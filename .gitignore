@@ -12,3 +12,4 @@ Thumbs.db
 coverage/
 out/
 release/
+.tools/node20/
