@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist-electron",
+    "rootDir": "./electron",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "declaration": false,
+    "declarationMap": false
+  },
+  "include": ["electron/**/*"],
+  "exclude": ["electron/**/*.test.ts"]
+}

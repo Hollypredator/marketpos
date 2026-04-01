@@ -1,0 +1,176 @@
+{
+  "code": "bakkal-v1",
+  "displayName": "Bakkal Starter V1",
+  "defaultMinStock": 10,
+  "defaultOpeningStock": 100,
+  "categories": [
+    { "name": "Icecekler", "sortOrder": 1, "color": "#3B82F6" },
+    { "name": "Atistirmalik", "sortOrder": 2, "color": "#F59E0B" },
+    { "name": "Temel Gida", "sortOrder": 3, "color": "#10B981" },
+    { "name": "Sut Urunleri", "sortOrder": 4, "color": "#8B5CF6" },
+    { "name": "Temizlik", "sortOrder": 5, "color": "#EC4899" }
+  ],
+  "products": [
+    {
+      "barcode": "8690001",
+      "name": "Su 0.5L",
+      "category": "Icecekler",
+      "purchasePrice": 3,
+      "salePrice": 5,
+      "vatRate": 10
+    },
+    {
+      "barcode": "8690002",
+      "name": "Kola 330ml",
+      "category": "Icecekler",
+      "purchasePrice": 8,
+      "salePrice": 15,
+      "vatRate": 10
+    },
+    {
+      "barcode": "8690003",
+      "name": "Ayran 200ml",
+      "category": "Icecekler",
+      "purchasePrice": 4,
+      "salePrice": 8,
+      "vatRate": 10
+    },
+    {
+      "barcode": "8690004",
+      "name": "Meyve Suyu 1L",
+      "category": "Icecekler",
+      "purchasePrice": 15,
+      "salePrice": 28,
+      "vatRate": 10
+    },
+    {
+      "barcode": "8690010",
+      "name": "Cips",
+      "category": "Atistirmalik",
+      "purchasePrice": 10,
+      "salePrice": 20,
+      "vatRate": 10
+    },
+    {
+      "barcode": "8690011",
+      "name": "Cikolata",
+      "category": "Atistirmalik",
+      "purchasePrice": 8,
+      "salePrice": 18,
+      "vatRate": 10
+    },
+    {
+      "barcode": "8690012",
+      "name": "Biskuvi",
+      "category": "Atistirmalik",
+      "purchasePrice": 5,
+      "salePrice": 12,
+      "vatRate": 10
+    },
+    {
+      "barcode": "8690020",
+      "name": "Ekmek",
+      "category": "Temel Gida",
+      "purchasePrice": 5,
+      "salePrice": 10,
+      "vatRate": 1,
+      "isQuickAccess": true,
+      "quickAccessColor": "#F59E0B",
+      "quickAccessOrder": 1
+    },
+    {
+      "barcode": "8690021",
+      "name": "Makarna 500g",
+      "category": "Temel Gida",
+      "purchasePrice": 8,
+      "salePrice": 15,
+      "vatRate": 10
+    },
+    {
+      "barcode": "8690022",
+      "name": "Pirinc 1kg",
+      "category": "Temel Gida",
+      "purchasePrice": 25,
+      "salePrice": 45,
+      "vatRate": 1
+    },
+    {
+      "barcode": "8690023",
+      "name": "Un 2kg",
+      "category": "Temel Gida",
+      "purchasePrice": 20,
+      "salePrice": 35,
+      "vatRate": 1
+    },
+    {
+      "barcode": "8690024",
+      "name": "Seker 1kg",
+      "category": "Temel Gida",
+      "purchasePrice": 15,
+      "salePrice": 30,
+      "vatRate": 1
+    },
+    {
+      "barcode": "8690030",
+      "name": "Sut 1L",
+      "category": "Sut Urunleri",
+      "purchasePrice": 15,
+      "salePrice": 30,
+      "vatRate": 10
+    },
+    {
+      "barcode": "8690031",
+      "name": "Peynir 250g",
+      "category": "Sut Urunleri",
+      "purchasePrice": 25,
+      "salePrice": 50,
+      "vatRate": 10
+    },
+    {
+      "barcode": "8690032",
+      "name": "Yogurt 500g",
+      "category": "Sut Urunleri",
+      "purchasePrice": 12,
+      "salePrice": 25,
+      "vatRate": 10
+    },
+    {
+      "barcode": "8690040",
+      "name": "Bulasik Deterjani",
+      "category": "Temizlik",
+      "purchasePrice": 20,
+      "salePrice": 40,
+      "vatRate": 20
+    },
+    {
+      "barcode": "8690041",
+      "name": "Camasir Deterjani",
+      "category": "Temizlik",
+      "purchasePrice": 40,
+      "salePrice": 75,
+      "vatRate": 20
+    },
+    {
+      "barcode": "8690042",
+      "name": "Tuvalet Kagidi",
+      "category": "Temizlik",
+      "purchasePrice": 30,
+      "salePrice": 55,
+      "vatRate": 20,
+      "isQuickAccess": true,
+      "quickAccessColor": "#EC4899",
+      "quickAccessOrder": 2
+    },
+    {
+      "barcode": "8690050",
+      "name": "Poset",
+      "category": null,
+      "purchasePrice": 0.5,
+      "salePrice": 1,
+      "vatRate": 20,
+      "isQuickAccess": true,
+      "quickAccessColor": "#6B7280",
+      "quickAccessOrder": 3
+    }
+  ]
+}

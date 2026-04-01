@@ -1,0 +1,77 @@
+{
+  "name": "@marketpos/pos-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MarketPOS Desktop POS Client",
+  "author": "MarketPOS Team",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "assets:icon": "powershell -ExecutionPolicy Bypass -File ./scripts/generate-brand-icon.ps1",
+    "build": "vite build",
+    "build:electron": "tsc -p tsconfig.electron.json",
+    "clean:electron-dev": "rimraf dist-electron",
+    "watch:electron": "tsc -p tsconfig.electron.json --watch --preserveWatchOutput",
+    "electron:dev": "npm run clean:electron-dev && concurrently -k -s first \"npm run dev -- --strictPort --port 5173\" \"npm run watch:electron\" \"wait-on http://127.0.0.1:5173 file:dist-electron/main.js file:dist-electron/preload.js && electron .\"",
+    "electron:build": "npm run assets:icon && npm run build && npm run build:electron && electron-builder",
+    "electron:release": "npm run electron:build && npm run release:manifest",
+    "electron:release:signed": "npm run release:check-signing && npm run electron:release && npm run release:verify-signature",
+    "release:check-signing": "powershell -ExecutionPolicy Bypass -File ./scripts/check-signing-env.ps1",
+    "release:manifest": "node ./scripts/generate-release-manifest.mjs",
+    "release:verify-signature": "powershell -ExecutionPolicy Bypass -File ./scripts/verify-release-signature.ps1",
+    "clean": "rimraf dist dist-electron release",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@marketpos/shared": "*",
+    "better-sqlite3": "^11.8.0",
+    "node-thermal-printer": "^4.6.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^7.1.0",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/uuid": "^10.0.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "concurrently": "^9.1.0",
+    "electron": "33.3.0",
+    "electron-builder": "^25.1.0",
+    "rimraf": "^6.0.0",
+    "typescript": "^5.7.0",
+    "vite": "^6.1.0",
+    "vitest": "^4.1.2",
+    "wait-on": "^8.0.0"
+  },
+  "build": {
+    "appId": "com.marketpos.desktop",
+    "artifactName": "MarketPOS-${version}-setup.${ext}",
+    "productName": "MarketPOS",
+    "directories": {
+      "buildResources": "build",
+      "output": "release"
+    },
+    "nsis": {
+      "allowToChangeInstallationDirectory": true,
+      "oneClick": false,
+      "perMachine": false
+    },
+    "win": {
+      "icon": "icon.ico",
+      "signAndEditExecutable": true,
+      "signtoolOptions": {
+        "publisherName": "MarketPOS Team",
+        "rfc3161TimeStampServer": "http://timestamp.digicert.com",
+        "signingHashAlgorithms": [
+          "sha256"
+        ],
+        "timeStampServer": "http://timestamp.digicert.com"
+      },
+      "verifyUpdateCodeSignature": true,
+      "target": "nsis"
+    }
+  }
+}
