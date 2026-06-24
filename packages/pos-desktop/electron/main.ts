@@ -5,6 +5,7 @@ import {
   readdirSync,
   rmSync,
   statSync,
+  readFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
 
@@ -45,10 +46,58 @@ import { SecurityService } from './services/security';
 import { EInvoiceService } from './services/e-invoice';
 import { YNOKCManager } from './services/yn-okc';
 
-const DEFAULT_API_BASE_URL = process.env.MARKETPOS_API_BASE_URL ?? 'http://localhost:3001';
+// Load .env variables from the app data folder or next to the executable
+function loadLocalEnv(): void {
+  const paths: string[] = [];
+  try {
+    paths.push(join(app.getPath('userData'), '.env'));
+  } catch (e) {
+    // ignore if path cannot be retrieved yet
+  }
+  try {
+    // Path next to executable in production
+    paths.push(join(app.getAppPath(), '..', '..', '.env'));
+    // Path inside package in dev mode
+    paths.push(join(app.getAppPath(), '.env'));
+  } catch (e) {
+    // ignore
+  }
+
+  for (const filePath of paths) {
+    if (existsSync(filePath)) {
+      try {
+        const content = readFileSync(filePath, 'utf8');
+        for (const line of content.split(/\r?\n/)) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith('#')) continue;
+          const index = trimmed.indexOf('=');
+          if (index > 0) {
+            const key = trimmed.slice(0, index).trim();
+            let val = trimmed.slice(index + 1).trim();
+            if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+              val = val.slice(1, -1);
+            }
+            if (!process.env[key]) {
+              process.env[key] = val;
+            }
+          }
+        }
+      } catch (e) {
+        // ignore errors reading file
+      }
+    }
+  }
+}
+
+// Execute env loading immediately at boot time
+loadLocalEnv();
+
+const IS_DEV = !app.isPackaged;
+const DEFAULT_API_BASE_URL = process.env.MARKETPOS_API_BASE_URL ?? (
+  IS_DEV ? 'http://localhost:3001' : 'https://marketpos-h7xv.onrender.com'
+);
 const DEFAULT_RENDERER_URL = process.env.ELECTRON_RENDERER_URL ?? 'http://localhost:5175';
 const SYNC_V2_ENABLED = (process.env.SYNC_V2_ENABLED ?? 'false').toLowerCase() === 'true';
-const IS_DEV = !app.isPackaged;
 
 let databaseService: LocalDatabaseService | null = null;
 let mainWindow: BrowserWindow | null = null;

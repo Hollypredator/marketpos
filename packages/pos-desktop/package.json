@@ -15,7 +15,7 @@
     "clean:electron-dev": "rimraf dist-electron",
     "free-port:5175": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$p=(Get-NetTCPConnection -LocalPort 5175 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique); if($p){ $p | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue } }\"",
     "watch:electron": "tsc -p tsconfig.electron.json --watch --preserveWatchOutput",
-    "electron:dev": "npm run free-port:5175 && npm run clean:electron-dev && concurrently -k -s first \"npm run dev -- --strictPort --port 5175\" \"npm run watch:electron\" \"wait-on http://localhost:5175 file:dist-electron/main.js file:dist-electron/preload.js && set \\\"ELECTRON_RUN_AS_NODE=\\\" && electron .\"",
+    "electron:dev": "npm run free-port:5175 && npm run clean-dev-compile && concurrently -k -s first \"npm run dev -- --strictPort --port 5175\" \"npm run watch:electron\" \"wait-on http://localhost:5175 file:dist-electron/main.js file:dist-electron/preload.js && set \\\"ELECTRON_RUN_AS_NODE=\\\" && electron .\"",
     "electron:build": "npm run assets:icon && npm run build && npm run build:electron && electron-builder",
     "electron:release": "npm run electron:build && npm run release:manifest",
     "electron:release:signed": "npm run release:check-signing && npm run electron:release && npm run release:verify-signature",
