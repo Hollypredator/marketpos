@@ -117,16 +117,19 @@ export function SetupWizardPage({
           template uygulayabilirsiniz.
         </p>
 
-        <div className="wizard-step-row">
+        <div className="steps">
           {STEP_TITLES.map((title, index) => (
-            <button
-              key={title}
-              type="button"
-              className={`wizard-step-pill ${index === stepIndex ? 'active' : ''}`}
-              onClick={() => setStepIndex(index)}
-            >
-              {index + 1}. {title}
-            </button>
+            <React.Fragment key={title}>
+              {index > 0 && <div className="step-divider" />}
+              <button
+                type="button"
+                className={`step ${index === stepIndex ? 'active' : ''} ${index < stepIndex ? 'done' : ''}`}
+                onClick={() => setStepIndex(index)}
+              >
+                <span className="step-num">{index < stepIndex ? '✓' : index + 1}</span>
+                {title}
+              </button>
+            </React.Fragment>
           ))}
         </div>
 

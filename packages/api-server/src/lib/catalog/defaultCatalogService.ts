@@ -7,6 +7,8 @@ import * as cheerio from 'cheerio';
 import { toMinor } from '../money';
 import prisma from '../prisma';
 
+const UPSERT_BATCH_SIZE = 200;
+
 interface CatalogJsonProduct {
   barcode: string;
   name: string;
@@ -456,40 +458,46 @@ export class DefaultCatalogService {
         });
       }
 
-      for (const product of catalogCategory.products) {
-        if (syncedBarcodes.has(product.barcode)) continue;
+      const productsToUpsert = catalogCategory.products.filter(
+        (p) => !syncedBarcodes.has(p.barcode),
+      );
 
+      for (let i = 0; i < productsToUpsert.length; i += UPSERT_BATCH_SIZE) {
+        const batch = productsToUpsert.slice(i, i + UPSERT_BATCH_SIZE);
         try {
-          await prisma.product.upsert({
-            create: {
-              barcode: product.barcode,
-              categoryId: category.id,
-              companyId,
-              minStock: 0,
-              name: product.name,
-              purchasePrice: 0,
-              purchasePriceMinor: 0n,
-              salePrice: product.salePrice,
-              salePriceMinor: toMinor(product.salePrice),
-              unitType: product.unitType as import('@prisma/client').UnitType,
-              vatRate: product.vatRate,
-            },
-            update: {
-              categoryId: category.id,
-              deletedAt: null,
-              isActive: true,
-              name: product.name,
-              salePrice: product.salePrice,
-              salePriceMinor: toMinor(product.salePrice),
-              updatedAt: new Date(),
-            },
-            where: { companyId_barcode: { barcode: product.barcode, companyId } },
-          });
-
-          syncedBarcodes.add(product.barcode);
-          totalSynced += 1;
+          await prisma.$transaction(
+            batch.map((product) => {
+              syncedBarcodes.add(product.barcode);
+              return prisma.product.upsert({
+                create: {
+                  barcode: product.barcode,
+                  categoryId: category.id,
+                  companyId,
+                  minStock: 0,
+                  name: product.name,
+                  purchasePrice: 0,
+                  purchasePriceMinor: 0n,
+                  salePrice: product.salePrice,
+                  salePriceMinor: toMinor(product.salePrice),
+                  unitType: product.unitType as import('@prisma/client').UnitType,
+                  vatRate: product.vatRate,
+                },
+                update: {
+                  categoryId: category.id,
+                  deletedAt: null,
+                  isActive: true,
+                  name: product.name,
+                  salePrice: product.salePrice,
+                  salePriceMinor: toMinor(product.salePrice),
+                  updatedAt: new Date(),
+                },
+                where: { companyId_barcode: { barcode: product.barcode, companyId } },
+              });
+            }),
+          );
+          totalSynced += batch.length;
         } catch (error) {
-          console.error(`[Catalog] Failed to upsert product ${product.barcode}:`, error);
+          console.error(`[Catalog] Batch upsert failed (${batch.length} products):`, error);
         }
       }
     }
@@ -536,40 +544,46 @@ export class DefaultCatalogService {
         });
       }
 
-      for (const product of products) {
-        if (syncedBarcodes.has(product.barcode)) continue;
+      const productsToUpsert = products.filter(
+        (p) => !syncedBarcodes.has(p.barcode),
+      );
 
+      for (let i = 0; i < productsToUpsert.length; i += UPSERT_BATCH_SIZE) {
+        const batch = productsToUpsert.slice(i, i + UPSERT_BATCH_SIZE);
         try {
-          await prisma.product.upsert({
-            create: {
-              barcode: product.barcode,
-              categoryId: category.id,
-              companyId,
-              minStock: 0,
-              name: product.name,
-              purchasePrice: 0,
-              purchasePriceMinor: 0n,
-              salePrice: product.price,
-              salePriceMinor: toMinor(product.price),
-              unitType: 'PIECE',
-              vatRate: 20,
-            },
-            update: {
-              categoryId: category.id,
-              deletedAt: null,
-              isActive: true,
-              name: product.name,
-              salePrice: product.price,
-              salePriceMinor: toMinor(product.price),
-              updatedAt: new Date(),
-            },
-            where: { companyId_barcode: { barcode: product.barcode, companyId } },
-          });
-
-          syncedBarcodes.add(product.barcode);
-          totalSynced += 1;
+          await prisma.$transaction(
+            batch.map((product) => {
+              syncedBarcodes.add(product.barcode);
+              return prisma.product.upsert({
+                create: {
+                  barcode: product.barcode,
+                  categoryId: category.id,
+                  companyId,
+                  minStock: 0,
+                  name: product.name,
+                  purchasePrice: 0,
+                  purchasePriceMinor: 0n,
+                  salePrice: product.price,
+                  salePriceMinor: toMinor(product.price),
+                  unitType: 'PIECE',
+                  vatRate: 20,
+                },
+                update: {
+                  categoryId: category.id,
+                  deletedAt: null,
+                  isActive: true,
+                  name: product.name,
+                  salePrice: product.price,
+                  salePriceMinor: toMinor(product.price),
+                  updatedAt: new Date(),
+                },
+                where: { companyId_barcode: { barcode: product.barcode, companyId } },
+              });
+            }),
+          );
+          totalSynced += batch.length;
         } catch (error) {
-          console.error(`[Catalog] Failed to upsert product ${product.barcode}:`, error);
+          console.error(`[Catalog] Batch upsert failed (${batch.length} products):`, error);
         }
       }
     }
