@@ -69,7 +69,7 @@ const STEP_TITLES: Record<SetupStepId, string> = {
 
 const DEFAULT_INSTALL_PREFS: InstallPreferencesForm = {
   architecture: 'x64',
-  installDirectory: 'C:/Program Files/Bilge/BakkalDefteri/ERP2.0/',
+  installDirectory: 'C:/Program Files/Bilge/MarketPOS/ERP2.0/',
   language: 'Turkce',
 };
 
@@ -1084,7 +1084,7 @@ export default function SetupGate({ onCompleted }: SetupGateProps) {
       <div className="setup-card">
         <div className="setup-header">
           <div>
-            <h1>Bakkal Defteri Kurulum</h1>
+            <h1>MarketPOS Kurulum</h1>
             <p>Kurulum bitmeden login ve satis ekranlarina gecis kapatilir.</p>
           </div>
           <button className="btn btn-ghost" type="button" disabled={isBusy} onClick={() => void resetSetup()}>
