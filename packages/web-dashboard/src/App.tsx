@@ -1057,6 +1057,25 @@ export default function App(): React.ReactElement {
     }
   };
 
+  const setupDefaultCatalog = async (): Promise<void> => {
+    if (companyId.length === 0) {
+      return;
+    }
+    if (!window.confirm('4000+ urun iceren varsayilan urun katalogunu yuklemek istiyor musunuz? Bu islem birkac dakika surebilir.')) {
+      return;
+    }
+    const timer = createFlowTimer('catalog.defaults.setup');
+    try {
+      setBanner({ type: 'success', text: 'Varsayilan katalog yukleme islemi baslatildi, arka planda yukleniyor...' });
+      const result = await catalogMutations.setupDefaults.mutateAsync({ companyId });
+      setBanner({ type: 'success', text: `Varsayilan katalog basariyla yuklendi! ${result.totalSynced} urun esitlendi.` });
+      timer.success();
+    } catch (error: unknown) {
+      setBanner({ type: 'error', text: readError(error, 'Varsayilan katalog yuklenemedi') });
+      timer.fail();
+    }
+  };
+
   const addProduct = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
     if (companyId.length === 0) {
@@ -1692,6 +1711,7 @@ export default function App(): React.ReactElement {
           onToggleProductActive={toggleProductActive}
           onUpdateCategory={updateCategory}
           onUpdateProduct={updateProduct}
+          onSetupDefaults={setupDefaultCatalog}
           productEditForm={productEditForm}
           productFilters={productFilters}
           productForm={productForm}

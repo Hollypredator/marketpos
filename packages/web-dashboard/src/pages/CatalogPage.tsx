@@ -86,6 +86,7 @@ interface CatalogPageProps {
   onToggleProductActive: (productId: string, isActive: boolean) => Promise<void>;
   onUpdateCategory: (event: React.FormEvent<HTMLFormElement>) => Promise<void>;
   onUpdateProduct: (event: React.FormEvent<HTMLFormElement>) => Promise<void>;
+  onSetupDefaults: () => Promise<void>;
   productEditForm: ProductForm;
   productFilters: ProductListFilters;
   productForm: ProductForm;
@@ -130,6 +131,7 @@ export function CatalogPage({
   onToggleProductActive,
   onUpdateCategory,
   onUpdateProduct,
+  onSetupDefaults,
   productEditForm,
   productFilters,
   productForm,
@@ -380,7 +382,17 @@ export function CatalogPage({
       </article>
 
       <article className="card">
-        <h2>Urunler ({productsPagination.total})</h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <h2 style={{ margin: 0 }}>Urunler ({productsPagination.total})</h2>
+          <button
+            className="btn primary"
+            type="button"
+            onClick={onSetupDefaults}
+            style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+          >
+            <span>🔄</span> 4000+ Ürünü Eşitle (Varsayılan Katalog)
+          </button>
+        </div>
         <div className="legacy-filter-box">
           <div className="inline-row three">
             <input

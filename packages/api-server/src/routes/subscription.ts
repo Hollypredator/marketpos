@@ -21,6 +21,7 @@ import { listCatalogTemplateSummaries } from '../lib/catalog-templates';
 import prisma from '../lib/prisma';
 import { mapSystemEventType } from '../lib/subscription-admin-helpers';
 import { generateLicenseKey } from '../lib/license-utils';
+import { DefaultCatalogService } from '../lib/catalog/defaultCatalogService';
 
 interface CompanyIdParams {
   id: string;
@@ -438,6 +439,11 @@ export async function subscriptionRoutes(server: FastifyInstance): Promise<void>
           registerName: parsed.data.registerName,
           taxNumber: parsed.data.taxNumber ?? null,
           templateCode: parsed.data.templateCode,
+        });
+
+        // Automatically seed default catalog (4000+ products) for the company in the background
+        void DefaultCatalogService.seedForCompany(result.company.id).catch((err) => {
+          console.error(`Failed to automatically seed company ${result.company.id} after provisioning:`, err);
         });
 
         return reply.status(parsed.data.companyId ? 200 : 201).send({

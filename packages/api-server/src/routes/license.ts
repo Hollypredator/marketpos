@@ -2,6 +2,7 @@ import type { Company } from '@prisma/client';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
+import { DefaultCatalogService } from '../lib/catalog/defaultCatalogService';
 import {
   buildCompanyAccessSnapshot,
   buildPackageGraceEndsAt,
@@ -113,6 +114,11 @@ export async function licenseRoutes(server: FastifyInstance): Promise<void> {
       await prisma.company.update({
         where: { id: company.id },
         data: { licenseKeyActivatedAt: new Date() },
+      });
+
+      // Automatically seed default catalog (4000+ products) for the company in the background
+      void DefaultCatalogService.seedForCompany(company.id).catch((err) => {
+        console.error(`Failed to automatically seed company ${company.id} after activation:`, err);
       });
 
       // 2. Yeni oluşturulan admin kullanıcısını çek
