@@ -1,6 +1,7 @@
 # MarketPOS Pilot Installer Runbook
 
-Bu dokuman manuel update modelini (auto-update olmadan) tek sube pilot icin standartlastirir.
+Bu dokuman tek sube pilot icin manuel installer modelini standartlastirir.
+Not: Uygulamada auto-update kontrolu vardir; feed tanimi olmayan ortamlarda manuel installer akisi fallback olarak kullanilir.
 
 ## Build Alma
 

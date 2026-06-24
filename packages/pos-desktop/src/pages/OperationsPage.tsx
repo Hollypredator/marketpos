@@ -3,9 +3,19 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { formatCurrency } from '@marketpos/shared';
 
 import ManagerApprovalModal from '../components/ManagerApprovalModal';
+import type { ManagerApprovalPayload } from '../components/ManagerApprovalModal';
+import { NumericPad } from '../components/NumericPad';
 import {
+  canWriteOperations,
   createBackup,
+  getQueueStatus,
+  getBackofficeSettings,
   getBackupPolicy,
+  listPendingCustomerOps,
+  listPendingProductOps,
+  listPendingPurchaseOps,
+  listPendingStockOps,
+  listPendingSupplierOps,
   listBackups,
   listCashMovements,
   listSecurityEvents,
@@ -14,7 +24,10 @@ import {
   recordCashMovement,
   recordShiftHandover,
   restoreBackup,
+  runSync,
   setBackupPolicy as updateBackupPolicy,
+  getLocalSetting,
+  setLocalSetting,
 } from '../services/pos-runtime';
 import type {
   BackupFileRecord,
@@ -33,10 +46,83 @@ const CASH_MOVEMENT_TYPES: Array<{ label: string; value: CashMovementType }> = [
   { label: 'Kucuk Harcama (Petty Cash)', value: 'PETTY_CASH' },
 ];
 
+function escapeCsvCell(value: unknown): string {
+  return `"${String(value ?? '').replaceAll('"', '""')}"`;
+}
+
+function downloadCsv(filename: string, headers: string[], rows: Array<Array<unknown>>): void {
+  const content = [headers, ...rows]
+    .map((row) => row.map((cell) => escapeCsvCell(cell)).join(','))
+    .join('\n');
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+  const href = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = href;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(href);
+}
+
+function downloadJson(filename: string, payload: unknown): void {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {
+    type: 'application/json;charset=utf-8;',
+  });
+  const href = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = href;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(href);
+}
+
+function toLocalDateKey(iso: string): string {
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) {
+    return '';
+  }
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, '0');
+  const day = String(parsed.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+interface DailyCloseSummary {
+  backupCount: number;
+  cashOutTotal: number;
+  cashSignedNet: number;
+  cashTransactionCount: number;
+  criticalEvents: number;
+  generatedAt: string;
+  handoverAnomalyCount: number;
+  handoverCount: number;
+  reportDate: string;
+  warnEvents: number;
+}
+
+interface OfflineAuditCheck {
+  key: string;
+  message: string;
+  passed: boolean;
+  value: string;
+}
+
+interface OfflineAuditSummary {
+  checks: OfflineAuditCheck[];
+  failed: number;
+  generatedAt: string;
+  passed: number;
+  scorePercent: number;
+}
+
 export default function OperationsPage(): React.ReactElement {
   const toast = useToast();
   const { state } = useApp();
   const activeSession = useMemo(() => selectAuthSession(state), [state]);
+  const canMutateOperations = canWriteOperations(activeSession?.user.role);
 
   const [backups, setBackups] = useState<BackupFileRecord[]>([]);
   const [backupPolicy, setBackupPolicyState] = useState<BackupPolicyState | null>(null);
@@ -45,6 +131,15 @@ export default function OperationsPage(): React.ReactElement {
   const [backupPolicyRetentionDays, setBackupPolicyRetentionDays] = useState('21');
   const [backupPolicyMaxBackups, setBackupPolicyMaxBackups] = useState('60');
   const [isSavingBackupPolicy, setIsSavingBackupPolicy] = useState(false);
+
+  // Automation Settings
+  const [autoCloseEnabled, setAutoCloseEnabled] = useState(false);
+  const [autoCloseTime, setAutoCloseTime] = useState('02:00');
+  const [autoOpenEnabled, setAutoOpenEnabled] = useState(false);
+  const [autoOpenTime, setAutoOpenTime] = useState('08:00');
+  const [autoOpenCash, setAutoOpenCash] = useState('0');
+
+
   const [cashAmount, setCashAmount] = useState('');
   const [cashMovements, setCashMovements] = useState<CashMovementRecord[]>([]);
   const [cashNote, setCashNote] = useState('');
@@ -60,10 +155,57 @@ export default function OperationsPage(): React.ReactElement {
   const [runtimeInfo, setRuntimeInfo] = useState<{
     apiBaseUrl: string;
     databasePath: string;
+    lastSyncedAt: string | null;
+    lastSyncStatus: 'DEGRADED' | 'IDLE' | 'OK';
+    offlineReadinessPassed: boolean;
+    pendingCount: number;
     userDataPath: string;
     version: string;
   } | null>(null);
   const [securityEvents, setSecurityEvents] = useState<SecurityEventRecord[]>([]);
+  const [securitySeverityFilter, setSecuritySeverityFilter] = useState<'ALL' | 'CRITICAL' | 'INFO' | 'WARN'>('ALL');
+  const [securitySearch, setSecuritySearch] = useState('');
+  const [dailyCloseSummary, setDailyCloseSummary] = useState<DailyCloseSummary | null>(null);
+  const [offlineAuditSummary, setOfflineAuditSummary] = useState<OfflineAuditSummary | null>(null);
+  const [isRunningOfflineAudit, setIsRunningOfflineAudit] = useState(false);
+  const [isManualSyncRunning, setIsManualSyncRunning] = useState(false);
+
+  const now = Date.now();
+  const dayStart = new Date();
+  dayStart.setHours(0, 0, 0, 0);
+  const dayStartTs = dayStart.getTime();
+  const last24hTs = now - 24 * 60 * 60 * 1000;
+
+  const securityEventsFiltered = useMemo(() => {
+    const normalizedSearch = securitySearch.trim().toLocaleLowerCase('tr-TR');
+    return securityEvents.filter((event) => {
+      if (securitySeverityFilter !== 'ALL' && event.severity !== securitySeverityFilter) {
+        return false;
+      }
+      if (normalizedSearch.length === 0) {
+        return true;
+      }
+      const haystack = `${event.eventType} ${event.message} ${event.reason ?? ''}`.toLocaleLowerCase('tr-TR');
+      return haystack.includes(normalizedSearch);
+    });
+  }, [securityEvents, securitySearch, securitySeverityFilter]);
+
+  const operationsSummary = useMemo(() => {
+    const cashToday = cashMovements
+      .filter((row) => new Date(row.createdAt).getTime() >= dayStartTs)
+      .reduce((sum, row) => sum + row.amount, 0);
+    const handoverAnomalyCount = handovers.filter((row) => Math.abs(row.difference) >= 1).length;
+    const criticalOrWarn24h = securityEvents.filter((row) => {
+      const createdAtTs = new Date(row.createdAt).getTime();
+      return createdAtTs >= last24hTs && (row.severity === 'CRITICAL' || row.severity === 'WARN');
+    }).length;
+
+    return {
+      cashToday,
+      criticalOrWarn24h,
+      handoverAnomalyCount,
+    };
+  }, [cashMovements, dayStartTs, handovers, last24hTs, securityEvents]);
 
   const loadData = async (): Promise<void> => {
     if (!activeSession) {
@@ -92,6 +234,10 @@ export default function OperationsPage(): React.ReactElement {
         setRuntimeInfo({
           apiBaseUrl: runtime.apiBaseUrl,
           databasePath: runtime.databasePath,
+          lastSyncedAt: runtime.lastSyncedAt,
+          lastSyncStatus: runtime.lastSyncStatus,
+          offlineReadinessPassed: runtime.offlineReadinessPassed,
+          pendingCount: runtime.pendingCount,
           userDataPath: runtime.userDataPath,
           version: runtime.version,
         });
@@ -101,14 +247,50 @@ export default function OperationsPage(): React.ReactElement {
     } finally {
       setIsLoading(false);
     }
+
+    // Load Automation Settings
+    try {
+      const closeEn = await getLocalSetting('marketpos_auto_close_enabled');
+      const closeTime = await getLocalSetting('marketpos_auto_close_time');
+      const openEn = await getLocalSetting('marketpos_auto_open_enabled');
+      const openTime = await getLocalSetting('marketpos_auto_open_time');
+      const openCash = await getLocalSetting('marketpos_auto_open_cash');
+
+      if (closeEn !== null) setAutoCloseEnabled(closeEn === 'true');
+      if (closeTime !== null) setAutoCloseTime(closeTime);
+      if (openEn !== null) setAutoOpenEnabled(openEn === 'true');
+      if (openTime !== null) setAutoOpenTime(openTime);
+      if (openCash !== null) setAutoOpenCash(openCash);
+    } catch (err) {
+      console.warn('Otomasyon ayarlari yuklenemedi');
+    }
   };
 
   useEffect(() => {
     void loadData();
   }, [activeSession?.registerId, activeSession?.sessionId]);
 
+  const saveAutomationSettings = async () => {
+    try {
+      await Promise.all([
+        setLocalSetting('marketpos_auto_close_enabled', String(autoCloseEnabled)),
+        setLocalSetting('marketpos_auto_close_time', autoCloseTime),
+        setLocalSetting('marketpos_auto_open_enabled', String(autoOpenEnabled)),
+        setLocalSetting('marketpos_auto_open_time', autoOpenTime),
+        setLocalSetting('marketpos_auto_open_cash', autoOpenCash),
+      ]);
+      toast.success('Otomasyon ayarları kaydedildi.');
+    } catch (err) {
+      toast.error('Ayarlar kaydedilemedi.');
+    }
+  };
+
   const submitCashMovement = async (): Promise<void> => {
     if (!activeSession) {
+      return;
+    }
+    if (!canMutateOperations) {
+      toast.error('Bu islem icin yazma yetkiniz yok.');
       return;
     }
     const amount = Number.parseFloat(cashAmount || '0');
@@ -147,6 +329,10 @@ export default function OperationsPage(): React.ReactElement {
 
   const submitShiftHandover = async (): Promise<void> => {
     if (!activeSession) {
+      return;
+    }
+    if (!canMutateOperations) {
+      toast.error('Bu islem icin yazma yetkiniz yok.');
       return;
     }
     const expected = Number.parseFloat(expectedCash || '0');
@@ -191,6 +377,10 @@ export default function OperationsPage(): React.ReactElement {
   };
 
   const runCreateBackup = async (): Promise<void> => {
+    if (!canMutateOperations) {
+      toast.error('Bu islem icin yazma yetkiniz yok.');
+      return;
+    }
     try {
       const backup = await createBackup();
       toast.success(`Yedek olusturuldu: ${backup.fileName}`);
@@ -201,6 +391,10 @@ export default function OperationsPage(): React.ReactElement {
   };
 
   const submitBackupPolicy = async (): Promise<void> => {
+    if (!canMutateOperations) {
+      toast.error('Bu islem icin yazma yetkiniz yok.');
+      return;
+    }
     const intervalHours = Number.parseInt(backupPolicyIntervalHours, 10);
     const retentionDays = Number.parseInt(backupPolicyRetentionDays, 10);
     const maxBackups = Number.parseInt(backupPolicyMaxBackups, 10);
@@ -249,12 +443,376 @@ export default function OperationsPage(): React.ReactElement {
     setRestoreApprovalOpen(true);
   };
 
-  const approveRestoreBackup = async (approval: {
-    managerFullName: string;
-    managerUserId: string;
-    method: 'PASSWORD' | 'PIN';
-    reason: string;
-  }): Promise<void> => {
+  const exportBackupsCsv = (): void => {
+    downloadCsv(
+      'ops-backups.csv',
+      ['Dosya', 'Olusturma', 'BoyutKB'],
+      backups.map((row) => [
+        row.fileName,
+        new Date(row.createdAt).toLocaleString('tr-TR'),
+        (row.sizeBytes / 1024).toFixed(1),
+      ]),
+    );
+  };
+
+  const exportCashMovementsCsv = (): void => {
+    downloadCsv(
+      'ops-cash-movements.csv',
+      ['Zaman', 'Tip', 'Tutar', 'Not'],
+      cashMovements.map((row) => [
+        new Date(row.createdAt).toLocaleString('tr-TR'),
+        row.movementType,
+        row.amount,
+        row.note ?? '',
+      ]),
+    );
+  };
+
+  const exportHandoversCsv = (): void => {
+    downloadCsv(
+      'ops-shift-handovers.csv',
+      ['Zaman', 'Beklenen', 'Beyan', 'Fark', 'BlindClose', 'Not'],
+      handovers.map((row) => [
+        new Date(row.createdAt).toLocaleString('tr-TR'),
+        row.expectedCash,
+        row.declaredCash,
+        row.difference,
+        row.blindClose ? 'YES' : 'NO',
+        row.note ?? '',
+      ]),
+    );
+  };
+
+  const exportSecurityEventsCsv = (): void => {
+    downloadCsv(
+      'ops-security-events.csv',
+      ['Zaman', 'Tip', 'Seviye', 'Mesaj', 'Neden'],
+      securityEventsFiltered.map((row) => [
+        new Date(row.createdAt).toLocaleString('tr-TR'),
+        row.eventType,
+        row.severity,
+        row.message,
+        row.reason ?? '',
+      ]),
+    );
+  };
+
+  const exportDiagnosticsBundle = async (): Promise<void> => {
+    if (!activeSession || !window.electronAPI) {
+      return;
+    }
+    try {
+      const [
+        runtime,
+        queue,
+        pendingSales,
+        pendingRefunds,
+        pendingProductOps,
+        pendingSupplierOps,
+        pendingPurchaseOps,
+        pendingCustomerOps,
+        pendingStockOps,
+        lastSecurityEvents,
+      ] = await Promise.all([
+        window.electronAPI.getRuntimeInfo(),
+        getQueueStatus(),
+        window.electronAPI.listPendingSales(250),
+        window.electronAPI.listPendingRefunds(250),
+        window.electronAPI.listPendingProductOps(250),
+        window.electronAPI.listPendingSupplierOps(250),
+        window.electronAPI.listPendingPurchaseOps(250),
+        window.electronAPI.listPendingCustomerOps(250),
+        window.electronAPI.listPendingStockOps(250),
+        listSecurityEvents(150),
+      ]);
+
+      const failedOnly = {
+        customerOps: pendingCustomerOps.filter((row) => row.syncStatus === 'FAILED'),
+        productOps: pendingProductOps.filter((row) => row.syncStatus === 'FAILED'),
+        purchaseOps: pendingPurchaseOps.filter((row) => row.syncStatus === 'FAILED'),
+        refunds: pendingRefunds.filter((row) => row.syncStatus === 'FAILED'),
+        sales: pendingSales.filter((row) => row.syncStatus === 'FAILED'),
+        stockOps: pendingStockOps.filter((row) => row.syncStatus === 'FAILED'),
+        supplierOps: pendingSupplierOps.filter((row) => row.syncStatus === 'FAILED'),
+      };
+
+      const bundle = {
+        capturedAt: new Date().toISOString(),
+        queue,
+        runtime,
+        session: {
+          branchId: activeSession.user.branchId,
+          companyId: activeSession.user.companyId,
+          registerId: activeSession.registerId,
+          role: activeSession.user.role,
+          userId: activeSession.user.id,
+        },
+        failedOnly,
+        lastSecurityEvents,
+      };
+      downloadJson(
+        `ops-diagnostics-bundle-${toLocalDateKey(bundle.capturedAt)}.json`,
+        bundle,
+      );
+      toast.success('Teshis paketi disa aktarildi.');
+    } catch (caughtError: unknown) {
+      toast.error(
+        caughtError instanceof Error
+          ? caughtError.message
+          : 'Teshis paketi olusturulamadi.',
+      );
+    }
+  };
+
+  const generateDailyCloseReport = async (): Promise<void> => {
+    const reportDate = toLocalDateKey(new Date().toISOString());
+    const cashToday = cashMovements.filter((row) => toLocalDateKey(row.createdAt) === reportDate);
+    const handoversToday = handovers.filter((row) => toLocalDateKey(row.createdAt) === reportDate);
+    const eventsToday = securityEvents.filter((row) => toLocalDateKey(row.createdAt) === reportDate);
+    const backupsToday = backups.filter((row) => toLocalDateKey(row.createdAt) === reportDate);
+
+    const cashSignedNet = cashToday.reduce((sum, row) => {
+      if (row.movementType === 'SAFE_IN') {
+        return sum + row.amount;
+      }
+      return sum - row.amount;
+    }, 0);
+    const cashOutTotal = cashToday.reduce((sum, row) => {
+      if (row.movementType === 'SAFE_IN') {
+        return sum;
+      }
+      return sum + row.amount;
+    }, 0);
+    const handoverAnomalyCount = handoversToday.filter((row) => Math.abs(row.difference) >= 1).length;
+    const warnEvents = eventsToday.filter((row) => row.severity === 'WARN').length;
+    const criticalEvents = eventsToday.filter((row) => row.severity === 'CRITICAL').length;
+
+    const summary: DailyCloseSummary = {
+      backupCount: backupsToday.length,
+      cashOutTotal,
+      cashSignedNet,
+      cashTransactionCount: cashToday.length,
+      criticalEvents,
+      generatedAt: new Date().toISOString(),
+      handoverAnomalyCount,
+      handoverCount: handoversToday.length,
+      reportDate,
+      warnEvents,
+    };
+
+    downloadCsv(
+      `ops-daily-close-${reportDate}.csv`,
+      ['Bolum', 'Alan', 'Deger'],
+      [
+        ['Summary', 'ReportDate', summary.reportDate],
+        ['Summary', 'GeneratedAt', new Date(summary.generatedAt).toLocaleString('tr-TR')],
+        ['Summary', 'CashTransactionCount', summary.cashTransactionCount],
+        ['Summary', 'CashOutTotal', summary.cashOutTotal.toFixed(2)],
+        ['Summary', 'CashSignedNet', summary.cashSignedNet.toFixed(2)],
+        ['Summary', 'HandoverCount', summary.handoverCount],
+        ['Summary', 'HandoverAnomalyCount', summary.handoverAnomalyCount],
+        ['Summary', 'WarnEvents', summary.warnEvents],
+        ['Summary', 'CriticalEvents', summary.criticalEvents],
+        ['Summary', 'BackupCount', summary.backupCount],
+        ...cashToday.map((row) => [
+          'CashMovement',
+          `${new Date(row.createdAt).toLocaleTimeString('tr-TR')} ${row.movementType}`,
+          `${row.amount.toFixed(2)} ${row.note ?? ''}`.trim(),
+        ]),
+        ...handoversToday.map((row) => [
+          'ShiftHandover',
+          new Date(row.createdAt).toLocaleTimeString('tr-TR'),
+          `Beklenen:${row.expectedCash.toFixed(2)} Beyan:${row.declaredCash.toFixed(2)} Fark:${row.difference.toFixed(2)}`,
+        ]),
+        ...eventsToday.map((row) => [
+          'SecurityEvent',
+          `${new Date(row.createdAt).toLocaleTimeString('tr-TR')} ${row.severity}`,
+          `${row.eventType} ${row.message}`.trim(),
+        ]),
+      ],
+    );
+
+    setDailyCloseSummary(summary);
+    try {
+      await logSecurityEvent({
+        eventType: 'DAILY_CLOSE_REPORT_EXPORTED',
+        message: `Gunluk kapanis raporu disa aktarildi (${reportDate})`,
+        metadataJson: JSON.stringify({
+          cashTransactionCount: summary.cashTransactionCount,
+          criticalEvents: summary.criticalEvents,
+          handoverAnomalyCount: summary.handoverAnomalyCount,
+          warnEvents: summary.warnEvents,
+        }),
+        operatorUserId: activeSession?.user.id ?? null,
+        severity: summary.criticalEvents > 0 || summary.handoverAnomalyCount > 0 ? 'WARN' : 'INFO',
+      });
+    } catch {
+      // Report export should not fail because of optional local log.
+    }
+    toast.success(`Gunluk kapanis raporu olusturuldu: ${reportDate}`);
+  };
+
+  const runManualSyncNow = async (): Promise<void> => {
+    if (!activeSession) {
+      return;
+    }
+    setIsManualSyncRunning(true);
+    try {
+      const result = await runSync(activeSession);
+      if (!result) {
+        toast.error('Offline modda manuel sync baslatilamadi.');
+        return;
+      }
+      await loadData();
+      toast.success(
+        `Sync tamamlandi. Gonderilen: ${result.pushedSales} satis / ${result.pushedRefunds} iade.`,
+      );
+    } catch (caughtError: unknown) {
+      toast.error(caughtError instanceof Error ? caughtError.message : 'Manuel sync basarisiz.');
+    } finally {
+      setIsManualSyncRunning(false);
+    }
+  };
+
+  const runOfflineReadinessAudit = async (): Promise<void> => {
+    if (!activeSession || !window.electronAPI) {
+      return;
+    }
+    setIsRunningOfflineAudit(true);
+    try {
+      const [
+        runtime,
+        queue,
+        cachedSession,
+        categories,
+        products,
+        policy,
+        pendingProductOps,
+        pendingSupplierOps,
+        pendingPurchaseOps,
+        pendingCustomerOps,
+        pendingStockOps,
+        backofficeSettings,
+      ] = await Promise.all([
+        window.electronAPI.getRuntimeInfo(),
+        getQueueStatus(),
+        window.electronAPI.getCachedSession(),
+        window.electronAPI.getCachedCategories(activeSession.user.companyId),
+        window.electronAPI.getCachedProducts({
+          companyId: activeSession.user.companyId,
+        }),
+        getBackupPolicy(),
+        listPendingProductOps(1000),
+        listPendingSupplierOps(1000),
+        listPendingPurchaseOps(1000),
+        listPendingCustomerOps(1000),
+        listPendingStockOps(1000),
+        getBackofficeSettings(),
+      ]);
+
+      const checks: OfflineAuditCheck[] = [
+        {
+          key: 'SETUP_OFFLINE_READINESS',
+          message: 'Kurulum offline readiness adimi tamamlandi',
+          passed: runtime.offlineReadinessPassed,
+          value: runtime.offlineReadinessPassed ? 'PASS' : 'FAIL',
+        },
+        {
+          key: 'CACHED_SESSION',
+          message: 'Offline login icin cihazda cacheli kullanici/oturum var',
+          passed: Boolean(cachedSession),
+          value: cachedSession ? 'FOUND' : 'MISSING',
+        },
+        {
+          key: 'CACHED_CATEGORIES',
+          message: 'Kategori cache mevcut',
+          passed: categories.length > 0,
+          value: String(categories.length),
+        },
+        {
+          key: 'CACHED_PRODUCTS',
+          message: 'Urun cache mevcut',
+          passed: products.length > 0,
+          value: String(products.length),
+        },
+        {
+          key: 'QUEUE_PRESSURE',
+          message: 'Kuyruk baskisi kontrolu (pending <= 50)',
+          passed:
+            queue.sales <= backofficeSettings.offlineAudit.maxPendingSales &&
+            queue.refunds <= backofficeSettings.offlineAudit.maxPendingRefunds &&
+            pendingProductOps.length <= backofficeSettings.offlineAudit.maxPendingProductOps &&
+            pendingStockOps.length <= backofficeSettings.offlineAudit.maxPendingStockOps,
+          value: String(queue.pendingCount),
+        },
+        {
+          key: 'PENDING_PRODUCT_OPS',
+          message: 'Bekleyen urun operasyonu limiti',
+          passed: pendingProductOps.length <= backofficeSettings.offlineAudit.maxPendingProductOps,
+          value: String(pendingProductOps.length),
+        },
+        {
+          key: 'PENDING_STOCK_OPS',
+          message: 'Bekleyen stok operasyonu limiti',
+          passed: pendingStockOps.length <= backofficeSettings.offlineAudit.maxPendingStockOps,
+          value: String(pendingStockOps.length),
+        },
+        {
+          key: 'PENDING_SUPPLIER_OPS',
+          message: 'Bekleyen tedarikci operasyonlari',
+          passed: pendingSupplierOps.length <= backofficeSettings.offlineAudit.maxPendingProductOps,
+          value: String(pendingSupplierOps.length),
+        },
+        {
+          key: 'PENDING_PURCHASE_OPS',
+          message: 'Bekleyen alis faturasi operasyonlari',
+          passed: pendingPurchaseOps.length <= backofficeSettings.offlineAudit.maxPendingProductOps,
+          value: String(pendingPurchaseOps.length),
+        },
+        {
+          key: 'PENDING_CUSTOMER_OPS',
+          message: 'Bekleyen musteri operasyonlari',
+          passed: pendingCustomerOps.length <= backofficeSettings.offlineAudit.maxPendingProductOps,
+          value: String(pendingCustomerOps.length),
+        },
+        {
+          key: 'BACKUP_POLICY',
+          message: 'Otomatik yedekleme aktif',
+          passed: policy.enabled,
+          value: policy.enabled ? 'ENABLED' : 'DISABLED',
+        },
+      ];
+
+      const passed = checks.filter((check) => check.passed).length;
+      const failed = checks.length - passed;
+      const scorePercent = Math.round((passed / checks.length) * 100);
+      const generatedAt = new Date().toISOString();
+      const summary: OfflineAuditSummary = {
+        checks,
+        failed,
+        generatedAt,
+        passed,
+        scorePercent,
+      };
+
+      downloadCsv(
+        `ops-offline-readiness-${toLocalDateKey(generatedAt)}.csv`,
+        ['CheckKey', 'Message', 'Passed', 'Value', 'GeneratedAt'],
+        checks.map((check) => [check.key, check.message, check.passed ? 'PASS' : 'FAIL', check.value, generatedAt]),
+      );
+
+      setOfflineAuditSummary(summary);
+      toast.success(`Offline readiness denetimi tamamlandi. Skor: ${scorePercent}%`);
+    } catch (caughtError: unknown) {
+      toast.error(caughtError instanceof Error ? caughtError.message : 'Offline denetimi calistirilamadi.');
+    } finally {
+      setIsRunningOfflineAudit(false);
+    }
+  };
+
+  const approveRestoreBackup = async (
+    approval: ManagerApprovalPayload,
+  ): Promise<void> => {
     if (restoreTarget.trim().length === 0) {
       return;
     }
@@ -301,6 +859,170 @@ export default function OperationsPage(): React.ReactElement {
       </div>
 
       <div style={{ height: 'calc(100vh - 98px)', overflow: 'auto', padding: '1rem' }}>
+        <div className="card" style={{ marginBottom: '1rem' }}>
+          <h3 className="card-title" style={{ marginBottom: '0.65rem' }}>
+            Operasyon Ozet KPI
+          </h3>
+          <div className="modal-grid-two">
+            <p>
+              <strong>Bugun Nakit Hareket Toplami:</strong> {formatCurrency(operationsSummary.cashToday)}
+            </p>
+            <p>
+              <strong>Vardiya Fark Alarmi (&gt;=1 TRY):</strong> {operationsSummary.handoverAnomalyCount}
+            </p>
+            <p>
+              <strong>Son 24 Saat WARN/CRITICAL:</strong> {operationsSummary.criticalOrWarn24h}
+            </p>
+            <p>
+              <strong>Yedek Sayisi:</strong> {backups.length}
+            </p>
+            <p>
+              <strong>Kuyruk (Runtime):</strong> {runtimeInfo?.pendingCount ?? '-'}
+            </p>
+            <p>
+              <strong>Son Sync Durum:</strong> {runtimeInfo?.lastSyncStatus ?? '-'}
+            </p>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem', marginTop: '0.75rem' }}>
+            <button
+              className="btn btn-primary"
+              type="button"
+              onClick={() => void generateDailyCloseReport()}
+            >
+              Tek Tik Gunluk Kapanis Raporu (CSV + Ozet)
+            </button>
+            <button
+              className="btn btn-ghost"
+              type="button"
+              onClick={() => void runOfflineReadinessAudit()}
+              disabled={isRunningOfflineAudit}
+            >
+              {isRunningOfflineAudit ? 'Offline Denetim Calisiyor...' : 'Offline Hazirlik Denetimi'}
+            </button>
+            <button
+              className="btn btn-ghost"
+              type="button"
+              onClick={() => void runManualSyncNow()}
+              disabled={isManualSyncRunning}
+            >
+              {isManualSyncRunning ? 'Sync Calisiyor...' : 'Manuel Sync Dene'}
+            </button>
+            <button
+              className="btn btn-ghost"
+              type="button"
+              onClick={() => void exportDiagnosticsBundle()}
+            >
+              Teshis Paketi JSON
+            </button>
+          </div>
+          {offlineAuditSummary && (
+            <div className="table-wrapper" style={{ marginTop: '0.75rem' }}>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Offline Audit Ozet</th>
+                    <th>Deger</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Skor</td>
+                    <td>{offlineAuditSummary.scorePercent}%</td>
+                  </tr>
+                  <tr>
+                    <td>PASS</td>
+                    <td>{offlineAuditSummary.passed}</td>
+                  </tr>
+                  <tr>
+                    <td>FAIL</td>
+                    <td>{offlineAuditSummary.failed}</td>
+                  </tr>
+                  <tr>
+                    <td>Uretim Zamani</td>
+                    <td>{new Date(offlineAuditSummary.generatedAt).toLocaleString('tr-TR')}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div className="table-wrapper" style={{ marginTop: '0.6rem' }}>
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Check</th>
+                      <th>Durum</th>
+                      <th>Deger</th>
+                      <th>Aciklama</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {offlineAuditSummary.checks.map((check) => (
+                      <tr key={check.key}>
+                        <td>{check.key}</td>
+                        <td>{check.passed ? 'PASS' : 'FAIL'}</td>
+                        <td>{check.value}</td>
+                        <td>{check.message}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          {dailyCloseSummary && (
+            <div className="table-wrapper" style={{ marginTop: '0.75rem' }}>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Alan</th>
+                    <th>Deger</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Rapor Tarihi</td>
+                    <td>{dailyCloseSummary.reportDate}</td>
+                  </tr>
+                  <tr>
+                    <td>Nakit Islem Sayisi</td>
+                    <td>{dailyCloseSummary.cashTransactionCount}</td>
+                  </tr>
+                  <tr>
+                    <td>Nakit Cikis Toplami</td>
+                    <td>{formatCurrency(dailyCloseSummary.cashOutTotal)}</td>
+                  </tr>
+                  <tr>
+                    <td>Nakit Net (Signed)</td>
+                    <td>{formatCurrency(dailyCloseSummary.cashSignedNet)}</td>
+                  </tr>
+                  <tr>
+                    <td>Vardiya Devir Sayisi</td>
+                    <td>{dailyCloseSummary.handoverCount}</td>
+                  </tr>
+                  <tr>
+                    <td>Vardiya Fark Alarmi (&gt;=1 TRY)</td>
+                    <td>{dailyCloseSummary.handoverAnomalyCount}</td>
+                  </tr>
+                  <tr>
+                    <td>WARN Olay</td>
+                    <td>{dailyCloseSummary.warnEvents}</td>
+                  </tr>
+                  <tr>
+                    <td>CRITICAL Olay</td>
+                    <td>{dailyCloseSummary.criticalEvents}</td>
+                  </tr>
+                  <tr>
+                    <td>Bugun Uretilen Yedek</td>
+                    <td>{dailyCloseSummary.backupCount}</td>
+                  </tr>
+                  <tr>
+                    <td>Olusturma Zamani</td>
+                    <td>{new Date(dailyCloseSummary.generatedAt).toLocaleString('tr-TR')}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
         <div className="card" style={{ marginBottom: '1rem' }}>
           <h3 className="card-title" style={{ marginBottom: '0.65rem' }}>
             Cihaz ve Yedekleme
@@ -376,14 +1098,17 @@ export default function OperationsPage(): React.ReactElement {
 
               <button
                 className="btn btn-ghost"
-                disabled={isSavingBackupPolicy}
+                disabled={isSavingBackupPolicy || !canMutateOperations}
                 onClick={() => void submitBackupPolicy()}
                 type="button"
               >
                 {isSavingBackupPolicy ? 'Kaydediliyor...' : 'Yedekleme Politikasini Kaydet'}
               </button>
-              <button className="btn btn-success" type="button" onClick={() => void runCreateBackup()}>
+              <button className="btn btn-success" type="button" onClick={() => void runCreateBackup()} disabled={!canMutateOperations}>
                 Lokal Yedek Olustur
+              </button>
+              <button className="btn btn-ghost" type="button" onClick={exportBackupsCsv} disabled={backups.length === 0}>
+                Yedek CSV Disa Aktar
               </button>
             </div>
           </div>
@@ -447,8 +1172,17 @@ export default function OperationsPage(): React.ReactElement {
             <label>Not</label>
             <input className="input" type="text" value={cashNote} onChange={(event) => setCashNote(event.target.value)} />
           </div>
-          <button className="btn btn-primary" type="button" onClick={() => void submitCashMovement()}>
+          <button className="btn btn-primary" type="button" onClick={() => void submitCashMovement()} disabled={!canMutateOperations}>
             Hareketi Kaydet
+          </button>
+          <button
+            className="btn btn-ghost"
+            style={{ marginLeft: '0.5rem' }}
+            type="button"
+            onClick={exportCashMovementsCsv}
+            disabled={cashMovements.length === 0}
+          >
+            Nakit CSV Disa Aktar
           </button>
 
           <div className="table-wrapper" style={{ marginTop: '0.75rem' }}>
@@ -484,28 +1218,41 @@ export default function OperationsPage(): React.ReactElement {
 
         <div className="card" style={{ marginBottom: '1rem' }}>
           <h3 className="card-title" style={{ marginBottom: '0.65rem' }}>
-            Vardiya Devir Kaydi
+            Vardiya Devir Kaydi (Z-Raporu Katılımı)
           </h3>
           <div className="modal-grid-two">
             <div className="login-field">
-              <label>Beklenen Nakit</label>
+              <label>Sistem Beklenen Nakit</label>
               <input className="input" type="number" min={0} step="0.01" value={expectedCash} onChange={(event) => setExpectedCash(event.target.value)} />
             </div>
             <div className="login-field">
-              <label>Beyan Edilen Nakit</label>
-              <input className="input" type="number" min={0} step="0.01" value={declaredCash} onChange={(event) => setDeclaredCash(event.target.value)} />
+              <label>Kasiyer Beyan Edilen Nakit (Dokunmatik)</label>
+              <input className="input text-xl font-bold text-teal-400" type="text" readOnly value={declaredCash || '0'} />
+              <NumericPad 
+                onInput={(k) => setDeclaredCash(prev => prev + k)}
+                onBackspace={() => setDeclaredCash(prev => prev.slice(0, -1))}
+                onClear={() => setDeclaredCash('')}
+              />
             </div>
           </div>
-          <label className="checkbox-row" style={{ marginBottom: '0.65rem' }}>
+          <label className="checkbox-row" style={{ marginBottom: '0.65rem', marginTop: '1rem' }}>
             <input type="checkbox" checked={handoverBlindClose} onChange={(event) => setHandoverBlindClose(event.target.checked)} />
             Blind close aktif
           </label>
-          <div className="login-field">
-            <label>Not</label>
-            <input className="input" type="text" value={handoverNote} onChange={(event) => setHandoverNote(event.target.value)} />
+          <div className="login-field mb-4">
+            <label>Mutabakat Notu</label>
+            <input className="input" type="text" value={handoverNote} onChange={(event) => setHandoverNote(event.target.value)} placeholder="Zorunlu devir veya sayım açıklaması..." />
           </div>
-          <button className="btn btn-primary" type="button" onClick={() => void submitShiftHandover()}>
-            Vardiya Devrini Kaydet
+          <button className="btn btn-primary w-full py-3" style={{ fontSize: '1.2rem', marginTop: '0.5rem' }} type="button" onClick={() => void submitShiftHandover()} disabled={!canMutateOperations}>
+            Kasayı Mutabık Kapat ve Devret
+          </button>
+          <button
+            className="btn btn-ghost mt-2 w-full"
+            type="button"
+            onClick={exportHandoversCsv}
+            disabled={handovers.length === 0}
+          >
+            Devir CSV Disa Aktar
           </button>
 
           <div className="table-wrapper" style={{ marginTop: '0.75rem' }}>
@@ -545,6 +1292,42 @@ export default function OperationsPage(): React.ReactElement {
           <h3 className="card-title" style={{ marginBottom: '0.65rem' }}>
             Guvenlik Audit Akisi
           </h3>
+          <div className="modal-grid-two" style={{ marginBottom: '0.65rem' }}>
+            <div className="login-field">
+              <label>Seviye Filtresi</label>
+              <select
+                className="input"
+                value={securitySeverityFilter}
+                onChange={(event) =>
+                  setSecuritySeverityFilter(event.target.value as 'ALL' | 'CRITICAL' | 'INFO' | 'WARN')
+                }
+              >
+                <option value="ALL">Tum seviyeler</option>
+                <option value="CRITICAL">CRITICAL</option>
+                <option value="WARN">WARN</option>
+                <option value="INFO">INFO</option>
+              </select>
+            </div>
+            <div className="login-field">
+              <label>Arama</label>
+              <input
+                className="input"
+                type="text"
+                value={securitySearch}
+                onChange={(event) => setSecuritySearch(event.target.value)}
+                placeholder="Tip, mesaj veya neden"
+              />
+            </div>
+          </div>
+          <button
+            className="btn btn-ghost"
+            type="button"
+            style={{ marginBottom: '0.65rem' }}
+            onClick={exportSecurityEventsCsv}
+            disabled={securityEventsFiltered.length === 0}
+          >
+            Filtreli Audit CSV Disa Aktar
+          </button>
           <div className="table-wrapper">
             <table className="table">
               <thead>
@@ -556,7 +1339,7 @@ export default function OperationsPage(): React.ReactElement {
                 </tr>
               </thead>
               <tbody>
-                {securityEvents.map((row) => (
+                {securityEventsFiltered.map((row) => (
                   <tr key={row.id}>
                     <td>{new Date(row.createdAt).toLocaleString('tr-TR')}</td>
                     <td>{row.eventType}</td>
@@ -564,10 +1347,10 @@ export default function OperationsPage(): React.ReactElement {
                     <td>{row.message}</td>
                   </tr>
                 ))}
-                {securityEvents.length === 0 && (
+                {securityEventsFiltered.length === 0 && (
                   <tr>
                     <td colSpan={4} style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>
-                      Guvenlik olayi kaydi bulunmuyor.
+                      Filtreye uygun guvenlik olayi kaydi bulunmuyor.
                     </td>
                   </tr>
                 )}

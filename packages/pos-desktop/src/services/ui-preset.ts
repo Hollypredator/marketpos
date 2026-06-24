@@ -12,7 +12,7 @@ const PRESET_KEYWORDS: Record<UiPreset, string[]> = {
 
 const PRESET_DEFINITIONS: Record<UiPreset, UiPresetDefinition> = {
   cafe: {
-    accentColor: '#0ea5e9',
+    accentColor: '#7c3aed',
     description: 'Icecek ve tatli odakli hizli satis',
     id: 'cafe',
     label: 'Kafe',
@@ -24,13 +24,13 @@ const PRESET_DEFINITIONS: Record<UiPreset, UiPresetDefinition> = {
     label: 'Kasap / Sarkuteri',
   },
   market: {
-    accentColor: '#6366f1',
+    accentColor: '#2563eb',
     description: 'Genel market ve bakkal satis duzeni',
     id: 'market',
     label: 'Market / Bakkal',
   },
   pide: {
-    accentColor: '#16a34a',
+    accentColor: '#059669',
     description: 'Pide ve hizli yemek odakli satis',
     id: 'pide',
     label: 'Pide / Restoran',

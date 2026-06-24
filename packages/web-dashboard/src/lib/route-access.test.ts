@@ -10,34 +10,31 @@ import {
 describe('route access matrix', () => {
   it('returns full backoffice tabs for SUPER_ADMIN', () => {
     expect(resolveAllowedTabs('SUPER_ADMIN')).toEqual([
+      'setup',
       'organization',
       'catalog',
       'stock',
       'users',
       'reports',
+      'suppliers',
       'subscription',
     ]);
-    expect(resolveFallbackTab('SUPER_ADMIN')).toBe('organization');
+    expect(resolveFallbackTab('SUPER_ADMIN')).toBe('setup');
   });
 
-  it('returns writer tabs for ADMIN', () => {
-    expect(resolveAllowedTabs('ADMIN')).toEqual([
-      'organization',
-      'catalog',
-      'stock',
-      'users',
-      'reports',
-    ]);
-    expect(resolveFallbackTab('ADMIN')).toBe('organization');
+  it('returns no tabs for ADMIN', () => {
+    expect(resolveAllowedTabs('ADMIN')).toEqual([]);
+    expect(resolveFallbackTab('ADMIN')).toBe('setup');
   });
 
-  it('returns reports-only for cashier/accountant roles', () => {
-    expect(resolveAllowedTabs('CASHIER')).toEqual(['reports']);
-    expect(resolveAllowedTabs('ACCOUNTANT')).toEqual(['reports']);
-    expect(resolveFallbackTab('CASHIER')).toBe('reports');
+  it('returns no tabs for cashier/accountant roles', () => {
+    expect(resolveAllowedTabs('CASHIER')).toEqual([]);
+    expect(resolveAllowedTabs('ACCOUNTANT')).toEqual([]);
+    expect(resolveFallbackTab('CASHIER')).toBe('setup');
   });
 
   it('maps tab <-> path consistently', () => {
+    expect(tabPath('setup')).toBe('/setup');
     expect(tabPath('organization')).toBe('/organization');
     expect(tabPath('subscription')).toBe('/subscription');
     expect(resolveTabFromPath('/stock')).toBe('stock');

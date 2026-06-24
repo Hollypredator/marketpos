@@ -6,6 +6,8 @@ Bu checklist, MarketPOS desktop surumunu sahaya guvenli ve tekrarlanabilir sekil
 
 - [ ] API ve web kalite kapisi gecti (`typecheck + test + build`).
 - [ ] POS desktop kalite kapisi gecti (`test + build + build:electron`).
+- [ ] Prisma dogrulama gecti (`npm run prisma:validate`).
+- [ ] Schema degisimi varsa migration guard gecti (`npm run prisma:migration:check`).
 - [ ] Installer `electron:release` ile alindi.
 - [ ] Production dagitimi ise `electron:release:signed` ile imzali paket alindi.
 - [ ] `release-manifest.json` olustu ve `.exe` hash dogrulandi.

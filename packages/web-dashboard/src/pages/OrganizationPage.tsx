@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 
 import { PaginationControls } from '../components/PaginationControls';
 import { useClientPagination } from '../hooks/use-client-pagination';
@@ -6,6 +6,8 @@ import { useClientPagination } from '../hooks/use-client-pagination';
 interface CompanyRow {
   id: string;
   isActive: boolean;
+  maxCartDiscountPercent: number;
+  maxItemDiscountPercent: number;
   name: string;
   taxNumber?: string | null;
 }
@@ -20,6 +22,8 @@ interface BranchRow {
 interface CompanyCreateForm {
   address: string;
   email: string;
+  maxCartDiscountPercent: string;
+  maxItemDiscountPercent: string;
   name: string;
   phone: string;
   taxNumber: string;
@@ -29,6 +33,8 @@ interface CompanyEditForm {
   address: string;
   email: string;
   isActive: boolean;
+  maxCartDiscountPercent: string;
+  maxItemDiscountPercent: string;
   name: string;
   phone: string;
   taxNumber: string;
@@ -71,11 +77,61 @@ interface OrganizationPageProps {
   onCompanyEditChange: (updater: (current: CompanyEditForm) => CompanyEditForm) => void;
   onCompanySelect: (companyId: string) => void;
   onCompanyUpdate: (event: React.FormEvent<HTMLFormElement>) => Promise<void>;
+  onInvoiceTemplateFormChange: (
+    updater: (current: {
+      footerNote: string;
+      headerText: string;
+      logoUrl: string;
+      taxOffice: string;
+      tradeRegistryNo: string;
+      salesFooterNote: string;
+      salesHeaderText: string;
+      salesLabel: string;
+      purchaseFooterNote: string;
+      purchaseHeaderText: string;
+      purchaseLabel: string;
+      dispatchFooterNote: string;
+      dispatchHeaderText: string;
+      dispatchLabel: string;
+    }) => {
+      footerNote: string;
+      headerText: string;
+      logoUrl: string;
+      taxOffice: string;
+      tradeRegistryNo: string;
+      salesFooterNote: string;
+      salesHeaderText: string;
+      salesLabel: string;
+      purchaseFooterNote: string;
+      purchaseHeaderText: string;
+      purchaseLabel: string;
+      dispatchFooterNote: string;
+      dispatchHeaderText: string;
+      dispatchLabel: string;
+    },
+  ) => void;
+  onInvoiceTemplateSave: (event: React.FormEvent<HTMLFormElement>) => Promise<void>;
   onNewBranchChange: (updater: (current: BranchCreateForm) => BranchCreateForm) => void;
   saving: boolean;
   selectedBranch: BranchRow | null;
   selectedCompany: CompanyRow | null;
   selectedCompanyName: string;
+  invoiceTemplateForm: {
+    footerNote: string;
+    headerText: string;
+    logoUrl: string;
+    taxOffice: string;
+    tradeRegistryNo: string;
+    salesFooterNote: string;
+    salesHeaderText: string;
+    salesLabel: string;
+    purchaseFooterNote: string;
+    purchaseHeaderText: string;
+    purchaseLabel: string;
+    dispatchFooterNote: string;
+    dispatchHeaderText: string;
+    dispatchLabel: string;
+  };
 }
 
 export function OrganizationPage({
@@ -102,19 +158,102 @@ export function OrganizationPage({
   onCompanyEditChange,
   onCompanySelect,
   onCompanyUpdate,
+  onInvoiceTemplateFormChange,
+  onInvoiceTemplateSave,
   onNewBranchChange,
   saving,
   selectedBranch,
   selectedCompany,
   selectedCompanyName,
+  invoiceTemplateForm,
 }: OrganizationPageProps): React.ReactElement {
-  const companiesPagination = useClientPagination(companies, { pageSize: 20 });
-  const branchesPagination = useClientPagination(branches, { pageSize: 20 });
+  const [companySearch, setCompanySearch] = useState('');
+  const [companyStatusFilter, setCompanyStatusFilter] = useState<'ACTIVE' | 'ALL' | 'PASSIVE'>('ALL');
+  const [branchSearch, setBranchSearch] = useState('');
+  const [branchStatusFilter, setBranchStatusFilter] = useState<'ACTIVE' | 'ALL' | 'PASSIVE'>('ALL');
+
+  const normalizedCompanySearch = companySearch.trim().toLocaleLowerCase('tr-TR');
+  const filteredCompanies = useMemo(
+    () =>
+      companies.filter((company) => {
+        if (companyStatusFilter === 'ACTIVE' && !company.isActive) {
+          return false;
+        }
+        if (companyStatusFilter === 'PASSIVE' && company.isActive) {
+          return false;
+        }
+        if (normalizedCompanySearch.length === 0) {
+          return true;
+        }
+
+        const haystack =
+          `${company.name} ${company.taxNumber ?? ''}`.toLocaleLowerCase('tr-TR');
+        return haystack.includes(normalizedCompanySearch);
+      }),
+    [companies, companyStatusFilter, normalizedCompanySearch],
+  );
+
+  const normalizedBranchSearch = branchSearch.trim().toLocaleLowerCase('tr-TR');
+  const filteredBranches = useMemo(
+    () =>
+      branches.filter((branch) => {
+        if (branchStatusFilter === 'ACTIVE' && !branch.isActive) {
+          return false;
+        }
+        if (branchStatusFilter === 'PASSIVE' && branch.isActive) {
+          return false;
+        }
+        if (normalizedBranchSearch.length === 0) {
+          return true;
+        }
+
+        const haystack =
+          `${branch.name} ${branch.phone ?? ''}`.toLocaleLowerCase('tr-TR');
+        return haystack.includes(normalizedBranchSearch);
+      }),
+    [branchStatusFilter, branches, normalizedBranchSearch],
+  );
+
+  const companiesPagination = useClientPagination(filteredCompanies, { pageSize: 20 });
+  const branchesPagination = useClientPagination(filteredBranches, { pageSize: 20 });
 
   return (
     <section className="panel-grid two-col">
       <article className="card">
-        <h2>Firmalar ({companiesPagination.total})</h2>
+        <h2>Firmalar ({companiesPagination.total}/{companies.length})</h2>
+
+        <div className="inline-row three">
+          <input
+            placeholder="Firma ara (ad/vergi no)"
+            value={companySearch}
+            onChange={(event) => setCompanySearch(event.target.value)}
+          />
+          <select
+            value={companyStatusFilter}
+            onChange={(event) =>
+              setCompanyStatusFilter(event.target.value as 'ACTIVE' | 'ALL' | 'PASSIVE')
+            }
+          >
+            <option value="ALL">Tum durumlar</option>
+            <option value="ACTIVE">Sadece aktif</option>
+            <option value="PASSIVE">Sadece pasif</option>
+          </select>
+          <button
+            className="btn ghost"
+            type="button"
+            onClick={() => {
+              setCompanySearch('');
+              setCompanyStatusFilter('ALL');
+            }}
+            disabled={
+              companySearch.trim().length === 0 &&
+              companyStatusFilter === 'ALL'
+            }
+          >
+            Filtreyi Temizle
+          </button>
+        </div>
+
         <ul className="list">
           {companiesPagination.visibleRows.map((company) => (
             <li key={company.id} className={company.id === companyId ? 'active' : ''}>
@@ -183,6 +322,30 @@ export function OrganizationPage({
               }
             />
           </div>
+          <div className="inline-row two">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={1}
+              placeholder="Urun indirim limiti (%)"
+              value={companyCreateForm.maxItemDiscountPercent}
+              onChange={(event) =>
+                onCompanyCreateChange((current) => ({ ...current, maxItemDiscountPercent: event.target.value }))
+              }
+            />
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={1}
+              placeholder="Sepet indirim limiti (%)"
+              value={companyCreateForm.maxCartDiscountPercent}
+              onChange={(event) =>
+                onCompanyCreateChange((current) => ({ ...current, maxCartDiscountPercent: event.target.value }))
+              }
+            />
+          </div>
           <button className="btn primary" type="submit" disabled={saving}>
             Firma Ekle
           </button>
@@ -236,6 +399,32 @@ export function OrganizationPage({
               disabled={!selectedCompany}
             />
           </div>
+          <div className="inline-row two">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={1}
+              placeholder="Urun indirim limiti (%)"
+              value={companyEditForm.maxItemDiscountPercent}
+              onChange={(event) =>
+                onCompanyEditChange((current) => ({ ...current, maxItemDiscountPercent: event.target.value }))
+              }
+              disabled={!selectedCompany}
+            />
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={1}
+              placeholder="Sepet indirim limiti (%)"
+              value={companyEditForm.maxCartDiscountPercent}
+              onChange={(event) =>
+                onCompanyEditChange((current) => ({ ...current, maxCartDiscountPercent: event.target.value }))
+              }
+              disabled={!selectedCompany}
+            />
+          </div>
           <label className="checkbox-row">
             <input
               type="checkbox"
@@ -259,8 +448,41 @@ export function OrganizationPage({
       </article>
 
       <article className="card">
-        <h2>Subeler ({branchesPagination.total})</h2>
+        <h2>Subeler ({branchesPagination.total}/{branches.length})</h2>
         <p className="muted">Aktif firma: {selectedCompanyName}</p>
+
+        <div className="inline-row three">
+          <input
+            placeholder="Sube ara (ad/telefon)"
+            value={branchSearch}
+            onChange={(event) => setBranchSearch(event.target.value)}
+          />
+          <select
+            value={branchStatusFilter}
+            onChange={(event) =>
+              setBranchStatusFilter(event.target.value as 'ACTIVE' | 'ALL' | 'PASSIVE')
+            }
+          >
+            <option value="ALL">Tum durumlar</option>
+            <option value="ACTIVE">Sadece aktif</option>
+            <option value="PASSIVE">Sadece pasif</option>
+          </select>
+          <button
+            className="btn ghost"
+            type="button"
+            onClick={() => {
+              setBranchSearch('');
+              setBranchStatusFilter('ALL');
+            }}
+            disabled={
+              branchSearch.trim().length === 0 &&
+              branchStatusFilter === 'ALL'
+            }
+          >
+            Filtreyi Temizle
+          </button>
+        </div>
+
         <ul className="list">
           {branchesPagination.visibleRows.map((branch) => (
             <li key={branch.id} className={branch.id === branchId ? 'active' : ''}>
@@ -368,6 +590,29 @@ export function OrganizationPage({
               Sil
             </button>
           </div>
+        </form>
+      </article>
+
+      <article className="card">
+        <h2>Kurumsal Fatura Sablonu</h2>
+        <form className="form-grid compact" onSubmit={onInvoiceTemplateSave}>
+          <div className="inline-row two">
+            <input placeholder="Genel baslik" value={invoiceTemplateForm.headerText} onChange={(event) => onInvoiceTemplateFormChange((current) => ({ ...current, headerText: event.target.value }))} />
+            <input placeholder="Logo URL" value={invoiceTemplateForm.logoUrl} onChange={(event) => onInvoiceTemplateFormChange((current) => ({ ...current, logoUrl: event.target.value }))} />
+          </div>
+          <div className="inline-row two">
+            <input placeholder="Vergi Dairesi" value={invoiceTemplateForm.taxOffice} onChange={(event) => onInvoiceTemplateFormChange((current) => ({ ...current, taxOffice: event.target.value }))} />
+            <input placeholder="Ticaret Sicil No" value={invoiceTemplateForm.tradeRegistryNo} onChange={(event) => onInvoiceTemplateFormChange((current) => ({ ...current, tradeRegistryNo: event.target.value }))} />
+          </div>
+          <input placeholder="Genel dipnot" value={invoiceTemplateForm.footerNote} onChange={(event) => onInvoiceTemplateFormChange((current) => ({ ...current, footerNote: event.target.value }))} />
+          <div className="inline-row three">
+            <input placeholder="Satis etiketi" value={invoiceTemplateForm.salesLabel} onChange={(event) => onInvoiceTemplateFormChange((current) => ({ ...current, salesLabel: event.target.value }))} />
+            <input placeholder="Alis etiketi" value={invoiceTemplateForm.purchaseLabel} onChange={(event) => onInvoiceTemplateFormChange((current) => ({ ...current, purchaseLabel: event.target.value }))} />
+            <input placeholder="Irsaliye etiketi" value={invoiceTemplateForm.dispatchLabel} onChange={(event) => onInvoiceTemplateFormChange((current) => ({ ...current, dispatchLabel: event.target.value }))} />
+          </div>
+          <button className="btn primary" type="submit" disabled={saving || !selectedCompany}>
+            Sablonu Kaydet
+          </button>
         </form>
       </article>
     </section>

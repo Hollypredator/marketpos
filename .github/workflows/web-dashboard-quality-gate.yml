@@ -4,18 +4,20 @@ on:
   pull_request:
     paths:
       - 'packages/web-dashboard/**'
-      - 'packages/api-server/**'
+      - 'packages/shared/**'
       - 'package.json'
       - 'package-lock.json'
+      - 'turbo.json'
       - '.github/workflows/web-dashboard-quality-gate.yml'
   push:
     branches:
       - main
     paths:
       - 'packages/web-dashboard/**'
-      - 'packages/api-server/**'
+      - 'packages/shared/**'
       - 'package.json'
       - 'package-lock.json'
+      - 'turbo.json'
       - '.github/workflows/web-dashboard-quality-gate.yml'
 
 jobs:
@@ -35,14 +37,14 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      - name: Web Typecheck
-        run: npm run typecheck --workspace @marketpos/web-dashboard
+      - name: Shared Typecheck
+        run: npm run typecheck --workspace @marketpos/shared
 
-      - name: Web Tests
+      - name: Web Lint
+        run: npm run lint --workspace @marketpos/web-dashboard
+
+      - name: Web Test
         run: npm run test --workspace @marketpos/web-dashboard
 
       - name: Web Build
         run: npm run build --workspace @marketpos/web-dashboard
-
-      - name: API Acceptance Tests
-        run: npm run test --workspace @marketpos/api-server

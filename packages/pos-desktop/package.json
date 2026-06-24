@@ -10,9 +10,12 @@
     "assets:icon": "powershell -ExecutionPolicy Bypass -File ./scripts/generate-brand-icon.ps1",
     "build": "vite build",
     "build:electron": "tsc -p tsconfig.electron.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.electron.json",
+    "lint": "npm run typecheck",
     "clean:electron-dev": "rimraf dist-electron",
+    "free-port:5175": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$p=(Get-NetTCPConnection -LocalPort 5175 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique); if($p){ $p | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue } }\"",
     "watch:electron": "tsc -p tsconfig.electron.json --watch --preserveWatchOutput",
-    "electron:dev": "npm run clean:electron-dev && concurrently -k -s first \"npm run dev -- --strictPort --port 5173\" \"npm run watch:electron\" \"wait-on http://127.0.0.1:5173 file:dist-electron/main.js file:dist-electron/preload.js && electron .\"",
+    "electron:dev": "npm run free-port:5175 && npm run clean:electron-dev && concurrently -k -s first \"npm run dev -- --strictPort --port 5175\" \"npm run watch:electron\" \"wait-on http://localhost:5175 file:dist-electron/main.js file:dist-electron/preload.js && set \\\"ELECTRON_RUN_AS_NODE=\\\" && electron .\"",
     "electron:build": "npm run assets:icon && npm run build && npm run build:electron && electron-builder",
     "electron:release": "npm run electron:build && npm run release:manifest",
     "electron:release:signed": "npm run release:check-signing && npm run electron:release && npm run release:verify-signature",
@@ -25,6 +28,7 @@
   "dependencies": {
     "@marketpos/shared": "*",
     "better-sqlite3": "^11.8.0",
+    "electron-updater": "^6.8.3",
     "node-thermal-printer": "^4.6.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -48,6 +52,7 @@
   },
   "build": {
     "appId": "com.marketpos.desktop",
+    "publish": null,
     "artifactName": "MarketPOS-${version}-setup.${ext}",
     "productName": "MarketPOS",
     "directories": {

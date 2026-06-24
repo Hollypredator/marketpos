@@ -110,6 +110,53 @@ export async function registerRoutes(server: FastifyInstance): Promise<void> {
     },
   );
 
+  server.get(
+    '/:id',
+    async (
+      request: FastifyRequest<{ Params: IdParams }>,
+      reply: FastifyReply,
+    ) => {
+      const register = await prisma.register.findFirst({
+        include: {
+          branch: {
+            select: {
+              companyId: true,
+            },
+          },
+        },
+        where: {
+          deletedAt: null,
+          id: request.params.id,
+        },
+      });
+      if (!register) {
+        return reply.status(404).send({
+          error: 'Kasa bulunamadi',
+          success: false,
+        });
+      }
+      if (
+        request.user.role !== 'SUPER_ADMIN' &&
+        register.branch.companyId !== request.user.companyId
+      ) {
+        return reply.status(404).send({
+          error: 'Kasa bulunamadi',
+          success: false,
+        });
+      }
+
+      return {
+        data: {
+          branchId: register.branchId,
+          id: register.id,
+          isActive: register.isActive,
+          name: register.name,
+        },
+        success: true,
+      };
+    },
+  );
+
   server.put(
     '/:id',
     { preHandler: server.ensureBackofficeWriter },

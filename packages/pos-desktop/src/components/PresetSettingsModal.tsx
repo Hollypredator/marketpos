@@ -2,6 +2,12 @@ import React, { useMemo, useState } from 'react';
 
 import { explainHardwareRecoveryPlan } from '../services/pos-runtime';
 import {
+  loadDiscountPolicy,
+  readDiscountPolicy,
+  saveDiscountPolicyForCompany,
+  type DiscountPolicy,
+} from '../services/discount-policy';
+import {
   applyHardwareProfile,
   listHardwareProfiles,
   type HardwareProfileId,
@@ -12,6 +18,11 @@ import {
   listUiPresetDefinitions,
   resolveTouchDensityByViewport,
 } from '../services/ui-preset';
+import {
+  readIntegrationSettings,
+  saveIntegrationSettings,
+  type IntegrationSettings,
+} from '../services/integration-settings';
 import { useToast } from '../store';
 
 interface PresetSettingsModalProps {
@@ -21,8 +32,8 @@ interface PresetSettingsModalProps {
   onSaved: (payload: { touchDensity: TouchDensity; uiPreset: UiPreset }) => void;
 }
 
-type UnlockStep = 'PIN_SETUP' | 'SETTINGS' | 'VERIFY';
-type SettingsTab = 'HARDWARE' | 'PRESET';
+type UnlockStep = 'SETTINGS' | 'VERIFY';
+type SettingsTab = 'HARDWARE' | 'PRESET' | 'SALES' | 'INTEGRATIONS';
 
 export default function PresetSettingsModal({
   companyId,
@@ -38,11 +49,25 @@ export default function PresetSettingsModal({
   const [hardwareTask, setHardwareTask] = useState<null | 'DRAWER' | 'LOAD' | 'REPRINT' | 'SAVE' | 'TEST_PRINT'>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [password, setPassword] = useState('');
-  const [pin, setPin] = useState('');
-  const [pinConfirm, setPinConfirm] = useState('');
+  const [salesPolicy, setSalesPolicy] = useState<DiscountPolicy>(() => readDiscountPolicy(companyId));
+  const [salesPolicyDraft, setSalesPolicyDraft] = useState<{
+    maxCart: string;
+    maxCartAmount: string;
+    maxItem: string;
+    maxItemAmount: string;
+  }>(() => {
+    const policy = readDiscountPolicy(companyId);
+    return {
+      maxCartAmount: String(policy.maxCartDiscountAmount),
+      maxCart: String(policy.maxCartDiscountPercent),
+      maxItemAmount: String(policy.maxItemDiscountAmount),
+      maxItem: String(policy.maxItemDiscountPercent),
+    };
+  });
   const [selectedPreset, setSelectedPreset] = useState<UiPreset>(currentPreset);
   const [selectedHardwareProfile, setSelectedHardwareProfile] =
     useState<HardwareProfileId>('LAN_FAST');
+  const [integrationSettings, setIntegrationSettings] = useState<IntegrationSettings>(() => readIntegrationSettings());
   const [step, setStep] = useState<UnlockStep>('VERIFY');
   const [username, setUsername] = useState('admin');
 
@@ -73,7 +98,17 @@ export default function PresetSettingsModal({
     setHardwareMessage('');
     try {
       const config = await window.electronAPI.getHardwareConfig();
+      const discountPolicy = await loadDiscountPolicy(companyId);
       setHardwareConfig(config);
+      setSalesPolicy(discountPolicy);
+      const integrations = readIntegrationSettings();
+      setIntegrationSettings(integrations);
+      setSalesPolicyDraft({
+        maxCartAmount: String(discountPolicy.maxCartDiscountAmount),
+        maxCart: String(discountPolicy.maxCartDiscountPercent),
+        maxItemAmount: String(discountPolicy.maxItemDiscountAmount),
+        maxItem: String(discountPolicy.maxItemDiscountPercent),
+      });
     } catch (caughtError: unknown) {
       setError(
         caughtError instanceof Error
@@ -82,41 +117,6 @@ export default function PresetSettingsModal({
       );
     } finally {
       setHardwareTask(null);
-    }
-  };
-
-  const verifyWithPin = async (): Promise<void> => {
-    if (!window.electronAPI) {
-      setError('Electron API bulunamadi.');
-      return;
-    }
-    if (!/^\d{4}$/u.test(pin.trim())) {
-      setError('Yonetici PIN 4 haneli olmalidir.');
-      return;
-    }
-
-    setError('');
-    setIsSubmitting(true);
-    try {
-      const result = await window.electronAPI.verifyManagerUnlock({
-        companyId: companyId ?? undefined,
-        pin: pin.trim(),
-        username: username.trim() || undefined,
-      });
-      if (result.requiresPinSetup) {
-        setStep('PIN_SETUP');
-      } else {
-        await openSettingsStep();
-        toast.success(`Yonetici dogrulandi: ${result.user.fullName}`);
-      }
-    } catch (caughtError: unknown) {
-      setError(
-        caughtError instanceof Error
-          ? caughtError.message
-          : 'Yonetici PIN dogrulamasi basarisiz.',
-      );
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -138,47 +138,13 @@ export default function PresetSettingsModal({
         password: password.trim(),
         username: username.trim() || undefined,
       });
-      if (result.requiresPinSetup) {
-        setStep('PIN_SETUP');
-        toast.info('Yonetici PIN henuz tanimli degil. Lutfen yeni PIN belirleyin.');
-      } else {
-        await openSettingsStep();
-        toast.success(`Yonetici dogrulandi: ${result.user.fullName}`);
-      }
+      await openSettingsStep();
+      toast.success(`Yonetici dogrulandi: ${result.user.fullName}`);
     } catch (caughtError: unknown) {
       setError(
         caughtError instanceof Error
           ? caughtError.message
           : 'Yonetici sifre dogrulamasi basarisiz.',
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const submitPinSetup = async (): Promise<void> => {
-    if (!window.electronAPI) {
-      setError('Electron API bulunamadi.');
-      return;
-    }
-    if (!/^\d{4}$/u.test(pin.trim())) {
-      setError('PIN 4 haneli olmalidir.');
-      return;
-    }
-    if (pin.trim() !== pinConfirm.trim()) {
-      setError('PIN tekrar alani esit degil.');
-      return;
-    }
-
-    setError('');
-    setIsSubmitting(true);
-    try {
-      await window.electronAPI.setManagerPin({ pin: pin.trim() });
-      toast.success('Yonetici PIN kaydedildi.');
-      await openSettingsStep();
-    } catch (caughtError: unknown) {
-      setError(
-        caughtError instanceof Error ? caughtError.message : 'PIN kayit hatasi.',
       );
     } finally {
       setIsSubmitting(false);
@@ -324,6 +290,44 @@ export default function PresetSettingsModal({
     }
   };
 
+  const saveSalesPolicyRules = async (): Promise<void> => {
+    const maxItem = Number.parseFloat(salesPolicyDraft.maxItem);
+    const maxCart = Number.parseFloat(salesPolicyDraft.maxCart);
+    const maxItemAmount = Number.parseFloat(salesPolicyDraft.maxItemAmount);
+    const maxCartAmount = Number.parseFloat(salesPolicyDraft.maxCartAmount);
+    if (!Number.isFinite(maxItem) || maxItem < 0 || maxItem > 100) {
+      setError('Urun indirim limiti 0 ile 100 arasinda olmalidir.');
+      return;
+    }
+    if (!Number.isFinite(maxCart) || maxCart < 0 || maxCart > 100) {
+      setError('Sepet indirim limiti 0 ile 100 arasinda olmalidir.');
+      return;
+    }
+    if (!Number.isFinite(maxItemAmount) || maxItemAmount < 0) {
+      setError('Urun sabit indirim limiti sifir veya daha buyuk olmalidir.');
+      return;
+    }
+    if (!Number.isFinite(maxCartAmount) || maxCartAmount < 0) {
+      setError('Sepet sabit indirim limiti sifir veya daha buyuk olmalidir.');
+      return;
+    }
+    setError('');
+    const saved = await saveDiscountPolicyForCompany({
+      maxCartDiscountAmount: maxCartAmount,
+      maxCartDiscountPercent: maxCart,
+      maxItemDiscountAmount: maxItemAmount,
+      maxItemDiscountPercent: maxItem,
+    }, companyId);
+    setSalesPolicy(saved);
+    setSalesPolicyDraft({
+      maxCartAmount: String(saved.maxCartDiscountAmount),
+      maxCart: String(saved.maxCartDiscountPercent),
+      maxItemAmount: String(saved.maxItemDiscountAmount),
+      maxItem: String(saved.maxItemDiscountPercent),
+    });
+    toast.success('Satis indirim kurallari kaydedildi.');
+  };
+
   return (
     <div className="modal-overlay" role="presentation">
       <div className="modal-card">
@@ -357,89 +361,25 @@ export default function PresetSettingsModal({
                 autoComplete="off"
               />
             </div>
-            <div className="modal-grid-two">
-              <div className="login-field">
-                <label htmlFor="unlock-pin">PIN (4 hane)</label>
-                <input
-                  id="unlock-pin"
-                  className="input"
-                  value={pin}
-                  onChange={(event) => setPin(event.target.value)}
-                  type="password"
-                  maxLength={4}
-                  autoComplete="off"
-                />
-                <button
-                  className="btn btn-primary btn-block"
-                  onClick={() => void verifyWithPin()}
-                  type="button"
-                  disabled={isBusy}
-                >
-                  PIN ile Onayla
-                </button>
-              </div>
-              <div className="login-field">
-                <label htmlFor="unlock-password">Yonetici Sifre</label>
-                <input
-                  id="unlock-password"
-                  className="input"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  type="password"
-                  autoComplete="off"
-                />
-                <button
-                  className="btn btn-ghost btn-block"
-                  onClick={() => void verifyWithPassword()}
-                  type="button"
-                  disabled={isBusy}
-                >
-                  Sifre ile Onayla
-                </button>
-              </div>
+            <div className="login-field">
+              <label htmlFor="unlock-password">Yonetici Sifre</label>
+              <input
+                id="unlock-password"
+                className="input"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                type="password"
+                autoComplete="off"
+              />
+              <button
+                className="btn btn-primary btn-block"
+                onClick={() => void verifyWithPassword()}
+                type="button"
+                disabled={isBusy}
+              >
+                Sifre ile Onayla
+              </button>
             </div>
-          </>
-        )}
-
-        {step === 'PIN_SETUP' && (
-          <>
-            <p className="modal-caption">
-              Yonetici PIN tanimsiz. Kurulum guvenligi icin yeni PIN belirleyin.
-            </p>
-            <div className="modal-grid-two">
-              <div className="login-field">
-                <label htmlFor="new-pin">Yeni PIN</label>
-                <input
-                  id="new-pin"
-                  className="input"
-                  value={pin}
-                  onChange={(event) => setPin(event.target.value)}
-                  type="password"
-                  maxLength={4}
-                  autoComplete="off"
-                />
-              </div>
-              <div className="login-field">
-                <label htmlFor="new-pin-repeat">PIN Tekrar</label>
-                <input
-                  id="new-pin-repeat"
-                  className="input"
-                  value={pinConfirm}
-                  onChange={(event) => setPinConfirm(event.target.value)}
-                  type="password"
-                  maxLength={4}
-                  autoComplete="off"
-                />
-              </div>
-            </div>
-            <button
-              className="btn btn-primary btn-lg"
-              onClick={() => void submitPinSetup()}
-              type="button"
-              disabled={isBusy}
-            >
-              PIN Kaydet ve Devam Et
-            </button>
           </>
         )}
 
@@ -461,6 +401,22 @@ export default function PresetSettingsModal({
                 disabled={isBusy}
               >
                 Donanim
+              </button>
+              <button
+                className={`modal-tab ${activeTab === 'SALES' ? 'active' : ''}`}
+                onClick={() => setActiveTab('SALES')}
+                type="button"
+                disabled={isBusy}
+              >
+                Satis Kurallari
+              </button>
+              <button
+                className={`modal-tab ${activeTab === 'INTEGRATIONS' ? 'active' : ''}`}
+                onClick={() => setActiveTab('INTEGRATIONS')}
+                type="button"
+                disabled={isBusy}
+              >
+                Entegrasyonlar
               </button>
             </div>
 
@@ -490,6 +446,87 @@ export default function PresetSettingsModal({
                   </button>
                   <button className="btn btn-success btn-lg" onClick={() => void savePreset()} type="button" disabled={isBusy}>
                     Preseti Kaydet
+                  </button>
+                </div>
+              </>
+            )}
+
+            {activeTab === 'SALES' && (
+              <>
+                <p className="modal-caption">
+                  Urun ve sepet indirimi bu yuzde limitlerine gore sinirlanir. Kasa ekraninda TL veya %
+                  girisi desteklenir (ornek: 25 veya 10%).
+                </p>
+                <div className="modal-grid-two">
+                  <div className="login-field">
+                    <label>Urun Indirim Limiti (%)</label>
+                    <input
+                      className="input"
+                      max={100}
+                      min={0}
+                      onChange={(event) =>
+                        setSalesPolicyDraft((current) => ({ ...current, maxItem: event.target.value }))
+                      }
+                      step={1}
+                      type="number"
+                      value={salesPolicyDraft.maxItem}
+                    />
+                  </div>
+                  <div className="login-field">
+                    <label>Urun Sabit Indirim Limiti (TL)</label>
+                    <input
+                      className="input"
+                      min={0}
+                      onChange={(event) =>
+                        setSalesPolicyDraft((current) => ({ ...current, maxItemAmount: event.target.value }))
+                      }
+                      step={1}
+                      type="number"
+                      value={salesPolicyDraft.maxItemAmount}
+                    />
+                  </div>
+                  <div className="login-field">
+                    <label>Sepet Indirim Limiti (%)</label>
+                    <input
+                      className="input"
+                      max={100}
+                      min={0}
+                      onChange={(event) =>
+                        setSalesPolicyDraft((current) => ({ ...current, maxCart: event.target.value }))
+                      }
+                      step={1}
+                      type="number"
+                      value={salesPolicyDraft.maxCart}
+                    />
+                  </div>
+                  <div className="login-field">
+                    <label>Sepet Sabit Indirim Limiti (TL)</label>
+                    <input
+                      className="input"
+                      min={0}
+                      onChange={(event) =>
+                        setSalesPolicyDraft((current) => ({ ...current, maxCartAmount: event.target.value }))
+                      }
+                      step={1}
+                      type="number"
+                      value={salesPolicyDraft.maxCartAmount}
+                    />
+                  </div>
+                </div>
+                <p className="modal-caption">
+                  Aktif politika: Urun %{salesPolicy.maxItemDiscountPercent} ({salesPolicy.maxItemDiscountAmount.toFixed(0)} TL) / Sepet %{salesPolicy.maxCartDiscountPercent} ({salesPolicy.maxCartDiscountAmount.toFixed(0)} TL)
+                </p>
+                <div className="modal-actions">
+                  <button className="btn btn-ghost btn-lg" onClick={onClose} type="button" disabled={isBusy}>
+                    Kapat
+                  </button>
+                  <button
+                    className="btn btn-success btn-lg"
+                    onClick={() => void saveSalesPolicyRules()}
+                    type="button"
+                    disabled={isBusy}
+                  >
+                    Satis Kurallarini Kaydet
                   </button>
                 </div>
               </>
@@ -732,6 +769,66 @@ export default function PresetSettingsModal({
                 {hardwareMessage.length > 0 && (
                   <div className="hardware-status">{hardwareMessage}</div>
                 )}
+              </div>
+            )}
+
+            {activeTab === 'INTEGRATIONS' && (
+              <div className="hardware-panel">
+                <p className="modal-caption">
+                  Zamani geldiginde SMS onayi, e-Fatura veya YN OKC baglantilarini burayi kullanarak aktif edebilirsiniz.
+                </p>
+                
+                <div className="modal-grid-two">
+                  <div className="login-field">
+                    <label className="toggle-label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={integrationSettings.isEInvoiceEnabled}
+                        onChange={(e) => setIntegrationSettings(prev => ({ ...prev, isEInvoiceEnabled: e.target.checked }))}
+                        style={{ width: '20px', height: '20px' }}
+                      />
+                      <span>e-Fatura / e-Arşiv Entegrasyonu</span>
+                    </label>
+                  </div>
+                  
+                  <div className="login-field">
+                    <label className="toggle-label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={integrationSettings.isYNOKCEnabled}
+                        onChange={(e) => setIntegrationSettings(prev => ({ ...prev, isYNOKCEnabled: e.target.checked }))}
+                        style={{ width: '20px', height: '20px' }}
+                      />
+                      <span>YN ÖKC (Yazarkasa POS) Donanımı</span>
+                    </label>
+                  </div>
+
+                  <div className="login-field">
+                    <label className="toggle-label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={integrationSettings.isManagerSMSEnabled}
+                        onChange={(e) => setIntegrationSettings(prev => ({ ...prev, isManagerSMSEnabled: e.target.checked }))}
+                        style={{ width: '20px', height: '20px' }}
+                      />
+                      <span>Yönetici SMS Doğrulaması</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="modal-actions" style={{ marginTop: '2rem' }}>
+                   <button 
+                     className="btn btn-success btn-lg btn-block" 
+                     onClick={() => {
+                        saveIntegrationSettings(integrationSettings);
+                        toast.success('Entegrasyon ayarlari kaydedildi.');
+                     }} 
+                     type="button" 
+                     disabled={isBusy}
+                   >
+                    Entegrasyon Ayarlarini Kaydet
+                  </button>
+                </div>
               </div>
             )}
           </>

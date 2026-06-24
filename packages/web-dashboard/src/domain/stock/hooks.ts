@@ -7,6 +7,7 @@ import {
   listStockMovementsApi,
 } from './api';
 import { queryKeys } from '../../lib/query-keys';
+import type { StockMovementListFilters } from './types';
 
 export function useStockLevelsQuery(branchId: string, enabled: boolean) {
   return useQuery({
@@ -17,11 +18,15 @@ export function useStockLevelsQuery(branchId: string, enabled: boolean) {
   });
 }
 
-export function useStockMovementsQuery(branchId: string, enabled: boolean) {
+export function useStockMovementsQuery(
+  branchId: string,
+  filters: StockMovementListFilters,
+  enabled: boolean,
+) {
   return useQuery({
     enabled: enabled && branchId.length > 0,
-    queryFn: () => listStockMovementsApi(branchId),
-    queryKey: queryKeys.stockMovements(branchId),
+    queryFn: () => listStockMovementsApi(branchId, filters),
+    queryKey: queryKeys.stockMovements(branchId, filters),
     staleTime: 20_000,
   });
 }
@@ -39,7 +44,7 @@ export function useStockMutations(branchId: string) {
   const queryClient = useQueryClient();
   const invalidateBranchStock = (): void => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.stockLevels(branchId) });
-    void queryClient.invalidateQueries({ queryKey: queryKeys.stockMovements(branchId) });
+    void queryClient.invalidateQueries({ queryKey: ['stock-movements', branchId] });
   };
 
   const createStockMovement = useMutation({

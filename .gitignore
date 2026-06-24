@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist-electron/
 .turbo/
 *.log
 .env
@@ -13,3 +14,17 @@ coverage/
 out/
 release/
 .tools/node20/
+
+# Scratch / debug output
+scratch_*
+tmp-*
+api-debug-*.log
+build_error*.txt
+build_final.txt
+
+# Dev databases
+prisma/*.db
+prisma/ewewrwr
+
+# Generated
+generated/

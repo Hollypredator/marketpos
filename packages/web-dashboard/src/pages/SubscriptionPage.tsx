@@ -21,33 +21,6 @@ interface SubscriptionPlanForm {
   packageStatus: 'ACTIVE' | 'SUSPENDED';
 }
 
-interface SubscriptionProvisionForm {
-  address: string;
-  adminFullName: string;
-  adminPassword: string;
-  adminUsername: string;
-  branchName: string;
-  companyId: string;
-  companyName: string;
-  email: string;
-  graceDays: string;
-  overwriteStock: boolean;
-  packageDays: string;
-  phone: string;
-  registerName: string;
-  taxNumber: string;
-  templateCode: string;
-}
-
-interface ProvisionTemplateSummary {
-  categoryCount: number;
-  code: string;
-  defaultMinStock: number;
-  defaultOpeningStock: number;
-  displayName: string;
-  productCount: number;
-}
-
 interface SubscriptionSummary {
   ACTIVE: number;
   EXPIRED: number;
@@ -64,6 +37,7 @@ interface SubscriptionCompanyRow {
     packageExpiresAt?: string | null;
     packageGraceEndsAt?: string | null;
     packageStatus: 'ACTIVE' | 'SUSPENDED';
+    licenseKey?: string | null;
   };
   access: {
     daysRemaining: number | null;
@@ -113,9 +87,6 @@ interface SubscriptionPageProps {
   onExportWholeList: () => void;
   onFiltersChange: (updater: (current: SubscriptionFilters) => SubscriptionFilters) => void;
   onPlanFormChange: (updater: (current: SubscriptionPlanForm) => SubscriptionPlanForm) => void;
-  onProvisionFormChange: (
-    updater: (current: SubscriptionProvisionForm) => SubscriptionProvisionForm,
-  ) => void;
   onQuickRenew: (companyId: string) => void;
   onQuickRenewSelected: () => void;
   onReloadAudit: () => void;
@@ -123,14 +94,10 @@ interface SubscriptionPageProps {
   onSavePlan: (event: React.FormEvent<HTMLFormElement>) => void;
   onSelectCompany: (companyId: string) => void;
   onSortChange: (sort: SubscriptionSort) => void;
-  onSubmitProvision: (event: React.FormEvent<HTMLFormElement>) => void;
   onSuspend: (companyId: string) => void;
   onUnsuspend: (companyId: string) => void;
-  onUseSelectedCompanyForProvision: () => void;
+  onGenerateLicenseKey: (companyId: string) => void;
   planForm: SubscriptionPlanForm;
-  provisionErrorText: string | null;
-  provisionForm: SubscriptionProvisionForm;
-  provisionLoading: boolean;
   rows: SubscriptionCompanyRow[];
   saving: boolean;
   selectedRow: SubscriptionCompanyRow | null;
@@ -140,9 +107,6 @@ interface SubscriptionPageProps {
   subscriptionErrorText: string | null;
   subscriptionLoading: boolean;
   summary: SubscriptionSummary;
-  templateErrorText: string | null;
-  templateLoading: boolean;
-  templates: ProvisionTemplateSummary[];
   toDateTime: (value?: string | null) => string;
   upcomingRenewals: SubscriptionCompanyRow[];
 }
@@ -161,7 +125,6 @@ export function SubscriptionPage({
   onExportWholeList,
   onFiltersChange,
   onPlanFormChange,
-  onProvisionFormChange,
   onQuickRenew,
   onQuickRenewSelected,
   onReloadAudit,
@@ -169,14 +132,10 @@ export function SubscriptionPage({
   onSavePlan,
   onSelectCompany,
   onSortChange,
-  onSubmitProvision,
   onSuspend,
   onUnsuspend,
-  onUseSelectedCompanyForProvision,
+  onGenerateLicenseKey,
   planForm,
-  provisionErrorText,
-  provisionForm,
-  provisionLoading,
   rows,
   saving,
   selectedRow,
@@ -186,16 +145,12 @@ export function SubscriptionPage({
   subscriptionErrorText,
   subscriptionLoading,
   summary,
-  templateErrorText,
-  templateLoading,
-  templates,
   toDateTime,
   upcomingRenewals,
 }: SubscriptionPageProps): React.ReactElement {
   const upcomingPagination = useClientPagination(upcomingRenewals, { pageSize: 20 });
   const rowsPagination = useClientPagination(rows, { pageSize: 20 });
   const auditRowsPagination = useClientPagination(auditRows, { pageSize: 20 });
-  const templatePagination = useClientPagination(templates, { pageSize: 20 });
 
   return (
     <section className="panel-grid">
@@ -302,290 +257,6 @@ export function SubscriptionPage({
         </div>
       </article>
 
-      <section className="panel-grid two-col">
-        <article className="card">
-          <h2>SaaS Provisioning Merkezi</h2>
-          <p className="muted">
-            Yeni firma acabilir veya secili firmaya tekrar template uygulayabilirsiniz.
-          </p>
-          {provisionErrorText && <p className="muted">{provisionErrorText}</p>}
-          <form className="form-grid compact" onSubmit={onSubmitProvision}>
-            <div className="inline-row two">
-              <label>
-                Template
-                <select
-                  value={provisionForm.templateCode}
-                  onChange={(event) =>
-                    onProvisionFormChange((current) => ({
-                      ...current,
-                      templateCode: event.target.value,
-                    }))
-                  }
-                  required
-                  disabled={templateLoading}
-                >
-                  {templates.map((template) => (
-                    <option key={template.code} value={template.code}>
-                      {template.displayName} ({template.code})
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Firma ID (mevcut)
-                <input
-                  placeholder="uuid"
-                  value={provisionForm.companyId}
-                  onChange={(event) =>
-                    onProvisionFormChange((current) => ({
-                      ...current,
-                      companyId: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-            </div>
-            <div className="inline-row two">
-              <label>
-                Yeni Firma Adi
-                <input
-                  placeholder="Ornek Market"
-                  value={provisionForm.companyName}
-                  onChange={(event) =>
-                    onProvisionFormChange((current) => ({
-                      ...current,
-                      companyName: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-              <label>
-                Vergi No
-                <input
-                  placeholder="1234567890"
-                  value={provisionForm.taxNumber}
-                  onChange={(event) =>
-                    onProvisionFormChange((current) => ({
-                      ...current,
-                      taxNumber: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-            </div>
-            <div className="inline-row three">
-              <label>
-                Admin Kullanici
-                <input
-                  value={provisionForm.adminUsername}
-                  onChange={(event) =>
-                    onProvisionFormChange((current) => ({
-                      ...current,
-                      adminUsername: event.target.value,
-                    }))
-                  }
-                  required
-                />
-              </label>
-              <label>
-                Admin Sifre
-                <input
-                  type="password"
-                  value={provisionForm.adminPassword}
-                  onChange={(event) =>
-                    onProvisionFormChange((current) => ({
-                      ...current,
-                      adminPassword: event.target.value,
-                    }))
-                  }
-                  required
-                />
-              </label>
-              <label>
-                Admin Ad Soyad
-                <input
-                  value={provisionForm.adminFullName}
-                  onChange={(event) =>
-                    onProvisionFormChange((current) => ({
-                      ...current,
-                      adminFullName: event.target.value,
-                    }))
-                  }
-                  required
-                />
-              </label>
-            </div>
-            <div className="inline-row three">
-              <label>
-                Sube
-                <input
-                  value={provisionForm.branchName}
-                  onChange={(event) =>
-                    onProvisionFormChange((current) => ({
-                      ...current,
-                      branchName: event.target.value,
-                    }))
-                  }
-                  required
-                />
-              </label>
-              <label>
-                Kasa
-                <input
-                  value={provisionForm.registerName}
-                  onChange={(event) =>
-                    onProvisionFormChange((current) => ({
-                      ...current,
-                      registerName: event.target.value,
-                    }))
-                  }
-                  required
-                />
-              </label>
-              <label>
-                Paket / Grace (gun)
-                <div className="inline-row two">
-                  <input
-                    type="number"
-                    min="1"
-                    value={provisionForm.packageDays}
-                    onChange={(event) =>
-                      onProvisionFormChange((current) => ({
-                        ...current,
-                        packageDays: event.target.value,
-                      }))
-                    }
-                    required
-                  />
-                  <input
-                    type="number"
-                    min="1"
-                    max="30"
-                    value={provisionForm.graceDays}
-                    onChange={(event) =>
-                      onProvisionFormChange((current) => ({
-                        ...current,
-                        graceDays: event.target.value,
-                      }))
-                    }
-                    required
-                  />
-                </div>
-              </label>
-            </div>
-            <div className="inline-row three">
-              <label>
-                Telefon
-                <input
-                  value={provisionForm.phone}
-                  onChange={(event) =>
-                    onProvisionFormChange((current) => ({
-                      ...current,
-                      phone: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-              <label>
-                Email
-                <input
-                  type="email"
-                  value={provisionForm.email}
-                  onChange={(event) =>
-                    onProvisionFormChange((current) => ({
-                      ...current,
-                      email: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-              <label>
-                Adres
-                <input
-                  value={provisionForm.address}
-                  onChange={(event) =>
-                    onProvisionFormChange((current) => ({
-                      ...current,
-                      address: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-            </div>
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={provisionForm.overwriteStock}
-                onChange={(event) =>
-                  onProvisionFormChange((current) => ({
-                    ...current,
-                    overwriteStock: event.target.checked,
-                  }))
-                }
-              />
-              Mevcut stoklari template stok miktari ile guncelle
-            </label>
-            <div className="inline-row two">
-              <button
-                className="btn"
-                type="button"
-                onClick={onUseSelectedCompanyForProvision}
-                disabled={!selectedRow || provisionLoading}
-              >
-                Secili Firmayi Hedefle
-              </button>
-              <button className="btn primary" type="submit" disabled={provisionLoading || saving}>
-                {provisionLoading ? 'Provision calisiyor...' : 'Provision Baslat'}
-              </button>
-            </div>
-          </form>
-        </article>
-
-        <article className="card">
-          <h2>Template Kutuphanesi ({templatePagination.total})</h2>
-          {templateErrorText && <p className="muted">{templateErrorText}</p>}
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Kod</th>
-                  <th>Ad</th>
-                  <th>Kategori</th>
-                  <th>Urun</th>
-                  <th>Min Stok</th>
-                  <th>Acilis Stok</th>
-                </tr>
-              </thead>
-              <tbody>
-                <TableState
-                  colSpan={6}
-                  emptyText="Template bulunmadi."
-                  errorText={templateErrorText}
-                  loading={templateLoading}
-                  rowCount={templatePagination.total}
-                />
-                {templatePagination.visibleRows.map((template) => (
-                  <tr key={template.code}>
-                    <td>{template.code}</td>
-                    <td>{template.displayName}</td>
-                    <td>{template.categoryCount}</td>
-                    <td>{template.productCount}</td>
-                    <td>{template.defaultMinStock}</td>
-                    <td>{template.defaultOpeningStock}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <PaginationControls
-            onPageChange={templatePagination.setPage}
-            page={templatePagination.page}
-            pageSize={templatePagination.pageSize}
-            total={templatePagination.total}
-          />
-        </article>
-      </section>
-
       <article className="card">
         <h2>Yaklasan Yenileme Listesi ({upcomingPagination.total})</h2>
         <p className="muted">Son {dueLimit} gun icinde yenileme beklenen firmalar.</p>
@@ -656,7 +327,10 @@ export function SubscriptionPage({
                   <td>
                     <div className="stacked-row">
                       <span>{row.company.name}</span>
-                      <small>{row.company.taxNumber ?? 'Vergi no yok'}</small>
+                      <small>
+                        {row.company.taxNumber ?? 'Vergi no yok'}
+                        {row.company.licenseKey && ` | Lisans: ${row.company.licenseKey}`}
+                      </small>
                     </div>
                   </td>
                   <td>{row.access.status}</td>
@@ -717,7 +391,18 @@ export function SubscriptionPage({
             <form className="form-grid compact" onSubmit={onSavePlan}>
               <p className="muted">
                 {selectedRow.company.name} | Runtime: {selectedRow.access.status}
+                {selectedRow.company.licenseKey && ` | Lisans: ${selectedRow.company.licenseKey}`}
               </p>
+              <div style={{ marginBottom: '12px' }}>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => onGenerateLicenseKey(selectedRow.company.id)}
+                  disabled={saving}
+                >
+                  Yeni Lisans Kodu Üret
+                </button>
+              </div>
               <div className="inline-row two">
                 <label>
                   Paket durumu

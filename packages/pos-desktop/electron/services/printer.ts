@@ -99,6 +99,57 @@ export class PrinterService {
     }
   }
 
+  public async printBarcode(
+    payload: { barcode: string; name: string; price: number; copyCount?: number }
+  ): Promise<PrinterActionResult> {
+    const hardwareConfig = this.getHardwareConfig();
+    const interfaceName = toThermalInterface(hardwareConfig);
+    const copyCount = this.resolveCopyCount(payload.copyCount, 1);
+    const printer = this.createPrinter(hardwareConfig, interfaceName);
+
+    try {
+      const connected = await printer.isPrinterConnected();
+      if (!connected) {
+        return {
+          errorCode: 'PRINTER_NOT_CONNECTED',
+          interfaceName,
+          message: 'Yaziciya baglanilamadi.',
+          operatorAction: 'CHECK_PRINTER_CONNECTION',
+          printedAt: new Date().toISOString(),
+          success: false,
+        };
+      }
+
+      for (let index = 0; index < copyCount; index += 1) {
+        printer.clear();
+        printer.alignCenter();
+        printer.println(payload.name);
+        printer.println(`Fiyat: ${payload.price.toFixed(2)} TL`);
+        // We use code128 for general barcodes
+        printer.printBarcode(payload.barcode, 73, { width: 2, height: 60 });
+        printer.cut();
+        await printer.execute({ docname: `MarketPOS-Barcode-${payload.barcode}-${index + 1}` });
+      }
+
+      return {
+        interfaceName,
+        message: `Etiket yazdirma islemi tamamlandi (${copyCount} kopya).`,
+        operatorAction: 'NONE',
+        printedAt: new Date().toISOString(),
+        success: true,
+      };
+    } catch (error: unknown) {
+      return {
+        errorCode: this.resolvePrinterErrorCode(error),
+        interfaceName,
+        message: this.readErrorMessage(error, 'Etiket yazdirma islemi basarisiz oldu.'),
+        operatorAction: 'CHECK_HARDWARE_SETTINGS',
+        printedAt: new Date().toISOString(),
+        success: false,
+      };
+    }
+  }
+
   private createPrinter(config: HardwareConfig, interfaceName: string): ThermalPrinter {
     return new ThermalPrinter({
       interface: interfaceName,

@@ -1,4 +1,4 @@
-﻿import type { Prisma } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import {
   closeRegisterSessionSchema,
   createStockMovementSchema,
@@ -22,9 +22,16 @@ interface SessionIdParams {
 
 interface MovementsQuery {
   branchId?: string;
+  dateFrom?: string;
+  dateTo?: string;
   limit?: string;
+  maxQuantity?: string;
+  minQuantity?: string;
   page?: string;
   productId?: string;
+  search?: string;
+  type?: string;
+  userSearch?: string;
 }
 
 interface LowStockRow {
@@ -43,6 +50,42 @@ function parsePositiveInt(value: string | undefined, fallback: number): number {
   }
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function normalizeClientRequestId(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const normalized = value.trim();
+  if (normalized.length < 8) {
+    return null;
+  }
+  return normalized;
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return (
+    !!error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    (error as { code?: string }).code === 'P2002'
+  );
+}
+
+function parseOptionalFloat(value?: string): number | null {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseOptionalDate(value?: string): Date | null {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    return null;
+  }
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 async function findScopedBranch(
@@ -189,7 +232,23 @@ export async function stockRoutes(server: FastifyInstance): Promise<void> {
         });
       }
 
-      const { branchId, note, productId, quantity, reference } = parsed.data;
+      const {
+        branchId,
+        clientRequestId,
+        note,
+        productId,
+        quantity,
+        reference,
+      } = parsed.data;
+      const rawRequestedType =
+        typeof (request.body as { type?: string } | undefined)?.type === 'string'
+          ? (request.body as { type?: string }).type
+          : undefined;
+      const requestedType =
+        rawRequestedType &&
+        ['PURCHASE', 'SALE', 'REFUND', 'ADJUSTMENT', 'WASTE'].includes(rawRequestedType)
+          ? (rawRequestedType as Prisma.StockMovementUncheckedCreateInput['type'])
+          : undefined;
       const scopedBranch = await findScopedBranch(branchId, request);
       if (!scopedBranch) {
         return reply.status(404).send({
@@ -197,62 +256,109 @@ export async function stockRoutes(server: FastifyInstance): Promise<void> {
           success: false,
         });
       }
-      const type: Prisma.StockMovementUncheckedCreateInput['type'] =
-        quantity > 0 ? 'PURCHASE' : 'ADJUSTMENT';
-
-      const result = await prisma.$transaction(async (tx) => {
-        const product = await tx.product.findFirst({
+      const normalizedClientRequestId = normalizeClientRequestId(clientRequestId);
+      if (normalizedClientRequestId) {
+        const replayed = await prisma.stockMovement.findFirst({
           where: {
-            companyId: scopedBranch.companyId,
-            deletedAt: null,
-            id: productId,
+            branchId,
+            clientRequestId: normalizedClientRequestId,
           },
         });
-        if (!product) {
-          throw new Error('Urun ayni firma icinde bulunamadi');
+        if (replayed) {
+          return reply.status(200).send({
+            data: replayed,
+            success: true,
+          });
         }
+      }
+      const type: Prisma.StockMovementUncheckedCreateInput['type'] =
+        requestedType ?? (quantity > 0 ? 'PURCHASE' : 'ADJUSTMENT');
+      let result;
+      try {
+        result = await prisma.$transaction(async (tx) => {
+          const product = await tx.product.findFirst({
+            where: {
+              companyId: scopedBranch.companyId,
+              deletedAt: null,
+              id: productId,
+            },
+          });
+          if (!product) {
+            throw new Error('Urun ayni firma icinde bulunamadi');
+          }
 
-        const stockLevel = await tx.stockLevel.findUnique({
-          where: {
-            productId_branchId: {
+          const stockLevel = await tx.stockLevel.findUnique({
+            where: {
+              productId_branchId: {
+                branchId,
+                productId,
+              },
+            },
+          });
+
+          const previousQuantity = stockLevel?.quantity ?? 0;
+          const newQuantity = previousQuantity + quantity;
+
+          await tx.stockLevel.upsert({
+            create: {
               branchId,
               productId,
+              quantity: newQuantity,
             },
-          },
-        });
+            update: { quantity: newQuantity },
+            where: {
+              productId_branchId: {
+                branchId,
+                productId,
+              },
+            },
+          });
 
-        const previousQuantity = stockLevel?.quantity ?? 0;
-        const newQuantity = previousQuantity + quantity;
-
-        await tx.stockLevel.upsert({
-          create: {
-            branchId,
-            productId,
-            quantity: newQuantity,
-          },
-          update: { quantity: newQuantity },
-          where: {
-            productId_branchId: {
+          return tx.stockMovement.create({
+            data: {
               branchId,
+              clientRequestId: normalizedClientRequestId,
+              newQuantity,
+              note,
+              previousQuantity,
               productId,
+              quantity,
+              reference,
+              type,
+              userId: request.user.id,
             },
-          },
+          });
         });
-
-        return tx.stockMovement.create({
-          data: {
+      } catch (error: unknown) {
+        if (!isUniqueConstraintError(error) || !normalizedClientRequestId) {
+          throw error;
+        }
+        const replayed = await prisma.stockMovement.findFirst({
+          where: {
             branchId,
-            newQuantity,
-            note,
-            previousQuantity,
-            productId,
-            quantity,
-            reference,
-            type,
-            userId: request.user.id,
+            clientRequestId: normalizedClientRequestId,
           },
         });
-      });
+        if (!replayed) {
+          throw error;
+        }
+        return reply.status(200).send({
+          data: replayed,
+          success: true,
+        });
+      }
+
+      request.log.info(
+        {
+          branchId,
+          event: 'stock.movement_create',
+          movementId: result.id,
+          productId,
+          type,
+          userId: request.user.id,
+        },
+        'Stock movement created',
+      );
 
       return reply.status(201).send({
         data: result,
@@ -299,6 +405,49 @@ export async function stockRoutes(server: FastifyInstance): Promise<void> {
                 deletedAt: null,
                 id: request.query.productId,
               };
+      }
+      if (typeof request.query.type === 'string' && request.query.type.length > 0) {
+        where.type = request.query.type as any;
+      }
+      if (typeof request.query.userSearch === 'string' && request.query.userSearch.length > 0) {
+        where.user = {
+          fullName: { contains: request.query.userSearch },
+        };
+      }
+      const dateFrom = parseOptionalDate(request.query.dateFrom);
+      const dateTo = parseOptionalDate(request.query.dateTo);
+      if (dateFrom || dateTo) {
+        where.createdAt = {};
+        if (dateFrom) {
+          where.createdAt.gte = dateFrom;
+        }
+        if (dateTo) {
+          where.createdAt.lte = dateTo;
+        }
+      }
+
+      const minQuantity = parseOptionalFloat(request.query.minQuantity);
+      const maxQuantity = parseOptionalFloat(request.query.maxQuantity);
+      if (typeof minQuantity === 'number' || typeof maxQuantity === 'number') {
+        where.quantity = {};
+        if (typeof minQuantity === 'number') {
+          where.quantity.gte = minQuantity;
+        }
+        if (typeof maxQuantity === 'number') {
+          where.quantity.lte = maxQuantity;
+        }
+      }
+
+      if (typeof request.query.search === 'string' && request.query.search.trim().length > 0) {
+        const search = request.query.search.trim();
+        const currentOr = Array.isArray(where.OR) ? where.OR : [];
+        where.OR = [
+          ...currentOr,
+          { note: { contains: search } },
+          { reference: { contains: search } },
+          { product: { barcode: { contains: search } } },
+          { product: { name: { contains: search } } },
+        ];
       }
 
       const [movements, total] = await Promise.all([
@@ -417,12 +566,19 @@ export async function stockRoutes(server: FastifyInstance): Promise<void> {
 
       const expectedBalance =
         session.openingBalance + session.totalCashSales - session.totalRefunds;
-      const difference = parsed.data.closingBalance - expectedBalance;
+      
+      const closedAt = new Date();
+      let difference = parsed.data.closingBalance - expectedBalance;
+      if (parsed.data.declaredCash !== undefined) {
+         // Eğer gişe görevlisi manuel nakit girdiyse hata (kasa farkı) nakit bazlı hesaplanır
+         difference = parsed.data.declaredCash - expectedBalance;
+      }
 
       const updated = await prisma.registerSession.update({
         data: {
-          closedAt: new Date(),
+          closedAt,
           closingBalance: parsed.data.closingBalance,
+          declaredCash: parsed.data.declaredCash,
           difference,
           expectedBalance,
           note: parsed.data.note,

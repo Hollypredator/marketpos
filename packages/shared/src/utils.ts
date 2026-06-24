@@ -75,3 +75,25 @@ export function calculateChange(grandTotal: number, paidAmount: number): number 
   const change = paidAmount - grandTotal;
   return roundCurrency(Math.max(0, change));
 }
+
+export interface ScaleBarcodeResult {
+  isScale: true;
+  pluCode: string;
+  value: number;
+}
+
+/**
+ * Terazi barkodunu çözümle (27, 28, 29 ile başlayan 13 haneli)
+ */
+export function parseScaleBarcode(barcode: string): ScaleBarcodeResult | null {
+  if (barcode.length === 13 && /^(27|28|29)/.test(barcode)) {
+    const pluCode = barcode.substring(2, 7);
+    const valueStr = barcode.substring(7, 12);
+    return {
+      isScale: true,
+      pluCode,
+      value: parseInt(valueStr, 10),
+    };
+  }
+  return null;
+}

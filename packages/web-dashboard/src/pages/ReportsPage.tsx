@@ -3,6 +3,30 @@ import React from 'react';
 import { PaginationControls } from '../components/PaginationControls';
 import { TableState } from '../components/TableState';
 import { useClientPagination } from '../hooks/use-client-pagination';
+import { downloadCsv } from '../lib/format';
+import type { OperationsHealthResponse } from '../domain/shared/types';
+import { useOperationsHealthInsights } from './reports/use-operations-health-insights';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  ArcElement,
+} from 'chart.js';
+import { Bar, Doughnut } from 'react-chartjs-2';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  ArcElement
+);
 
 interface ReportRange {
   from: string;
@@ -56,32 +80,6 @@ interface BranchComparisonRow {
   netSales: number;
 }
 
-interface OperationsHealthResponse {
-  company: { name: string };
-  generatedAt: string;
-  summary: {
-    branchCount: number;
-    failedQueueTotal: number;
-    offlineRegisters: number;
-    onlineRegisters: number;
-    pendingQueueTotal: number;
-    registerCount: number;
-  };
-  branches: Array<{
-    id: string;
-    name: string;
-    registers: Array<{
-      id: string;
-      name: string;
-      isOnline: boolean;
-      lastSyncAt: string | null;
-      openSessionUpdatedAt: string | null;
-      pendingQueueCount: number;
-      failedQueueCount: number;
-    }>;
-  }>;
-}
-
 interface ReportKpis {
   averageTicket: number;
   criticalStockCount: number;
@@ -112,6 +110,37 @@ interface ReportsPageProps {
   sessionsErrorText: string | null;
   topProducts: TopProduct[];
   topProductsErrorText: string | null;
+  profitabilityReport: {
+    summary: {
+      margin: number;
+      totalCost: number;
+      totalProfit: number;
+      totalRevenue: number;
+    };
+    topProducts: Array<{
+      productId: string;
+      productName: string;
+      quantity: number;
+      revenue: number;
+    }>;
+  } | null;
+  expiringProducts: Array<{
+    barcode: string;
+    categoryName?: string;
+    expiryDate?: string;
+    id: string;
+    name: string;
+    stockQuantity: number;
+  }>;
+  ledgerSummary: {
+    openingBalance: number;
+    totalDebt: number;
+    totalPayment: number;
+    closingBalance: number;
+    dueAmount: number;
+    last30DaysPayments: number;
+    netChange: number;
+  } | null;
   toDateTime: (value?: string | null) => string;
   toMoney: (value: number) => string;
 }
@@ -138,12 +167,113 @@ export function ReportsPage({
   sessionsErrorText,
   topProducts,
   topProductsErrorText,
+  profitabilityReport,
+  expiringProducts,
+  ledgerSummary,
   toDateTime,
   toMoney,
 }: ReportsPageProps): React.ReactElement {
   const topProductsPagination = useClientPagination(topProducts, { pageSize: 20 });
   const branchComparisonPagination = useClientPagination(branchComparisonRows, { pageSize: 20 });
   const sessionsPagination = useClientPagination(sessions, { pageSize: 20 });
+  const {
+    hasOpsQueuePressure,
+    hasOpsRisk,
+    matrixSummary,
+    registerHealthMatrix,
+    safeFailedThreshold,
+    safePendingThreshold,
+    safeSyncLagThresholdMinutes,
+    setSlaMaxFailedQueue,
+    setSlaMaxPendingQueue,
+    setSlaMaxSyncLagMinutes,
+    slaMaxFailedQueue,
+    slaMaxPendingQueue,
+    slaMaxSyncLagMinutes,
+  } = useOperationsHealthInsights(operationsHealth);
+
+  const exportOperationsHealthCsv = (): void => {
+    if (!operationsHealth || registerHealthMatrix.length === 0) {
+      return;
+    }
+    downloadCsv(
+      'operations-health-registers.csv',
+      [
+        'Sube',
+        'Kasa',
+        'SLASeviye',
+        'Neden',
+        'PendingQueue',
+        'FailedQueue',
+        'SyncLagMin',
+        'QueuePeak',
+        'OldestPendingSec',
+        'LastHeartbeatAt',
+        'LastErrorCode',
+        'Replay24h',
+        'Failed24h',
+      ],
+      registerHealthMatrix.map((row) => [
+        row.branchName,
+        row.registerName,
+        row.severity,
+        row.reasons,
+        row.pendingQueueCount,
+        row.failedQueueCount,
+        row.syncLagMinutes ?? '-',
+        row.queuePeak,
+        row.oldestPendingAgeSec ?? '-',
+        row.lastHeartbeatAt ?? '-',
+        row.lastSyncErrorCode ?? '-',
+        row.replayed24h,
+        row.failed24h,
+      ]),
+    );
+  };
+
+  const exportTopProductsCsv = (): void => {
+    downloadCsv(
+      'reports-top-products.csv',
+      ['Urun', 'Adet', 'Miktar', 'Ciro'],
+      topProducts.map((item) => [item.productName, item.count, item.totalQuantity, item.totalRevenue]),
+    );
+  };
+
+  const exportBranchComparisonCsv = (): void => {
+    downloadCsv(
+      'reports-branch-comparison.csv',
+      ['Sube', 'SatisAdedi', 'IadeAdedi', 'ToplamSatis', 'ToplamIade', 'NetSatis', 'ToplamKDV'],
+      branchComparisonRows.map((row) => [
+        row.branchName,
+        row.salesCount,
+        row.refundsCount,
+        row.totalSales,
+        row.totalRefunds,
+        row.netSales,
+        row.totalVat,
+      ]),
+    );
+  };
+
+  const exportSessionsCsv = (): void => {
+    downloadCsv(
+      'reports-register-sessions.csv',
+      ['Kasa', 'Kullanici', 'Durum', 'Acilis', 'Kapanis', 'Fark', 'KapanisTarihi'],
+      sessions.map((session) => [
+        session.register.name,
+        session.user.fullName,
+        session.status,
+        session.openingBalance,
+        session.closingBalance ?? 0,
+        session.difference ?? 0,
+        toDateTime(session.closedAt ?? session.createdAt),
+      ]),
+    );
+  };
+  const replayRate24h = operationsHealth?.summary.replayRate24h ?? 0;
+  const failed24hTotal = operationsHealth?.summary.failed24hTotal ?? 0;
+  const staleHeartbeatRegisters = operationsHealth?.summary.staleHeartbeatRegisters ?? 0;
+  const degradedRegisters = operationsHealth?.summary.degradedRegisters ?? 0;
 
   return (
     <section className="panel-grid">
@@ -233,7 +363,184 @@ export function ReportsPage({
       </article>
 
       <article className="card">
+        <h2>Finans Cari Ozeti</h2>
+        {ledgerSummary ? (
+          <div className="metric-grid">
+            <div className="metric-card">
+              <span>Donem Basi Bakiye</span>
+              <strong>{toMoney(ledgerSummary.openingBalance)}</strong>
+            </div>
+            <div className="metric-card">
+              <span>Donem Borc</span>
+              <strong>{toMoney(ledgerSummary.totalDebt)}</strong>
+            </div>
+            <div className="metric-card">
+              <span>Donem Odeme</span>
+              <strong>{toMoney(ledgerSummary.totalPayment)}</strong>
+            </div>
+            <div className="metric-card">
+              <span>Kapanis Bakiye</span>
+              <strong>{toMoney(ledgerSummary.closingBalance)}</strong>
+            </div>
+            <div className="metric-card">
+              <span>Vadesi Gecmis</span>
+              <strong>{toMoney(ledgerSummary.dueAmount)}</strong>
+            </div>
+            <div className="metric-card">
+              <span>Son 30 Gun Odeme</span>
+              <strong>{toMoney(ledgerSummary.last30DaysPayments)}</strong>
+            </div>
+          </div>
+        ) : (
+          <p className="muted">Finans ozeti icin raporu getir.</p>
+        )}
+      </article>
+
+      {profitabilityReport && (
+        <article className="card">
+          <h2>Karlilik Analizi Ozeti</h2>
+          <div className="metric-grid">
+            <div className="metric-card primary">
+              <span>Toplam Ciro</span>
+              <strong>{toMoney(profitabilityReport.summary.totalRevenue)}</strong>
+            </div>
+            <div className="metric-card">
+              <span>Toplam Maliyet</span>
+              <strong>{toMoney(profitabilityReport.summary.totalCost)}</strong>
+            </div>
+            <div className="metric-card success">
+              <span>Toplam Kar</span>
+              <strong>{toMoney(profitabilityReport.summary.totalProfit)}</strong>
+            </div>
+            <div className="metric-card highlight">
+              <span>Ortalama Marj</span>
+              <strong>%{profitabilityReport.summary.margin.toFixed(2)}</strong>
+            </div>
+          </div>
+          <h3 style={{ marginTop: '1rem' }}>En Karli Urunler Dağılımı</h3>
+          <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ width: '300px', height: '300px' }}>
+              <Doughnut
+                data={{
+                  labels: profitabilityReport.topProducts.map(p => p.productName),
+                  datasets: [
+                    {
+                      label: 'Ciro',
+                      data: profitabilityReport.topProducts.map(p => p.revenue),
+                      backgroundColor: [
+                        '#0d9488', '#0f766e', '#115e59', '#134e4a', '#14b8a6', '#2dd4bf', '#5eead4'
+                      ],
+                      borderWidth: 0,
+                    },
+                  ],
+                }}
+                options={{
+                  plugins: {
+                    legend: { display: false }
+                  },
+                  cutout: '70%',
+                }}
+              />
+            </div>
+            <div className="table-wrap" style={{ flex: 1, minWidth: '300px' }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Urun</th>
+                    <th>Miktar</th>
+                    <th>Ciro</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {profitabilityReport.topProducts.map((item) => (
+                    <tr key={item.productId}>
+                      <td>{item.productName}</td>
+                      <td>{item.quantity}</td>
+                      <td>{toMoney(item.revenue)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </article>
+      )}
+
+      <article className="card">
+        <h2>Son Kullanma Tarihi Yaklasan Urunler ({expiringProducts.length})</h2>
+        <div className="inline-row two" style={{ marginBottom: '0.7rem' }}>
+          <p className="muted">Onumuzdeki 30 gun icinde suresi dolacak urunler.</p>
+          <div className="report-action">
+            <button
+              className="btn ghost"
+              type="button"
+              onClick={() => {
+                downloadCsv(
+                  'reports-expiring-products.csv',
+                  ['Barkod', 'Urun', 'Kategori', 'Stok', 'SKT'],
+                  expiringProducts.map((p) => [
+                    p.barcode,
+                    p.name,
+                    p.categoryName ?? '-',
+                    p.stockQuantity,
+                    p.expiryDate ? new Date(p.expiryDate).toLocaleDateString('tr-TR') : '-',
+                  ]),
+                );
+              }}
+              disabled={expiringProducts.length === 0}
+            >
+              CSV Indir
+            </button>
+          </div>
+        </div>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>SKT</th>
+                <th>Urun</th>
+                <th>Barkod</th>
+                <th>Stok</th>
+              </tr>
+            </thead>
+            <tbody>
+              {expiringProducts.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="muted" style={{ textAlign: 'center', padding: '1rem' }}>
+                    Yakin tarihte suresi dolacak urun bulunmadi.
+                  </td>
+                </tr>
+              ) : (
+                expiringProducts.map((product) => (
+                  <tr key={product.id}>
+                    <td>
+                      <span className="state-pill critical">
+                        {product.expiryDate ? new Date(product.expiryDate).toLocaleDateString('tr-TR') : '-'}
+                      </span>
+                    </td>
+                    <td>{product.name}</td>
+                    <td>{product.barcode}</td>
+                    <td>{product.stockQuantity}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <article className="card">
         <h2>Firma / Sube / Kasa Saglik Ozeti</h2>
+        {operationsHealth && (
+          <div className={`banner ${hasOpsRisk ? 'error' : 'success'}`} style={{ marginTop: '0.6rem' }}>
+            {hasOpsRisk
+              ? 'Operasyon riski var: offline/failed/stale kasa tespit edildi.'
+              : 'Operasyon sagligi iyi: kritik offline veya failed queue yok.'}
+            {hasOpsQueuePressure ? ' Kuyruk yogunlugu yuksek, sync hizi izlenmeli.' : ''}
+            {failed24hTotal > 0 ? ` Son 24 saatte ${failed24hTotal} failed islem var.` : ''}
+            {replayRate24h > 5 ? ` Replay orani %${replayRate24h.toFixed(2)} seviyesinde.` : ''}
+          </div>
+        )}
         {loadingOperationsHealth ? (
           <p className="muted">Saglik ozeti yukleniyor...</p>
         ) : operationsHealthErrorText ? (
@@ -268,6 +575,133 @@ export function ReportsPage({
                 <span>Kuyruk Hata/Conflict</span>
                 <strong>{operationsHealth.summary.failedQueueTotal}</strong>
               </div>
+              <div className="metric-card">
+                <span>Queue Peak Max</span>
+                <strong>{operationsHealth.summary.queuePeakMax ?? 0}</strong>
+              </div>
+              <div className="metric-card">
+                <span>Oldest Pending Max</span>
+                <strong>
+                  {typeof operationsHealth.summary.oldestPendingAgeSecMax === 'number'
+                    ? `${operationsHealth.summary.oldestPendingAgeSecMax} sn`
+                    : '-'}
+                </strong>
+              </div>
+              <div className="metric-card">
+                <span>Replay Rate 24h</span>
+                <strong>%{replayRate24h.toFixed(2)}</strong>
+              </div>
+              <div className="metric-card">
+                <span>Stale Register</span>
+                <strong>{staleHeartbeatRegisters}</strong>
+              </div>
+              <div className="metric-card">
+                <span>Degraded Register</span>
+                <strong>{degradedRegisters}</strong>
+              </div>
+              <div className="metric-card">
+                <span>Accepted / Replayed / Failed 24h</span>
+                <strong>
+                  {(operationsHealth.summary.accepted24hTotal ?? 0)} / {operationsHealth.summary.replayed24hTotal ?? 0} /{' '}
+                  {failed24hTotal}
+                </strong>
+              </div>
+              <div className="metric-card">
+                <span>SLA Critical Kasa</span>
+                <strong>{matrixSummary.critical}</strong>
+              </div>
+              <div className="metric-card">
+                <span>SLA Warn Kasa</span>
+                <strong>{matrixSummary.warn}</strong>
+              </div>
+            </div>
+
+            <div className="inline-row two" style={{ marginBottom: '0.7rem' }}>
+              <p className="muted">
+                Kasa bazli saglik kayitlarini CSV olarak disa alabilirsiniz.
+              </p>
+              <div className="report-action">
+                <button className="btn ghost" type="button" onClick={exportOperationsHealthCsv}>
+                  Saglik CSV
+                </button>
+              </div>
+            </div>
+
+            <div className="legacy-filter-box" style={{ marginBottom: '0.7rem' }}>
+              <h3>SLA Esik Ayarlari</h3>
+              <div className="inline-row three">
+                <label>
+                  Max Pending Queue / Kasa
+                  <input
+                    min={0}
+                    step={1}
+                    type="number"
+                    value={slaMaxPendingQueue}
+                    onChange={(event) => setSlaMaxPendingQueue(event.target.value)}
+                  />
+                </label>
+                <label>
+                  Max Failed Queue / Kasa
+                  <input
+                    min={0}
+                    step={1}
+                    type="number"
+                    value={slaMaxFailedQueue}
+                    onChange={(event) => setSlaMaxFailedQueue(event.target.value)}
+                  />
+                </label>
+                <label>
+                  Max Sync Gecikmesi (dk)
+                  <input
+                    min={1}
+                    step={1}
+                    type="number"
+                    value={slaMaxSyncLagMinutes}
+                    onChange={(event) => setSlaMaxSyncLagMinutes(event.target.value)}
+                  />
+                </label>
+              </div>
+              <p className="muted">
+                Aktif esikler: Pending {safePendingThreshold}, Failed {safeFailedThreshold}, Sync Lag{' '}
+                {safeSyncLagThresholdMinutes} dk
+              </p>
+            </div>
+
+            <div className="table-wrap" style={{ marginBottom: '0.7rem' }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Sube</th>
+                    <th>Kasa</th>
+                    <th>SLA</th>
+                    <th>Neden</th>
+                    <th>Pending</th>
+                    <th>Failed</th>
+                    <th>Sync Lag</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {registerHealthMatrix.map((row) => (
+                    <tr key={`${row.branchName}:${row.registerName}`}>
+                      <td>{row.branchName}</td>
+                      <td>{row.registerName}</td>
+                      <td>
+                        <span
+                          className={`state-pill ${
+                            row.severity === 'CRITICAL' ? 'critical' : row.severity === 'WARN' ? 'warn' : 'ok'
+                          }`}
+                        >
+                          {row.severity}
+                        </span>
+                      </td>
+                      <td>{row.reasons}</td>
+                      <td>{row.pendingQueueCount}</td>
+                      <td>{row.failedQueueCount}</td>
+                      <td>{typeof row.syncLagMinutes === 'number' ? `${row.syncLagMinutes} dk` : '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
 
             <div className="table-wrap">
@@ -278,6 +712,11 @@ export function ReportsPage({
                     <th>Kasa</th>
                     <th>Durum</th>
                     <th>Kuyruk</th>
+                    <th>Queue Peak</th>
+                    <th>Oldest Pending</th>
+                    <th>Son Heartbeat</th>
+                    <th>Last Error</th>
+                    <th>Replay/Failed 24h</th>
                     <th>Son Sync</th>
                     <th>Son Oturum Guncelleme</th>
                   </tr>
@@ -295,6 +734,17 @@ export function ReportsPage({
                         </td>
                         <td>
                           P:{register.pendingQueueCount} / F:{register.failedQueueCount}
+                        </td>
+                        <td>{register.queuePeak ?? 0}</td>
+                        <td>
+                          {typeof register.oldestPendingAgeSec === 'number'
+                            ? `${register.oldestPendingAgeSec} sn`
+                            : '-'}
+                        </td>
+                        <td>{toDateTime(register.lastHeartbeatAt ?? null)}</td>
+                        <td>{register.lastSyncErrorCode ?? '-'}</td>
+                        <td>
+                          {(register.replayed24h ?? 0)} / {(register.failed24h ?? 0)}
                         </td>
                         <td>{toDateTime(register.lastSyncAt)}</td>
                         <td>{toDateTime(register.openSessionUpdatedAt)}</td>
@@ -341,29 +791,70 @@ export function ReportsPage({
           </div>
 
           <h3>Odeme Dagilimi</h3>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Yontem</th>
-                  <th>Tutar</th>
-                </tr>
-              </thead>
-              <tbody>
-                {dailyReport.paymentBreakdown.map((item) => (
-                  <tr key={item.method}>
-                    <td>{item.method}</td>
-                    <td>{toMoney(item.total)}</td>
+          <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
+            <div className="table-wrap" style={{ flex: 1, minWidth: '250px' }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Yontem</th>
+                    <th>Tutar</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {dailyReport.paymentBreakdown.map((item) => (
+                    <tr key={item.method}>
+                      <td>{item.method}</td>
+                      <td>{toMoney(item.total)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ flex: 1, minWidth: '300px', height: '200px' }}>
+              <Bar 
+                data={{
+                  labels: dailyReport.paymentBreakdown.map(p => p.method),
+                  datasets: [{
+                    label: 'Tutar',
+                    data: dailyReport.paymentBreakdown.map(p => p.total),
+                    backgroundColor: '#0d9488',
+                    borderRadius: 4
+                  }]
+                }}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: { display: false }
+                  },
+                  scales: {
+                    y: {
+                      beginAtZero: true,
+                      grid: { color: '#374151' },
+                      ticks: { color: '#9ca3af' }
+                    },
+                    x: {
+                      grid: { display: false },
+                      ticks: { color: '#9ca3af' }
+                    }
+                  }
+                }}
+              />
+            </div>
           </div>
         </article>
       )}
 
       <article className="card">
         <h2>En Cok Satan Urunler ({topProductsPagination.total})</h2>
+        <div className="inline-row two" style={{ marginBottom: '0.7rem' }}>
+          <p className="muted">Toplam {topProducts.length} urun satirini disa aktarir.</p>
+          <div className="report-action">
+            <button className="btn ghost" type="button" onClick={exportTopProductsCsv} disabled={topProducts.length === 0}>
+              CSV Indir
+            </button>
+          </div>
+        </div>
         <div className="table-wrap">
           <table>
             <thead>
@@ -403,6 +894,19 @@ export function ReportsPage({
 
       <article className="card">
         <h2>Sube Karsilastirma ({branchComparisonPagination.total})</h2>
+        <div className="inline-row two" style={{ marginBottom: '0.7rem' }}>
+          <p className="muted">Sube bazli net performans verisini disa aktarir.</p>
+          <div className="report-action">
+            <button
+              className="btn ghost"
+              type="button"
+              onClick={exportBranchComparisonCsv}
+              disabled={branchComparisonRows.length === 0}
+            >
+              CSV Indir
+            </button>
+          </div>
+        </div>
         <div className="table-wrap">
           <table>
             <thead>
@@ -448,6 +952,14 @@ export function ReportsPage({
 
       <article className="card">
         <h2>Kasa Oturumlari ({sessionsPagination.total})</h2>
+        <div className="inline-row two" style={{ marginBottom: '0.7rem' }}>
+          <p className="muted">Kasa oturum hareketlerinin tam listesini disa aktarir.</p>
+          <div className="report-action">
+            <button className="btn ghost" type="button" onClick={exportSessionsCsv} disabled={sessions.length === 0}>
+              CSV Indir
+            </button>
+          </div>
+        </div>
         <div className="table-wrap tall">
           <table>
             <thead>

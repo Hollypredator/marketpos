@@ -4,13 +4,40 @@ interface SubscriptionFiltersKey {
   status: string;
 }
 
+interface ProductFiltersKey {
+  active: string;
+  brand: string;
+  categoryId: string;
+  maxPrice: string;
+  maxPurchasePrice: string;
+  minPrice: string;
+  minPurchasePrice: string;
+  search: string;
+  supplierId: string;
+  updatedFrom: string;
+  updatedTo: string;
+  vatRate: string;
+}
+
+interface StockMovementFiltersKey {
+  dateFrom: string;
+  dateTo: string;
+  maxQuantity: string;
+  minQuantity: string;
+  search: string;
+  type: string;
+  userSearch: string;
+}
+
 export const queryKeys = {
   branches: (companyId: string) => ['branches', companyId] as const,
   categories: (companyId: string) => ['categories', companyId] as const,
   companies: ['companies'] as const,
+  invoiceTemplate: (companyId: string) => ['invoice-template', companyId] as const,
   operationsHealth: (role: string, companyId: string, branchId: string) =>
     ['operations-health', role, companyId, branchId] as const,
-  products: (companyId: string) => ['products', companyId] as const,
+  products: (companyId: string, filters: ProductFiltersKey) =>
+    ['products', companyId, filters] as const,
   registers: (branchId: string) => ['registers', branchId] as const,
   reports: (
     companyId: string,
@@ -21,7 +48,8 @@ export const queryKeys = {
     day: string,
   ) => ['reports', companyId, branchId, from, to, registerId, day] as const,
   stockLevels: (branchId: string) => ['stock-levels', branchId] as const,
-  stockMovements: (branchId: string) => ['stock-movements', branchId] as const,
+  stockMovements: (branchId: string, filters: StockMovementFiltersKey) =>
+    ['stock-movements', branchId, filters] as const,
   subscriptionAudit: (companyId: string) => ['subscription-audit', companyId] as const,
   subscriptionCompanies: (filters: SubscriptionFiltersKey) =>
     ['subscription-companies', filters] as const,

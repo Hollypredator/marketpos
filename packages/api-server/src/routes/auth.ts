@@ -26,8 +26,24 @@ interface LoginAttemptState {
 
 const loginAttemptsByKey = new Map<string, LoginAttemptState>();
 
-function buildLoginAttemptKey(username: string, ipAddress: string): string {
-  return `${username.toLowerCase()}|${ipAddress}`;
+function normalizeOptionalEmail(value?: string | null): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim().toLowerCase();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeOptionalUsername(value?: string | null): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function buildLoginAttemptKey(identifier: string, ipAddress: string): string {
+  return `${identifier.toLowerCase()}|${ipAddress}`;
 }
 
 function clearLoginAttempts(key: string): void {
@@ -70,8 +86,17 @@ export async function authRoutes(server: FastifyInstance): Promise<void> {
       });
     }
 
-    const { companyId, password, username } = parsed.data;
-    const attemptKey = buildLoginAttemptKey(username, request.ip);
+    const { companyId, password } = parsed.data;
+    const normalizedEmail = normalizeOptionalEmail(parsed.data.email);
+    const normalizedUsername = normalizeOptionalUsername(parsed.data.username);
+    if (!normalizedEmail && !normalizedUsername) {
+      return reply.status(400).send({
+        error: 'Email veya kullanici adi zorunludur',
+        success: false,
+      });
+    }
+    const loginIdentifier = normalizedEmail ?? normalizedUsername ?? 'unknown';
+    const attemptKey = buildLoginAttemptKey(loginIdentifier, request.ip);
     const activeLockUntil = readActiveLock(attemptKey);
     if (activeLockUntil !== null) {
       const waitSeconds = Math.ceil((activeLockUntil - Date.now()) / 1000);
@@ -85,11 +110,14 @@ export async function authRoutes(server: FastifyInstance): Promise<void> {
     const whereClause: Prisma.UserWhereInput = {
       deletedAt: null,
       isActive: true,
-      username,
     };
-
-    if (companyId) {
-      whereClause.companyId = companyId;
+    if (normalizedEmail) {
+      whereClause.email = normalizedEmail;
+    } else if (normalizedUsername) {
+      whereClause.username = normalizedUsername;
+      if (companyId) {
+        whereClause.companyId = companyId;
+      }
     }
 
     const user = await prisma.user.findFirst({
@@ -104,6 +132,7 @@ export async function authRoutes(server: FastifyInstance): Promise<void> {
       registerFailedAttempt(attemptKey);
       return reply.status(401).send({
         error: 'Kullanici adi veya sifre hatali',
+        errorCode: 'INVALID_CREDENTIALS',
         success: false,
       });
     }
@@ -113,6 +142,7 @@ export async function authRoutes(server: FastifyInstance): Promise<void> {
       registerFailedAttempt(attemptKey);
       return reply.status(401).send({
         error: 'Kullanici adi veya sifre hatali',
+        errorCode: 'INVALID_CREDENTIALS',
         success: false,
       });
     }

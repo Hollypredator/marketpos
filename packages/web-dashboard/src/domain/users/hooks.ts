@@ -28,6 +28,7 @@ export function useUserMutations(companyId: string, userId: string) {
   const updateUser = useMutation({
     mutationFn: (payload: {
       branchId: string;
+      email: string;
       fullName: string;
       isActive: boolean;
       password: string;

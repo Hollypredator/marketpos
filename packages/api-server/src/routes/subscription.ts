@@ -20,6 +20,7 @@ import {
 import { listCatalogTemplateSummaries } from '../lib/catalog-templates';
 import prisma from '../lib/prisma';
 import { mapSystemEventType } from '../lib/subscription-admin-helpers';
+import { generateLicenseKey } from '../lib/license-utils';
 
 interface CompanyIdParams {
   id: string;
@@ -59,6 +60,7 @@ const suspendSchema = z.object({
 const provisionCompanySchema = z
   .object({
     address: z.string().trim().max(255).optional().nullable(),
+    adminEmail: z.string().trim().email().max(255).optional().nullable(),
     adminFullName: z.string().trim().min(3).max(120),
     adminPassword: z.string().min(6).max(128),
     adminUsername: z.string().trim().min(3).max(80),
@@ -84,6 +86,16 @@ const provisionCompanySchema = z
         code: z.ZodIssueCode.custom,
         message: 'Mevcut firma id veya yeni firma adi zorunludur',
         path: ['companyName'],
+      });
+    }
+    if (
+      !hasCompanyId &&
+      !(typeof payload.adminEmail === 'string' && payload.adminEmail.trim().length > 0)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Yeni firma acilisinda adminEmail zorunludur',
+        path: ['adminEmail'],
       });
     }
   });
@@ -302,8 +314,8 @@ export async function subscriptionRoutes(server: FastifyInstance): Promise<void>
       const where: Prisma.CompanyWhereInput = { deletedAt: null };
       if (query.search && query.search.length > 0) {
         where.OR = [
-          { name: { contains: query.search, mode: 'insensitive' } },
-          { taxNumber: { contains: query.search, mode: 'insensitive' } },
+          { name: { contains: query.search } },
+          { taxNumber: { contains: query.search } },
         ];
       }
 
@@ -411,6 +423,7 @@ export async function subscriptionRoutes(server: FastifyInstance): Promise<void>
         const result = await provisionCompanyFromTemplate({
           actorUserId: request.user.id,
           address: parsed.data.address ?? null,
+          adminEmail: parsed.data.adminEmail ?? null,
           adminFullName: parsed.data.adminFullName,
           adminPassword: parsed.data.adminPassword,
           adminUsername: parsed.data.adminUsername,
@@ -433,8 +446,9 @@ export async function subscriptionRoutes(server: FastifyInstance): Promise<void>
         });
       } catch (error: unknown) {
         if (error instanceof ProvisioningInputError) {
-          return reply.status(400).send({
+          return reply.status(error.statusCode).send({
             error: error.message,
+            errorCode: error.errorCode,
             success: false,
           });
         }
@@ -570,6 +584,46 @@ export async function subscriptionRoutes(server: FastifyInstance): Promise<void>
             packageGraceEndsAt: updated.packageGraceEndsAt,
             packageStatus: updated.packageStatus,
           }),
+        },
+        success: true,
+      };
+    },
+  );
+
+  server.post(
+    '/admin/companies/:id/generate-license',
+    { preHandler: server.ensureSuperAdmin },
+    async (
+      request: FastifyRequest<{ Params: CompanyIdParams }>,
+      reply: FastifyReply,
+    ) => {
+      const company = await readCompanyOr404(reply, request.params.id);
+      if (!company) {
+        return;
+      }
+
+      const newKey = generateLicenseKey();
+
+      const updated = await prisma.company.update({
+        data: {
+          licenseKey: newKey,
+          licenseKeyActivatedAt: null,
+          updatedAt: new Date(),
+        },
+        where: { id: company.id },
+      });
+
+      await createManualAudit({
+        actorUserId: request.user.id,
+        companyAfter: updated,
+        companyBefore: company,
+        eventType: 'RENEW_MANUAL',
+        note: `Yeni lisans anahtari uretildi: ${newKey}`,
+      });
+
+      return {
+        data: {
+          licenseKey: newKey,
         },
         success: true,
       };

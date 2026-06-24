@@ -9,6 +9,7 @@ import {
   saveSubscriptionPlanApi,
   suspendSubscriptionApi,
   unsuspendSubscriptionApi,
+  generateLicenseKeyApi,
 } from './api';
 import { queryKeys } from '../../lib/query-keys';
 import type { SubscriptionFilters } from './types';
@@ -77,5 +78,10 @@ export function useSubscriptionMutations(filters: SubscriptionFilters, selectedC
     onSuccess: refreshSubscriptionScope,
   });
 
-  return { provisionCompany, quickRenew, savePlan, suspend, unsuspend };
+  const generateLicense = useMutation({
+    mutationFn: generateLicenseKeyApi,
+    onSuccess: refreshSubscriptionScope,
+  });
+
+  return { provisionCompany, quickRenew, savePlan, suspend, unsuspend, generateLicense };
 }

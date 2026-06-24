@@ -142,7 +142,11 @@ export default function LoginPage({ onAccessBlocked, onLoginSuccess }: LoginPage
     <div className="login-page">
       <form className="login-card" onSubmit={submitLogin}>
         <div className="login-logo">M</div>
-        <h1 className="login-title">MarketPOS Giris</h1>
+        <div className="login-head">
+          <p className="login-kicker">Magaza Oturumu</p>
+          <h1 className="login-title">MarketPOS Giris</h1>
+          <p className="login-subtitle">Kasa operasyonlarina devam etmek icin oturum acin.</p>
+        </div>
 
         {error.length > 0 && <div className="login-error">{error}</div>}
 
@@ -187,7 +191,7 @@ export default function LoginPage({ onAccessBlocked, onLoginSuccess }: LoginPage
           />
         </div>
 
-        <button className="btn btn-primary btn-lg btn-block" type="submit" disabled={isLoading || !isFormReady}>
+        <button className="btn btn-primary btn-lg btn-block login-submit" type="submit" disabled={isLoading || !isFormReady}>
           {isLoading
             ? 'Giris yapiliyor...'
             : mode === 'OFFLINE_ONLY'
@@ -196,16 +200,15 @@ export default function LoginPage({ onAccessBlocked, onLoginSuccess }: LoginPage
         </button>
 
         <button
-          className="btn btn-ghost btn-block"
+          className="btn btn-ghost btn-block login-mode-switch"
           type="button"
           disabled={isLoading}
-          style={{ marginTop: '0.75rem' }}
           onClick={() => setMode((current) => (current === 'AUTO' ? 'OFFLINE_ONLY' : 'AUTO'))}
         >
           {mode === 'AUTO' ? 'Sadece Offline Moduna Gec' : 'Online + Offline Moduna Don'}
         </button>
 
-        <p style={{ marginTop: '1rem', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
+        <p className="login-help">
           Offline giris yalnizca bu cihazda daha once online dogrulanan kullanicilar icin aciktir.
         </p>
       </form>

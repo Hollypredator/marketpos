@@ -5,19 +5,34 @@ import { useSearchParams } from 'react-router-dom';
 import { AppShell } from './components/AppShell';
 import { LoginView } from './components/LoginView';
 import { useAuth } from './domain/auth/hooks';
+import type { LoginFormState } from './domain/auth/types';
 import { useCategoriesQuery, useCatalogMutations, useProductsQuery } from './domain/catalog/hooks';
-import type { CategoryForm, ProductForm } from './domain/catalog/types';
-import { useBranchesQuery, useBranchMutations, useCompaniesQuery, useCompanyMutations } from './domain/organization/hooks';
+import type {
+  BulkProductUpdateForm,
+  CategoryForm,
+  ProductForm,
+  ProductListFilters,
+} from './domain/catalog/types';
+import {
+  useBranchesQuery,
+  useBranchMutations,
+  useCompaniesQuery,
+  useCompanyMutations,
+  useInvoiceTemplateMutation,
+  useInvoiceTemplateQuery,
+} from './domain/organization/hooks';
 import type {
   BranchCreateForm,
   BranchEditForm,
   CompanyCreateForm,
   CompanyEditForm,
+  InvoiceTemplateForm,
 } from './domain/organization/types';
 import { useOperationsHealthQuery, useReportsMutation } from './domain/reports/hooks';
 import type { ReportRange } from './domain/reports/types';
+import { useSuppliersQuery } from './domain/suppliers/hooks';
 import { useStockLevelsQuery, useStockMovementsQuery, useRegistersQuery, useStockMutations } from './domain/stock/hooks';
-import type { StockMovementForm } from './domain/stock/types';
+import type { StockMovementForm, StockMovementListFilters } from './domain/stock/types';
 import {
   useProvisionTemplatesQuery,
   useSubscriptionAuditQuery,
@@ -30,19 +45,31 @@ import type {
   SubscriptionProvisionForm,
   SubscriptionSort,
 } from './domain/subscription/types';
-import { SUBSCRIPTION_STATUSES, type BranchComparisonRow, type DailyReport, type ReportSession, type TopProduct } from './domain/shared/types';
+import {
+  SUBSCRIPTION_STATUSES,
+  type BranchComparisonRow,
+  type DailyReport,
+  type ExpiringProduct,
+  type LedgerSummary,
+  type ProfitabilityReport,
+  type ReportSession,
+  type TopProduct,
+} from './domain/shared/types';
 import { useUsersQuery, useUserMutations } from './domain/users/hooks';
 import type { UserCreateForm, UserEditForm } from './domain/users/types';
 import { useTabNavigation } from './hooks/use-tab-navigation';
 import { downloadCsv, intNum, money, readError, toDateInput, toDateTime, toLocalDateIso } from './lib/format';
 import { canManageRole, resolveAssignableRoles } from './lib/role-hierarchy';
 import { queryKeys } from './lib/query-keys';
+import { createFlowTimer } from './lib/telemetry';
 import { CatalogPage } from './pages/CatalogPage';
 import { OrganizationPage } from './pages/OrganizationPage';
 import { ReportsPage } from './pages/ReportsPage';
+import { SetupWizardPage } from './pages/SetupWizardPage';
 import { StockPage } from './pages/StockPage';
 import { SubscriptionPage } from './pages/SubscriptionPage';
 import { UsersPage } from './pages/UsersPage';
+import { SuppliersPage } from './pages/suppliers/SuppliersPage';
 
 interface BannerState {
   text: string;
@@ -66,7 +93,13 @@ export default function App(): React.ReactElement {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const [loginForm, setLoginForm] = useState({ username: 'admin', password: 'admin123', companyId: '' });
+  const [loginForm, setLoginForm] = useState<LoginFormState>({
+    companyId: '',
+    email: '',
+    mode: 'EMAIL',
+    password: 'admin123',
+    username: 'admin',
+  });
 
   const [companyId, setCompanyId] = useState('');
   const [branchId, setBranchId] = useState('');
@@ -97,10 +130,15 @@ export default function App(): React.ReactElement {
   const [topProducts, setTopProducts] = useState<TopProduct[]>([]);
   const [sessions, setSessions] = useState<ReportSession[]>([]);
   const [branchComparisonRows, setBranchComparisonRows] = useState<BranchComparisonRow[]>([]);
+  const [profitabilityReport, setProfitabilityReport] = useState<ProfitabilityReport | null>(null);
+  const [expiringProducts, setExpiringProducts] = useState<ExpiringProduct[]>([]);
+  const [ledgerSummary, setLedgerSummary] = useState<LedgerSummary | null>(null);
 
   const [companyCreateForm, setCompanyCreateForm] = useState<CompanyCreateForm>({
     address: '',
     email: '',
+    maxCartDiscountPercent: '25',
+    maxItemDiscountPercent: '40',
     name: '',
     phone: '',
     taxNumber: '',
@@ -109,25 +147,109 @@ export default function App(): React.ReactElement {
     address: '',
     email: '',
     isActive: true,
+    maxCartDiscountPercent: '25',
+    maxItemDiscountPercent: '40',
     name: '',
     phone: '',
     taxNumber: '',
   });
   const [branchCreateForm, setBranchCreateForm] = useState<BranchCreateForm>({ address: '', name: '', phone: '' });
   const [branchEditForm, setBranchEditForm] = useState<BranchEditForm>({ address: '', isActive: true, name: '', phone: '' });
-  const [categoryForm, setCategoryForm] = useState<CategoryForm>({ color: '#6366f1', name: '', sortOrder: '0' });
+  const [invoiceTemplateForm, setInvoiceTemplateForm] = useState<InvoiceTemplateForm>({
+    footerNote: '',
+    headerText: '',
+    logoUrl: '',
+    taxOffice: '',
+    tradeRegistryNo: '',
+    salesFooterNote: '',
+    salesHeaderText: '',
+    salesLabel: '',
+    purchaseFooterNote: '',
+    purchaseHeaderText: '',
+    purchaseLabel: '',
+    dispatchFooterNote: '',
+    dispatchHeaderText: '',
+    dispatchLabel: '',
+  });
+  const [categoryForm, setCategoryForm] = useState<CategoryForm>({
+    color: '#0f766e',
+    name: '',
+    parentId: '',
+    sortOrder: '0',
+  });
+  const [categoryEditForm, setCategoryEditForm] = useState<CategoryForm>({
+    color: '#0f766e',
+    name: '',
+    parentId: '',
+    sortOrder: '0',
+  });
+  const [selectedCategoryId, setSelectedCategoryId] = useState('');
   const [productForm, setProductForm] = useState<ProductForm>({
     barcode: '',
+    brand: '',
     categoryId: '',
+    expiryDate: '',
     minStock: '0',
     name: '',
     purchasePrice: '0',
     salePrice: '0',
+    supplierId: '',
     vatRate: '10',
   });
-  const [movementForm, setMovementForm] = useState<StockMovementForm>({ note: '', productId: '', quantity: '0', reference: '' });
+  const [productEditForm, setProductEditForm] = useState<ProductForm>({
+    barcode: '',
+    brand: '',
+    categoryId: '',
+    expiryDate: '',
+    minStock: '0',
+    name: '',
+    purchasePrice: '0',
+    salePrice: '0',
+    supplierId: '',
+    vatRate: '10',
+  });
+  const [selectedProductId, setSelectedProductId] = useState('');
+  const [bulkProductForm, setBulkProductForm] = useState<BulkProductUpdateForm>({
+    categoryId: '',
+    isActive: 'true',
+    minStock: '0',
+    mode: 'SET_PRICE',
+    percentage: '0',
+    salePrice: '0',
+  });
+  const [movementForm, setMovementForm] = useState<StockMovementForm>({
+    note: '',
+    productId: '',
+    quantity: '0',
+    reference: '',
+    type: '',
+  });
+  const [productFilters, setProductFilters] = useState<ProductListFilters>({
+    active: '',
+    brand: '',
+    categoryId: '',
+    maxPrice: '',
+    maxPurchasePrice: '',
+    minPrice: '',
+    minPurchasePrice: '',
+    search: '',
+    supplierId: '',
+    updatedFrom: '',
+    updatedTo: '',
+    vatRate: '',
+  });
+  const [stockMovementFilters, setStockMovementFilters] = useState<StockMovementListFilters>({
+    dateFrom: '',
+    dateTo: '',
+    maxQuantity: '',
+    minQuantity: '',
+    search: '',
+    type: '',
+    userSearch: '',
+  });
   const [userCreateForm, setUserCreateForm] = useState<UserCreateForm>({
     branchId: '',
+    email: '',
     fullName: '',
     password: '',
     pin: '',
@@ -136,6 +258,7 @@ export default function App(): React.ReactElement {
   });
   const [userEditForm, setUserEditForm] = useState<UserEditForm>({
     branchId: '',
+    email: '',
     fullName: '',
     isActive: true,
     password: '',
@@ -153,6 +276,7 @@ export default function App(): React.ReactElement {
   const [subscriptionActionNote, setSubscriptionActionNote] = useState('');
   const [subscriptionProvisionForm, setSubscriptionProvisionForm] = useState<SubscriptionProvisionForm>({
     address: '',
+    adminEmail: '',
     adminFullName: 'Sistem Yoneticisi',
     adminPassword: '',
     adminUsername: 'admin',
@@ -180,6 +304,7 @@ export default function App(): React.ReactElement {
     [auth.isBackofficeWriter, companiesQuery.data],
   );
   const branchesQuery = useBranchesQuery(companyId, auth.isAuthenticated);
+  const invoiceTemplateQuery = useInvoiceTemplateQuery(companyId, auth.isAuthenticated);
   const branches = useMemo(
     () => [...(branchesQuery.data ?? [])].sort((left, right) => left.name.localeCompare(right.name, 'tr')),
     [branchesQuery.data],
@@ -195,10 +320,22 @@ export default function App(): React.ReactElement {
       }),
     [categoriesQuery.data],
   );
-  const productsQuery = useProductsQuery(companyId, auth.isAuthenticated && auth.isBackofficeWriter);
+  const productsQuery = useProductsQuery(
+    companyId,
+    productFilters,
+    auth.isAuthenticated && auth.isBackofficeWriter,
+  );
+  const suppliersQuery = useSuppliersQuery(companyId, 1);
   const products = useMemo(
     () => [...(productsQuery.data ?? [])].sort((left, right) => left.name.localeCompare(right.name, 'tr')),
     [productsQuery.data],
+  );
+  const suppliers = useMemo(
+    () =>
+      [...(suppliersQuery.data?.data ?? [])].sort((left, right) =>
+        left.name.localeCompare(right.name, 'tr'),
+      ),
+    [suppliersQuery.data?.data],
   );
   const usersQuery = useUsersQuery(companyId, auth.isAuthenticated && auth.isBackofficeWriter);
   const users = useMemo(
@@ -210,7 +347,11 @@ export default function App(): React.ReactElement {
     () => [...(stockLevelsQuery.data ?? [])].sort((left, right) => left.product.name.localeCompare(right.product.name, 'tr')),
     [stockLevelsQuery.data],
   );
-  const stockMovementsQuery = useStockMovementsQuery(branchId, auth.isAuthenticated);
+  const stockMovementsQuery = useStockMovementsQuery(
+    branchId,
+    stockMovementFilters,
+    auth.isAuthenticated,
+  );
   const stockMovements = useMemo(
     () =>
       [...(stockMovementsQuery.data ?? [])].sort(
@@ -271,6 +412,14 @@ export default function App(): React.ReactElement {
 
   const selectedCompany = useMemo(() => companies.find((company) => company.id === companyId) ?? null, [companies, companyId]);
   const selectedBranch = useMemo(() => branches.find((branch) => branch.id === branchId) ?? null, [branches, branchId]);
+  const selectedCategory = useMemo(
+    () => categories.find((category) => category.id === selectedCategoryId) ?? null,
+    [categories, selectedCategoryId],
+  );
+  const selectedProduct = useMemo(
+    () => products.find((product) => product.id === selectedProductId) ?? null,
+    [products, selectedProductId],
+  );
   const selectedUser = useMemo(() => users.find((user) => user.id === selectedUserId) ?? null, [users, selectedUserId]);
   const userCreateRoleOptions = useMemo(
     () => resolveAssignableRoles(auth.role),
@@ -365,8 +514,51 @@ export default function App(): React.ReactElement {
     };
   }, [dailyReport, sessions, stockLevels]);
 
+  useEffect(() => {
+    if (selectedCategoryId.length > 0 && !categories.some((category) => category.id === selectedCategoryId)) {
+      setSelectedCategoryId('');
+    }
+  }, [categories, selectedCategoryId]);
+
+  useEffect(() => {
+    if (!selectedCategory) {
+      return;
+    }
+    setCategoryEditForm({
+      color: selectedCategory.color ?? '',
+      name: selectedCategory.name,
+      parentId: selectedCategory.parentId ?? '',
+      sortOrder: String(selectedCategory.sortOrder),
+    });
+  }, [selectedCategory]);
+
+  useEffect(() => {
+    if (selectedProductId.length > 0 && !products.some((product) => product.id === selectedProductId)) {
+      setSelectedProductId('');
+    }
+  }, [products, selectedProductId]);
+
+  useEffect(() => {
+    if (!selectedProduct) {
+      return;
+    }
+    setProductEditForm({
+      barcode: selectedProduct.barcode,
+      brand: selectedProduct.brand ?? '',
+      categoryId: selectedProduct.categoryId ?? '',
+      expiryDate: selectedProduct.expiryDate ?? '',
+      minStock: String(selectedProduct.minStock),
+      name: selectedProduct.name,
+      purchasePrice: String(selectedProduct.purchasePrice),
+      salePrice: String(selectedProduct.salePrice),
+      supplierId: selectedProduct.supplierId ?? '',
+      vatRate: String(selectedProduct.vatRate),
+    });
+  }, [selectedProduct]);
+
   const companyMutations = useCompanyMutations(selectedCompany?.id ?? '');
   const branchMutations = useBranchMutations(companyId, selectedBranch?.id ?? '');
+  const invoiceTemplateMutation = useInvoiceTemplateMutation(companyId);
   const catalogMutations = useCatalogMutations(companyId);
   const stockMutations = useStockMutations(branchId);
   const userMutations = useUserMutations(companyId, selectedUser?.id ?? '');
@@ -380,8 +572,14 @@ export default function App(): React.ReactElement {
     branchMutations.createBranch.isPending ||
     branchMutations.updateBranch.isPending ||
     branchMutations.deleteBranch.isPending ||
+    invoiceTemplateMutation.isPending ||
     catalogMutations.createCategory.isPending ||
     catalogMutations.createProduct.isPending ||
+    catalogMutations.updateCategory.isPending ||
+    catalogMutations.deleteCategory.isPending ||
+    catalogMutations.updateProduct.isPending ||
+    catalogMutations.deleteProduct.isPending ||
+    catalogMutations.bulkProductUpdate.isPending ||
     stockMutations.createStockMovement.isPending ||
     userMutations.createUser.isPending ||
     userMutations.updateUser.isPending ||
@@ -437,15 +635,28 @@ export default function App(): React.ReactElement {
       return;
     }
 
+    if (auth.isSuperAdmin) {
+      setCompanyId((current) =>
+        current.length > 0 && companies.some((row) => row.id === current)
+          ? current
+          : '',
+      );
+      return;
+    }
+
     if (!auth.isBackofficeWriter) {
       setCompanyId(auth.session?.user.companyId ?? '');
       return;
     }
 
-    setCompanyId((current) =>
-      current.length > 0 && companies.some((row) => row.id === current) ? current : companies[0]?.id ?? '',
-    );
-  }, [auth.isAuthenticated, auth.isBackofficeWriter, auth.session?.user.companyId, companies]);
+    setCompanyId(auth.session?.user.companyId ?? '');
+  }, [
+    auth.isAuthenticated,
+    auth.isBackofficeWriter,
+    auth.isSuperAdmin,
+    auth.session?.user.companyId,
+    companies,
+  ]);
 
   useEffect(() => {
     setBranchId((current) =>
@@ -493,13 +704,24 @@ export default function App(): React.ReactElement {
 
   useEffect(() => {
     if (!selectedCompany) {
-      setCompanyEditForm({ address: '', email: '', isActive: true, name: '', phone: '', taxNumber: '' });
+      setCompanyEditForm({
+        address: '',
+        email: '',
+        isActive: true,
+        maxCartDiscountPercent: '25',
+        maxItemDiscountPercent: '40',
+        name: '',
+        phone: '',
+        taxNumber: '',
+      });
       return;
     }
     setCompanyEditForm({
       address: selectedCompany.address ?? '',
       email: selectedCompany.email ?? '',
       isActive: selectedCompany.isActive,
+      maxCartDiscountPercent: String(selectedCompany.maxCartDiscountPercent ?? 25),
+      maxItemDiscountPercent: String(selectedCompany.maxItemDiscountPercent ?? 40),
       name: selectedCompany.name,
       phone: selectedCompany.phone ?? '',
       taxNumber: selectedCompany.taxNumber ?? '',
@@ -520,9 +742,33 @@ export default function App(): React.ReactElement {
   }, [selectedBranch]);
 
   useEffect(() => {
+    const tpl = invoiceTemplateQuery.data;
+    if (!tpl) {
+      return;
+    }
+    setInvoiceTemplateForm({
+      footerNote: tpl.footerNote ?? '',
+      headerText: tpl.headerText ?? '',
+      logoUrl: tpl.logoUrl ?? '',
+      taxOffice: tpl.taxOffice ?? '',
+      tradeRegistryNo: tpl.tradeRegistryNo ?? '',
+      salesFooterNote: tpl.sales?.footerNote ?? '',
+      salesHeaderText: tpl.sales?.headerText ?? '',
+      salesLabel: tpl.sales?.label ?? '',
+      purchaseFooterNote: tpl.purchase?.footerNote ?? '',
+      purchaseHeaderText: tpl.purchase?.headerText ?? '',
+      purchaseLabel: tpl.purchase?.label ?? '',
+      dispatchFooterNote: tpl.dispatch?.footerNote ?? '',
+      dispatchHeaderText: tpl.dispatch?.headerText ?? '',
+      dispatchLabel: tpl.dispatch?.label ?? '',
+    });
+  }, [invoiceTemplateQuery.data]);
+
+  useEffect(() => {
     if (!selectedUser) {
       setUserEditForm({
         branchId: '',
+        email: '',
         fullName: '',
         isActive: true,
         password: '',
@@ -534,6 +780,7 @@ export default function App(): React.ReactElement {
     }
     setUserEditForm({
       branchId: selectedUser.branchId ?? '',
+      email: selectedUser.email ?? '',
       fullName: selectedUser.fullName,
       isActive: selectedUser.isActive,
       password: '',
@@ -580,6 +827,11 @@ export default function App(): React.ReactElement {
 
   const selectedCompanyName = selectedCompany?.name ?? '-';
   const selectedBranchName = selectedBranch?.name ?? '-';
+  const requiresCompanySelection =
+    auth.isSuperAdmin &&
+    companyId.trim().length === 0 &&
+    activeTab !== 'subscription' &&
+    activeTab !== 'setup';
 
   const exportSubscriptionRows = (rows: typeof subscriptionRows, filename: string): void => {
     downloadCsv(
@@ -617,6 +869,14 @@ export default function App(): React.ReactElement {
 
   const onLogin = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
+    if (loginForm.mode === 'EMAIL' && loginForm.email.trim().length === 0) {
+      setBanner({ type: 'error', text: 'Email ile giris modunda email zorunludur' });
+      return;
+    }
+    if (loginForm.mode === 'LEGACY' && loginForm.username.trim().length < 3) {
+      setBanner({ type: 'error', text: 'Legacy giris modunda kullanici adi zorunludur' });
+      return;
+    }
     setIsAuthenticating(true);
     try {
       await auth.login(loginForm);
@@ -634,7 +894,15 @@ export default function App(): React.ReactElement {
     try {
       const created = await companyMutations.createCompany.mutateAsync(companyCreateForm);
       setCompanyId(created.id);
-      setCompanyCreateForm({ address: '', email: '', name: '', phone: '', taxNumber: '' });
+      setCompanyCreateForm({
+        address: '',
+        email: '',
+        maxCartDiscountPercent: '25',
+        maxItemDiscountPercent: '40',
+        name: '',
+        phone: '',
+        taxNumber: '',
+      });
       setBanner({ type: 'success', text: 'Firma eklendi' });
     } catch (error: unknown) {
       setBanner({ type: 'error', text: readError(error, 'Firma eklenemedi') });
@@ -713,17 +981,79 @@ export default function App(): React.ReactElement {
     }
   };
 
+  const saveInvoiceTemplate = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault();
+    if (companyId.length === 0) {
+      setBanner({ type: 'error', text: 'Sablon kaydi icin once firma secin' });
+      return;
+    }
+    try {
+      await invoiceTemplateMutation.mutateAsync(invoiceTemplateForm);
+      setBanner({ type: 'success', text: 'Fatura sablonu guncellendi' });
+    } catch (error: unknown) {
+      setBanner({ type: 'error', text: readError(error, 'Fatura sablonu kaydedilemedi') });
+    }
+  };
+
   const addCategory = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
     if (companyId.length === 0) {
       return;
     }
+    const timer = createFlowTimer('catalog.category.create');
     try {
       await catalogMutations.createCategory.mutateAsync({ ...categoryForm, companyId });
-      setCategoryForm({ color: '#6366f1', name: '', sortOrder: '0' });
+      setCategoryForm({ color: '#0f766e', name: '', parentId: '', sortOrder: '0' });
       setBanner({ type: 'success', text: 'Kategori eklendi' });
+      timer.success();
     } catch (error: unknown) {
       setBanner({ type: 'error', text: readError(error, 'Kategori eklenemedi') });
+      timer.fail();
+    }
+  };
+
+  const updateCategory = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault();
+    if (!selectedCategory) {
+      return;
+    }
+    const timer = createFlowTimer('catalog.category.update');
+    try {
+      await catalogMutations.updateCategory.mutateAsync({
+        ...categoryEditForm,
+        id: selectedCategory.id,
+      });
+      setBanner({ type: 'success', text: 'Kategori guncellendi' });
+      timer.success();
+    } catch (error: unknown) {
+      setBanner({ type: 'error', text: readError(error, 'Kategori guncellenemedi') });
+      timer.fail();
+    }
+  };
+
+  const deleteCategory = async (): Promise<void> => {
+    if (!selectedCategory) {
+      return;
+    }
+    const transferCategoryId = window.prompt(
+      'Kategori urunleri varsa tasinacak kategori ID girin (bos birakirsaniz bagli urunde silme iptal olur):',
+      '',
+    ) ?? '';
+    if (!window.confirm(`"${selectedCategory.name}" kategorisini silmek istiyor musunuz?`)) {
+      return;
+    }
+    const timer = createFlowTimer('catalog.category.delete');
+    try {
+      await catalogMutations.deleteCategory.mutateAsync({
+        id: selectedCategory.id,
+        transferCategoryId,
+      });
+      setSelectedCategoryId('');
+      setBanner({ type: 'success', text: 'Kategori silindi' });
+      timer.success();
+    } catch (error: unknown) {
+      setBanner({ type: 'error', text: readError(error, 'Kategori silinemedi') });
+      timer.fail();
     }
   };
 
@@ -732,12 +1062,140 @@ export default function App(): React.ReactElement {
     if (companyId.length === 0) {
       return;
     }
+    const timer = createFlowTimer('catalog.product.create');
     try {
       await catalogMutations.createProduct.mutateAsync({ ...productForm, companyId });
-      setProductForm((current) => ({ ...current, barcode: '', minStock: '0', name: '', purchasePrice: '0', salePrice: '0' }));
+      setProductForm((current) => ({
+        ...current,
+        barcode: '',
+        brand: '',
+        minStock: '0',
+        name: '',
+        purchasePrice: '0',
+        salePrice: '0',
+        supplierId: '',
+      }));
       setBanner({ type: 'success', text: 'Urun eklendi' });
+      timer.success();
     } catch (error: unknown) {
       setBanner({ type: 'error', text: readError(error, 'Urun eklenemedi') });
+      timer.fail();
+    }
+  };
+
+  const updateProduct = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault();
+    if (!selectedProduct) {
+      return;
+    }
+    const timer = createFlowTimer('catalog.product.update.single');
+    try {
+      await catalogMutations.updateProduct.mutateAsync({
+        ...productEditForm,
+        id: selectedProduct.id,
+        isActive: selectedProduct.isActive,
+      });
+      setBanner({ type: 'success', text: 'Urun guncellendi' });
+      timer.success();
+    } catch (error: unknown) {
+      setBanner({ type: 'error', text: readError(error, 'Urun guncellenemedi') });
+      timer.fail();
+    }
+  };
+
+  const toggleProductActive = async (productId: string, isActive: boolean): Promise<void> => {
+    const product = products.find((row) => row.id === productId);
+    if (!product) {
+      return;
+    }
+    const timer = createFlowTimer('catalog.product.toggle_active');
+    try {
+      await catalogMutations.updateProduct.mutateAsync({
+        barcode: product.barcode,
+        brand: product.brand ?? '',
+        categoryId: product.categoryId ?? '',
+        expiryDate: product.expiryDate ?? '',
+        id: product.id,
+        isActive,
+        minStock: String(product.minStock),
+        name: product.name,
+        purchasePrice: String(product.purchasePrice),
+        salePrice: String(product.salePrice),
+        supplierId: product.supplierId ?? '',
+        vatRate: String(product.vatRate),
+      });
+      setBanner({ type: 'success', text: `Urun ${isActive ? 'aktif' : 'pasif'} yapildi` });
+      timer.success();
+    } catch (error: unknown) {
+      setBanner({ type: 'error', text: readError(error, 'Urun durumu guncellenemedi') });
+      timer.fail();
+    }
+  };
+
+  const deleteProduct = async (productId: string): Promise<void> => {
+    const product = products.find((row) => row.id === productId);
+    if (!product) {
+      return;
+    }
+    if (!window.confirm(`"${product.name}" urununu silmek istiyor musunuz?`)) {
+      return;
+    }
+    const timer = createFlowTimer('catalog.product.delete');
+    try {
+      await catalogMutations.deleteProduct.mutateAsync({ id: product.id });
+      if (selectedProductId === product.id) {
+        setSelectedProductId('');
+      }
+      setBanner({ type: 'success', text: 'Urun silindi' });
+      timer.success();
+    } catch (error: unknown) {
+      setBanner({ type: 'error', text: readError(error, 'Urun silinemedi') });
+      timer.fail();
+    }
+  };
+
+  const previewBulkProducts = async (
+    selectedProductIds: string[],
+    form: BulkProductUpdateForm,
+  ) => {
+    if (companyId.length === 0) {
+      return null;
+    }
+    return catalogMutations.bulkProductUpdate.mutateAsync({
+      companyId,
+      form,
+      previewOnly: true,
+      productIds: selectedProductIds,
+    });
+  };
+
+  const applyBulkProducts = async (
+    selectedProductIds: string[],
+    form: BulkProductUpdateForm,
+  ): Promise<void> => {
+    if (companyId.length === 0) {
+      return;
+    }
+    const timer = createFlowTimer('catalog.product.bulk_update.100');
+    try {
+      const result = await catalogMutations.bulkProductUpdate.mutateAsync({
+        companyId,
+        form,
+        previewOnly: false,
+        productIds: selectedProductIds,
+      });
+      const summary = result.summary;
+      setBanner({
+        type: 'success',
+        text:
+          summary
+            ? `Toplu guncelleme tamamlandi. Basarili: ${summary.updated}, Hatali: ${summary.failed}`
+            : 'Toplu guncelleme tamamlandi',
+      });
+      timer.success();
+    } catch (error: unknown) {
+      setBanner({ type: 'error', text: readError(error, 'Toplu guncelleme basarisiz') });
+      timer.fail();
     }
   };
 
@@ -746,13 +1204,24 @@ export default function App(): React.ReactElement {
     if (branchId.length === 0 || movementForm.productId.length === 0) {
       return;
     }
+    const timer = createFlowTimer('stock.movement.create');
     try {
       await stockMutations.createStockMovement.mutateAsync({ ...movementForm, branchId });
-      setMovementForm((current) => ({ ...current, note: '', quantity: '0', reference: '' }));
+      setMovementForm((current) => ({ ...current, note: '', quantity: '0', reference: '', type: '' }));
       setBanner({ type: 'success', text: 'Stok hareketi kaydedildi' });
+      timer.success();
     } catch (error: unknown) {
       setBanner({ type: 'error', text: readError(error, 'Stok hareketi kaydedilemedi') });
+      timer.fail();
     }
+  };
+
+  const applyStockMovementFilters = (
+    updater: (current: StockMovementListFilters) => StockMovementListFilters,
+  ): void => {
+    const timer = createFlowTimer('stock.movement.filter');
+    setStockMovementFilters((current) => updater(current));
+    timer.success();
   };
 
   const createUser = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
@@ -772,6 +1241,7 @@ export default function App(): React.ReactElement {
       setSelectedUserId(created.id);
       setUserCreateForm({
         branchId: '',
+        email: '',
         fullName: '',
         password: '',
         pin: '',
@@ -838,12 +1308,16 @@ export default function App(): React.ReactElement {
         dailyDate,
         from: reportRange.from,
         registerId: reportRegisterId,
+        sessionLimit: 300,
         to: reportRange.to,
       });
       setDailyReport(payload.dailyReport);
       setTopProducts(payload.topProducts);
       setSessions(payload.sessions);
       setBranchComparisonRows(payload.branchComparisonRows);
+      setProfitabilityReport(payload.profitabilityReport);
+      setExpiringProducts(payload.expiringProducts);
+      setLedgerSummary(payload.ledgerSummary);
       setBanner({ type: 'success', text: 'Raporlar guncellendi' });
     } catch (error: unknown) {
       setBanner({ type: 'error', text: readError(error, 'Raporlar yuklenemedi') });
@@ -858,14 +1332,14 @@ export default function App(): React.ReactElement {
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: queryKeys.branches(companyId) }),
           queryClient.invalidateQueries({ queryKey: queryKeys.categories(companyId) }),
-          queryClient.invalidateQueries({ queryKey: queryKeys.products(companyId) }),
+          queryClient.invalidateQueries({ queryKey: ['products', companyId] }),
           queryClient.invalidateQueries({ queryKey: queryKeys.users(companyId) }),
         ]);
       }
       if (branchId.length > 0) {
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: queryKeys.stockLevels(branchId) }),
-          queryClient.invalidateQueries({ queryKey: queryKeys.stockMovements(branchId) }),
+          queryClient.invalidateQueries({ queryKey: ['stock-movements', branchId] }),
           queryClient.invalidateQueries({ queryKey: queryKeys.registers(branchId) }),
           queryClient.invalidateQueries({
             queryKey: queryKeys.operationsHealth(auth.role ?? '', companyId, branchId),
@@ -955,6 +1429,18 @@ export default function App(): React.ReactElement {
     }
   };
 
+  const generateLicenseKeyForCompany = async (targetCompanyId: string): Promise<void> => {
+    if (!window.confirm('Yeni bir lisans anahtari uretmek istiyor musunuz? Mevcut aktif olmayan anahtar gecersiz kilinacaktir.')) {
+      return;
+    }
+    try {
+      const newKey = await subscriptionMutations.generateLicense.mutateAsync(targetCompanyId);
+      setBanner({ type: 'success', text: `Yeni lisans anahtari uretildi: ${newKey}` });
+    } catch (error: unknown) {
+      setBanner({ type: 'error', text: readError(error, 'Lisans anahtari uretilemedi') });
+    }
+  };
+
   const saveSubscriptionPlan = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
     if (!selectedSubscriptionRow) {
@@ -1003,6 +1489,16 @@ export default function App(): React.ReactElement {
       });
       return;
     }
+    if (
+      subscriptionProvisionForm.companyId.trim().length === 0 &&
+      subscriptionProvisionForm.adminEmail.trim().length === 0
+    ) {
+      setBanner({
+        type: 'error',
+        text: 'Yeni firma acilisinda admin email zorunludur',
+      });
+      return;
+    }
 
     try {
       const result = await subscriptionMutations.provisionCompany.mutateAsync(
@@ -1011,13 +1507,14 @@ export default function App(): React.ReactElement {
       setSubscriptionSelectedCompanyId(result.company.id);
       setSubscriptionProvisionForm((current) => ({
         ...current,
+        adminEmail: current.adminEmail.trim().toLowerCase(),
         adminPassword: '',
         companyId: result.company.id,
         companyName: result.company.name,
       }));
       setBanner({
         type: 'success',
-        text: `Provision tamamlandi: ${result.company.name} (${result.template.code})`,
+        text: `Provision tamamlandi: ${result.company.name} (${result.template.code}) - Lisans Kodu: ${result.company.licenseKey || ''}`,
       });
     } catch (error: unknown) {
       setBanner({
@@ -1025,26 +1522,6 @@ export default function App(): React.ReactElement {
         text: readError(error, 'Provision islemi tamamlanamadi'),
       });
     }
-  };
-
-  const bindSelectedCompanyToProvision = (): void => {
-    if (!selectedSubscriptionRow) {
-      setBanner({
-        type: 'error',
-        text: 'Once paket listesinden bir firma secin',
-      });
-      return;
-    }
-    setSubscriptionProvisionForm((current) => ({
-      ...current,
-      companyId: selectedSubscriptionRow.company.id,
-      companyName: selectedSubscriptionRow.company.name,
-      taxNumber: selectedSubscriptionRow.company.taxNumber ?? '',
-    }));
-    setBanner({
-      type: 'success',
-      text: `"${selectedSubscriptionRow.company.name}" provision hedefine alindi`,
-    });
   };
 
   const applySubscriptionFilters = (): void => {
@@ -1081,7 +1558,9 @@ export default function App(): React.ReactElement {
         accessBlockedMessage={auth.accessBlockedMessage}
         banner={banner}
         login={loginForm}
+        onChangeEmail={(value) => setLoginForm((current) => ({ ...current, email: value }))}
         onChangeCompanyId={(value) => setLoginForm((current) => ({ ...current, companyId: value }))}
+        onChangeMode={(mode) => setLoginForm((current) => ({ ...current, mode }))}
         onChangePassword={(value) => setLoginForm((current) => ({ ...current, password: value }))}
         onChangeUsername={(value) => setLoginForm((current) => ({ ...current, username: value }))}
         onSubmit={onLogin}
@@ -1112,7 +1591,46 @@ export default function App(): React.ReactElement {
       userFullName={auth.session?.user.fullName ?? auth.session?.user.username ?? '-'}
       userRole={auth.role ?? '-'}
     >
-      {activeTab === 'organization' && (
+      {!auth.isSuperAdmin && (
+        <section className="card">
+          <h2>Web Panel Yetkisi Kapali</h2>
+          <p className="muted">
+            Bu web paneli sadece merkez operasyon (SUPER_ADMIN) icin aciktir. Firma ici tum
+            yonetim ve operasyon islemleri desktop POS uygulamasi uzerinden yapilmalidir.
+          </p>
+        </section>
+      )}
+
+      {requiresCompanySelection && (
+        <section className="card">
+          <h2>Firma Secimi Gerekli</h2>
+          <p className="muted">
+            SUPER_ADMIN olarak devam etmek icin once ust bardan bir firma secin. Firma secilmeden
+            organizasyon, katalog, stok, kullanici ve rapor modulleri acilmaz.
+          </p>
+        </section>
+      )}
+
+      {activeTab === 'setup' && auth.isSuperAdmin && (
+        <SetupWizardPage
+          existingCompanies={companies}
+          onProvisionFormChange={setSubscriptionProvisionForm}
+          onSubmitProvision={submitCompanyProvisioning}
+          provisionErrorText={
+            subscriptionMutations.provisionCompany.isError
+              ? readError(subscriptionMutations.provisionCompany.error, 'Provision islemi hata verdi')
+              : null
+          }
+          provisionForm={subscriptionProvisionForm}
+          provisionLoading={subscriptionMutations.provisionCompany.isPending}
+          saving={saving}
+          templateErrorText={subscriptionTemplateErrorText}
+          templateLoading={subscriptionTemplatesQuery.isFetching}
+          templates={subscriptionTemplates}
+        />
+      )}
+
+      {!requiresCompanySelection && activeTab === 'organization' && (
         <OrganizationPage
           branchErrorText={branchesErrorText}
           branchCreateForm={branchCreateForm}
@@ -1137,39 +1655,64 @@ export default function App(): React.ReactElement {
           onCompanyEditChange={setCompanyEditForm}
           onCompanySelect={setCompanyId}
           onCompanyUpdate={updateCompany}
+          onInvoiceTemplateFormChange={setInvoiceTemplateForm}
+          onInvoiceTemplateSave={saveInvoiceTemplate}
           onNewBranchChange={setBranchCreateForm}
           saving={saving}
           selectedBranch={selectedBranch}
           selectedCompany={selectedCompany}
           selectedCompanyName={selectedCompanyName}
+          invoiceTemplateForm={invoiceTemplateForm}
         />
       )}
 
-      {activeTab === 'catalog' && (
+      {!requiresCompanySelection && activeTab === 'catalog' && (
         <CatalogPage
+          bulkForm={bulkProductForm}
           categories={categories}
           categoriesErrorText={categoriesErrorText}
           categoriesLoading={categoriesQuery.isFetching}
+          categoryEditForm={categoryEditForm}
           categoryForm={categoryForm}
           companyId={companyId}
           onAddCategory={addCategory}
           onAddProduct={addProduct}
+          onApplyBulk={applyBulkProducts}
+          onBulkFormChange={setBulkProductForm}
+          onCategoryEditFormChange={setCategoryEditForm}
           onCategoryFormChange={setCategoryForm}
+          onDeleteCategory={deleteCategory}
+          onDeleteProduct={deleteProduct}
+          onPreviewBulk={previewBulkProducts}
+          onProductEditFormChange={setProductEditForm}
+          onProductFiltersChange={setProductFilters}
           onProductFormChange={setProductForm}
+          onSelectCategory={setSelectedCategoryId}
+          onSelectProduct={setSelectedProductId}
+          onToggleProductActive={toggleProductActive}
+          onUpdateCategory={updateCategory}
+          onUpdateProduct={updateProduct}
+          productEditForm={productEditForm}
+          productFilters={productFilters}
           productForm={productForm}
           products={products}
           productsErrorText={productsErrorText}
           productsLoading={productsQuery.isFetching}
           saving={saving}
+          selectedCategoryId={selectedCategoryId}
+          selectedProductId={selectedProductId}
+          suppliers={suppliers}
           toMoney={money}
         />
       )}
 
-      {activeTab === 'stock' && (
+      {!requiresCompanySelection && activeTab === 'stock' && (
         <StockPage
           branchId={branchId}
           movementForm={movementForm}
+          movementFilters={stockMovementFilters}
           onMovementFormChange={setMovementForm}
+          onMovementFiltersChange={applyStockMovementFilters}
           onSubmitMovement={addStockMovement}
           products={products}
           saving={saving}
@@ -1184,7 +1727,7 @@ export default function App(): React.ReactElement {
         />
       )}
 
-      {activeTab === 'users' && (
+      {!requiresCompanySelection && activeTab === 'users' && (
         <UsersPage
           branches={branches}
           canCreateUser={canCreateUsersInHierarchy}
@@ -1212,7 +1755,7 @@ export default function App(): React.ReactElement {
         />
       )}
 
-      {activeTab === 'reports' && (
+      {!requiresCompanySelection && activeTab === 'reports' && (
         <ReportsPage
           branchComparisonErrorText={reportsErrorText}
           branchComparisonRows={branchComparisonRows}
@@ -1239,7 +1782,14 @@ export default function App(): React.ReactElement {
           toDateTime={toDateTime}
           toMoney={money}
           topProducts={topProducts}
+          profitabilityReport={profitabilityReport}
+          expiringProducts={expiringProducts}
+          ledgerSummary={ledgerSummary}
         />
+      )}
+
+      {!requiresCompanySelection && activeTab === 'suppliers' && (
+        <SuppliersPage branchId={branchId} companyId={companyId} products={products} toMoney={money} />
       )}
 
       {activeTab === 'subscription' && auth.isSuperAdmin && (
@@ -1257,7 +1807,6 @@ export default function App(): React.ReactElement {
           onExportWholeList={() => exportSubscriptionRows(sortedSubscriptionRows, 'subscription-list.csv')}
           onFiltersChange={setSubscriptionFilters}
           onPlanFormChange={setSubscriptionPlanForm}
-          onProvisionFormChange={setSubscriptionProvisionForm}
           onQuickRenew={(targetCompanyId) => {
             void renewSubscription(targetCompanyId);
           }}
@@ -1273,9 +1822,6 @@ export default function App(): React.ReactElement {
           onSavePlan={(event) => {
             void saveSubscriptionPlan(event);
           }}
-          onSubmitProvision={(event) => {
-            void submitCompanyProvisioning(event);
-          }}
           onSelectCompany={setSubscriptionSelectedCompanyId}
           onSortChange={setSubscriptionSort}
           onSuspend={(targetCompanyId) => {
@@ -1284,11 +1830,10 @@ export default function App(): React.ReactElement {
           onUnsuspend={(targetCompanyId) => {
             void unsuspendSubscription(targetCompanyId);
           }}
-          onUseSelectedCompanyForProvision={bindSelectedCompanyToProvision}
+          onGenerateLicenseKey={(targetCompanyId) => {
+            void generateLicenseKeyForCompany(targetCompanyId);
+          }}
           planForm={subscriptionPlanForm}
-          provisionForm={subscriptionProvisionForm}
-          provisionLoading={subscriptionMutations.provisionCompany.isPending}
-          provisionErrorText={subscriptionMutations.provisionCompany.isError ? readError(subscriptionMutations.provisionCompany.error, 'Provision islemi hata verdi') : null}
           rows={sortedSubscriptionRows}
           saving={saving}
           selectedRow={selectedSubscriptionRow}
@@ -1297,9 +1842,6 @@ export default function App(): React.ReactElement {
           statuses={SUBSCRIPTION_STATUSES}
           subscriptionErrorText={subscriptionErrorText}
           subscriptionLoading={subscriptionCompaniesQuery.isFetching}
-          templates={subscriptionTemplates}
-          templateErrorText={subscriptionTemplateErrorText}
-          templateLoading={subscriptionTemplatesQuery.isFetching}
           summary={subscriptionSummary}
           toDateTime={toDateTime}
           upcomingRenewals={upcomingRenewals}

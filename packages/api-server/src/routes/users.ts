@@ -19,10 +19,26 @@ interface UserListQuery {
   companyId?: string;
 }
 
+function normalizeOptionalEmail(value?: string | null): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim().toLowerCase();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 function sendHierarchyForbidden(reply: FastifyReply): FastifyReply {
   return reply.status(403).send({
     error: 'Firma ici rol hiyerarsisi nedeniyle bu isleme yetkiniz yok',
     errorCode: 'ROLE_HIERARCHY_FORBIDDEN',
+    success: false,
+  });
+}
+
+function sendEmailConflict(reply: FastifyReply): FastifyReply {
+  return reply.status(409).send({
+    error: 'Bu email baska bir kullanici tarafindan kullaniliyor',
+    errorCode: 'EMAIL_ALREADY_IN_USE',
     success: false,
   });
 }
@@ -44,6 +60,7 @@ export async function userRoutes(server: FastifyInstance): Promise<void> {
         request,
         reply,
         request.query.companyId,
+        { requiredForSuperAdmin: true },
       );
       if (reply.sent) {
         return;
@@ -62,6 +79,7 @@ export async function userRoutes(server: FastifyInstance): Promise<void> {
             companyId: true,
             createdAt: true,
             deletedAt: true,
+            email: true,
             fullName: true,
             id: true,
             isActive: true,
@@ -96,6 +114,7 @@ export async function userRoutes(server: FastifyInstance): Promise<void> {
           companyId: true,
           createdAt: true,
           deletedAt: true,
+          email: true,
           fullName: true,
           id: true,
           isActive: true,
@@ -162,18 +181,33 @@ export async function userRoutes(server: FastifyInstance): Promise<void> {
       return sendHierarchyForbidden(reply);
     }
 
-    const { password, ...rest } = parsed.data;
+    const normalizedEmail = normalizeOptionalEmail(parsed.data.email);
+    if (normalizedEmail) {
+      const conflict = await prisma.user.findFirst({
+        where: {
+          deletedAt: null,
+          email: normalizedEmail,
+        },
+      });
+      if (conflict) {
+        return sendEmailConflict(reply);
+      }
+    }
+
+    const { password, email: _email, ...rest } = parsed.data;
     const passwordHash = await bcrypt.hash(password, 12);
 
     const user = await prisma.user.create({
       data: {
         ...rest,
+        email: normalizedEmail,
         passwordHash,
       },
       select: {
         branchId: true,
         companyId: true,
         createdAt: true,
+        email: true,
         fullName: true,
         id: true,
         isActive: true,
@@ -264,8 +298,34 @@ export async function userRoutes(server: FastifyInstance): Promise<void> {
         }
       }
 
-      const { password, ...rest } = parsed.data;
+      const hasEmailPatch = Object.prototype.hasOwnProperty.call(
+        parsed.data,
+        'email',
+      );
+      const incomingEmail = hasEmailPatch
+        ? normalizeOptionalEmail(parsed.data.email ?? null)
+        : undefined;
+      if (
+        typeof incomingEmail === 'string' &&
+        incomingEmail !== normalizeOptionalEmail(existing.email)
+      ) {
+        const conflict = await prisma.user.findFirst({
+          where: {
+            deletedAt: null,
+            email: incomingEmail,
+            NOT: { id: existing.id },
+          },
+        });
+        if (conflict) {
+          return sendEmailConflict(reply);
+        }
+      }
+
+      const { password, email: _email, ...rest } = parsed.data;
       const updateData: Prisma.UserUpdateInput = { ...rest };
+      if (incomingEmail !== undefined) {
+        updateData.email = incomingEmail;
+      }
       if (password) {
         updateData.passwordHash = await bcrypt.hash(password, 12);
       }
@@ -276,6 +336,7 @@ export async function userRoutes(server: FastifyInstance): Promise<void> {
           branchId: true,
           companyId: true,
           createdAt: true,
+          email: true,
           fullName: true,
           id: true,
           isActive: true,

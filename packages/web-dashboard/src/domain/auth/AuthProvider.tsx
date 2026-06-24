@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { persistStoredAuthSession, readStoredAuthSession, type StoredAuthSession } from '../../lib/auth-session';
@@ -22,16 +22,22 @@ export function AuthProvider({ children }: AuthProviderProps): React.ReactElemen
     const persisted = readStoredAuthSession(SESSION_STORAGE_KEY) as AuthSession | null;
     return persisted;
   });
+  const sessionRef = useRef<AuthSession | null>(session);
   const [accessBlockedMessage, setAccessBlockedMessage] = useState<string | null>(null);
 
   const applySession = useCallback((nextSession: AuthSession | null) => {
+    sessionRef.current = nextSession;
     setSession(nextSession);
     persistStoredAuthSession(SESSION_STORAGE_KEY, nextSession as StoredAuthSession | null);
   }, []);
 
   useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
+
+  useEffect(() => {
     setApiAuthLifecycle({
-      getSession: () => session,
+      getSession: () => sessionRef.current,
       onAccessBlocked: (message: string) => {
         setAccessBlockedMessage(message);
         applySession(null);
@@ -49,7 +55,7 @@ export function AuthProvider({ children }: AuthProviderProps): React.ReactElemen
     return () => {
       setApiAuthLifecycle(null);
     };
-  }, [applySession, navigate, session]);
+  }, [applySession, navigate]);
 
   const login = useCallback(
     async (credentials: LoginFormState) => {
@@ -75,14 +81,14 @@ export function AuthProvider({ children }: AuthProviderProps): React.ReactElemen
 
   const value = useMemo<AuthContextValue>(() => {
     const role = session?.user.role ?? null;
-    return {
-      accessBlockedMessage,
-      clearAccessBlockedMessage: () => setAccessBlockedMessage(null),
-      isAuthenticated: Boolean(session),
-      isBackofficeWriter: role === 'SUPER_ADMIN' || role === 'ADMIN',
-      isSuperAdmin: role === 'SUPER_ADMIN',
-      login,
-      logout,
+      return {
+        accessBlockedMessage,
+        clearAccessBlockedMessage: () => setAccessBlockedMessage(null),
+        isAuthenticated: Boolean(session),
+        isBackofficeWriter: role === 'SUPER_ADMIN',
+        isSuperAdmin: role === 'SUPER_ADMIN',
+        login,
+        logout,
       role,
       session,
     };

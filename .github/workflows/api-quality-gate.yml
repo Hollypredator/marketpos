@@ -1,0 +1,58 @@
+name: API Quality Gate
+
+on:
+  pull_request:
+    paths:
+      - 'packages/api-server/**'
+      - 'packages/shared/**'
+      - 'prisma/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'turbo.json'
+      - '.github/workflows/api-quality-gate.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'packages/api-server/**'
+      - 'packages/shared/**'
+      - 'prisma/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'turbo.json'
+      - '.github/workflows/api-quality-gate.yml'
+
+jobs:
+  api-gate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Shared Lint
+        run: npm run lint --workspace @marketpos/shared
+
+      - name: API Lint
+        run: npm run lint --workspace @marketpos/api-server
+
+      - name: API Test
+        run: npm run test --workspace @marketpos/api-server
+
+      - name: API Build
+        run: npm run build --workspace @marketpos/api-server
+
+      - name: Prisma Validate
+        run: npm run prisma:validate
+
+      - name: Prisma Migration Guard
+        run: npm run prisma:migration:check

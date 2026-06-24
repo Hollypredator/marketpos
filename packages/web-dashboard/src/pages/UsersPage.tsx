@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 
 import { PaginationControls } from '../components/PaginationControls';
 import { useClientPagination } from '../hooks/use-client-pagination';
@@ -13,6 +13,7 @@ interface BranchRow {
 interface UserRow {
   id: string;
   createdAt: string;
+  email?: string | null;
   fullName: string;
   isActive: boolean;
   role: UserRole;
@@ -21,6 +22,7 @@ interface UserRow {
 
 interface UserCreateForm {
   branchId: string;
+  email: string;
   fullName: string;
   password: string;
   pin: string;
@@ -30,6 +32,7 @@ interface UserCreateForm {
 
 interface UserEditForm {
   branchId: string;
+  email: string;
   fullName: string;
   isActive: boolean;
   password: string;
@@ -89,19 +92,77 @@ export function UsersPage({
   userEditForm,
   users,
 }: UsersPageProps): React.ReactElement {
-  const usersPagination = useClientPagination(users, { pageSize: 20 });
+  const [userSearch, setUserSearch] = useState('');
+  const [userStatusFilter, setUserStatusFilter] = useState<'ACTIVE' | 'ALL' | 'PASSIVE'>('ALL');
+
+  const normalizedUserSearch = userSearch.trim().toLocaleLowerCase('tr-TR');
+  const filteredUsers = useMemo(
+    () =>
+      users.filter((user) => {
+        if (userStatusFilter === 'ACTIVE' && !user.isActive) {
+          return false;
+        }
+        if (userStatusFilter === 'PASSIVE' && user.isActive) {
+          return false;
+        }
+
+        if (normalizedUserSearch.length === 0) {
+          return true;
+        }
+
+        const haystack =
+          `${user.fullName} ${user.username} ${user.email ?? ''} ${user.role}`.toLocaleLowerCase('tr-TR');
+        return haystack.includes(normalizedUserSearch);
+      }),
+    [normalizedUserSearch, userStatusFilter, users],
+  );
+
+  const usersPagination = useClientPagination(filteredUsers, { pageSize: 20 });
 
   return (
     <section className="panel-grid two-col">
       <article className="card">
-        <h2>Kullanicilar ({usersPagination.total})</h2>
+        <h2>Kullanicilar ({usersPagination.total}/{users.length})</h2>
+
+        <div className="inline-row three">
+          <input
+            placeholder="Ad, email, rol ara"
+            value={userSearch}
+            onChange={(event) => setUserSearch(event.target.value)}
+          />
+          <select
+            value={userStatusFilter}
+            onChange={(event) =>
+              setUserStatusFilter(event.target.value as 'ACTIVE' | 'ALL' | 'PASSIVE')
+            }
+          >
+            <option value="ALL">Tum durumlar</option>
+            <option value="ACTIVE">Sadece aktif</option>
+            <option value="PASSIVE">Sadece pasif</option>
+          </select>
+          <button
+            className="btn ghost"
+            type="button"
+            onClick={() => {
+              setUserSearch('');
+              setUserStatusFilter('ALL');
+            }}
+            disabled={
+              userSearch.trim().length === 0 &&
+              userStatusFilter === 'ALL'
+            }
+          >
+            Filtreyi Temizle
+          </button>
+        </div>
+
         <ul className="list">
           {usersPagination.visibleRows.map((user) => (
             <li key={user.id} className={user.id === selectedUserId ? 'active' : ''}>
               <button className="list-button" type="button" onClick={() => onSelectUser(user.id)}>
                 <span>{user.fullName}</span>
                 <small>
-                  {user.username} | {user.role}
+                  {user.email ?? user.username} | {user.role}
                 </small>
               </button>
               <span className={`state-pill ${user.isActive ? 'ok' : 'off'}`}>
@@ -144,6 +205,15 @@ export function UsersPage({
               disabled={!canCreateUser || saving}
             />
           </div>
+          <input
+            type="email"
+            placeholder="Email (opsiyonel)"
+            value={userCreateForm.email}
+            onChange={(event) =>
+              onUserCreateFormChange((current) => ({ ...current, email: event.target.value }))
+            }
+            disabled={!canCreateUser || saving}
+          />
           <div className="inline-row three">
             <input
               type="password"
@@ -231,6 +301,15 @@ export function UsersPage({
                 disabled={!canEditSelectedUser || saving}
               />
             </div>
+            <input
+              type="email"
+              placeholder="Email (bos birakirsan temizlenir)"
+              value={userEditForm.email}
+              onChange={(event) =>
+                onUserEditFormChange((current) => ({ ...current, email: event.target.value }))
+              }
+              disabled={!canEditSelectedUser || saving}
+            />
             <div className="inline-row three">
               <input
                 type="password"

@@ -1,17 +1,21 @@
 export type DashboardTab =
+  | 'setup'
   | 'organization'
   | 'catalog'
   | 'stock'
   | 'users'
   | 'reports'
+  | 'suppliers'
   | 'subscription';
 
 export const TAB_PATHS: Record<DashboardTab, string> = {
+  setup: '/setup',
   organization: '/organization',
   catalog: '/catalog',
   stock: '/stock',
   users: '/users',
   reports: '/reports',
+  suppliers: '/suppliers',
   subscription: '/subscription',
 };
 
@@ -21,16 +25,13 @@ const PATH_TO_TAB = new Map<string, DashboardTab>(
 
 export function resolveAllowedTabs(role?: string): DashboardTab[] {
   if (role === 'SUPER_ADMIN') {
-    return ['organization', 'catalog', 'stock', 'users', 'reports', 'subscription'];
+    return ['setup', 'organization', 'catalog', 'stock', 'users', 'reports', 'suppliers', 'subscription'];
   }
-  if (role === 'ADMIN') {
-    return ['organization', 'catalog', 'stock', 'users', 'reports'];
-  }
-  return ['reports'];
+  return [];
 }
 
 export function resolveFallbackTab(role?: string): DashboardTab {
-  return role === 'SUPER_ADMIN' || role === 'ADMIN' ? 'organization' : 'reports';
+  return role === 'SUPER_ADMIN' ? 'setup' : 'setup';
 }
 
 export function resolveTabFromPath(pathname: string): DashboardTab | null {

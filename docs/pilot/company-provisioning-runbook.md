@@ -15,10 +15,17 @@ npm run db:push --workspace @marketpos/api-server
 npm run db:provision --workspace @marketpos/api-server -- \
   --company-name "Ornek Market" \
   --tax-number "1234567890" \
+  --admin-email "admin@ornekmarket.com" \
   --admin-username "admin" \
   --admin-password "DegistirBeni123" \
   --template bakkal-v1
 ```
+
+Notlar:
+
+- Yeni firma acilisinda `adminEmail` zorunludur.
+- Admin email global unique olmali; duplicate durumda API `409 EMAIL_ALREADY_IN_USE` dondurur.
+- Email kaydi lowercase normalize edilerek saklanir.
 
 Provision komutu su varliklari olusturur veya gunceller:
 
@@ -37,6 +44,8 @@ npm run db:provision --workspace @marketpos/api-server -- \
   --admin-password "DegistirBeni123" \
   --template bakkal-v1
 ```
+
+Mevcut firmaya template uygularken `adminEmail` opsiyoneldir.
 
 ## 4. Kritik Opsiyonlar
 
@@ -59,3 +68,13 @@ npm run db:provision --workspace @marketpos/api-server -- \
   Template kutuphanesi listesi
 - `POST /api/subscription/admin/provision`
   Backoffice panelden yeni firma olusturma veya mevcut firmaya template uygulama
+  Yeni firma acilisinda payload icinde `adminEmail` zorunludur.
+
+## 7. Backoffice Wizard Akisi
+
+SUPER_ADMIN rolunde onboarding yalnizca `Firma Kurulum (Setup Wizard)` modulunden yapilir:
+
+1. Firma Bilgileri
+2. Admin Hesabi (`adminEmail` yeni firmada zorunlu)
+3. Paket ve Template
+4. Onay

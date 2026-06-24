@@ -24,6 +24,13 @@ API container ayaga kalktikten sonra migration uygulayin:
 docker exec -it marketpos-api npx prisma migrate deploy
 ```
 
+Schema veya migration degisikligi olan release'lerde deploy oncesi su kontroller zorunludur:
+
+```bash
+npm run prisma:validate
+npm run prisma:migration:check
+```
+
 ## 4) Operasyon Standartlari
 
 - Healthcheck: `http://<server-ip>:3001/health`

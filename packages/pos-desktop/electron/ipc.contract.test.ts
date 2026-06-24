@@ -27,6 +27,11 @@ describe('ipc contracts', () => {
     expect(IPC_CHANNELS.SETUP_UPDATE_STEP).toBe('setup:update-step');
     expect(IPC_CHANNELS.SETUP_COMPLETE).toBe('setup:complete');
     expect(IPC_CHANNELS.SETUP_RESET).toBe('setup:reset');
+    expect(IPC_CHANNELS.SETUP_SET_OFFLINE_READINESS).toBe('setup:set-offline-readiness');
+    expect(IPC_CHANNELS.SETUP_INCREMENT_OPERATOR_INTERVENTION).toBe(
+      'setup:increment-operator-intervention',
+    );
+    expect(IPC_CHANNELS.SETUP_MARK_FIRST_SALE).toBe('setup:mark-first-sale');
   });
 
   it('includes backup and operations channels for enterprise runtime', () => {
@@ -41,6 +46,16 @@ describe('ipc contracts', () => {
     expect(IPC_CHANNELS.OPS_LIST_SHIFT_HANDOVERS).toBe('ops:list-shift-handovers');
     expect(IPC_CHANNELS.OPS_RECORD_CASH_MOVEMENT).toBe('ops:record-cash-movement');
     expect(IPC_CHANNELS.OPS_LIST_CASH_MOVEMENTS).toBe('ops:list-cash-movements');
+    expect(IPC_CHANNELS.REPORTS_GET_LOCAL_DAILY).toBe('reports:get-local-daily');
+    expect(IPC_CHANNELS.BACKOFFICE_GET_SETTINGS).toBe('backoffice:get-settings');
+    expect(IPC_CHANNELS.BACKOFFICE_SET_SETTINGS).toBe('backoffice:set-settings');
+    expect(IPC_CHANNELS.DB_QUEUE_PRODUCT_OP).toBe('db:queue-product-op');
+    expect(IPC_CHANNELS.DB_QUEUE_STOCK_OP).toBe('db:queue-stock-op');
+    expect(IPC_CHANNELS.DB_LIST_PENDING_CUSTOMER_OPS).toBe('db:list-pending-customer-ops');
+    expect(IPC_CHANNELS.DB_LIST_PENDING_PRODUCT_OPS).toBe('db:list-pending-product-ops');
+    expect(IPC_CHANNELS.DB_LIST_PENDING_SUPPLIER_OPS).toBe('db:list-pending-supplier-ops');
+    expect(IPC_CHANNELS.DB_LIST_PENDING_PURCHASE_OPS).toBe('db:list-pending-purchase-ops');
+    expect(IPC_CHANNELS.DB_LIST_PENDING_STOCK_OPS).toBe('db:list-pending-stock-ops');
   });
 
   it('has no duplicate channel values', () => {

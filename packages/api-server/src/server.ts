@@ -3,6 +3,7 @@ import Fastify from 'fastify';
 import { dirname, resolve } from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { ZodError } from 'zod';
 
 import { startSubscriptionAuditJob } from './jobs/subscription-audit-job';
 import { authPlugin } from './plugins/auth';
@@ -10,15 +11,21 @@ import { authRoutes } from './routes/auth';
 import { branchRoutes } from './routes/branches';
 import { categoryRoutes } from './routes/categories';
 import { companyRoutes } from './routes/companies';
+import { customerRoutes } from './routes/customers';
+import { financeRoutes } from './routes/finance';
+import { purchaseInvoiceRoutes } from './routes/purchase-invoices';
 import { productRoutes } from './routes/products';
 import { refundRoutes } from './routes/refunds';
 import { registerRoutes } from './routes/registers';
 import { reportRoutes } from './routes/reports';
 import { saleRoutes } from './routes/sales';
 import { stockRoutes } from './routes/stock';
+import { stockTransferRoutes } from './routes/stock-transfers';
 import { subscriptionRoutes } from './routes/subscription';
+import { supplierRoutes } from './routes/suppliers';
 import { syncRoutes } from './routes/sync';
 import { userRoutes } from './routes/users';
+import { licenseRoutes } from './routes/license';
 
 function loadEnvironment(): void {
   const currentDir = dirname(fileURLToPath(import.meta.url));
@@ -64,6 +71,10 @@ function readErrorMessage(error: unknown): string {
   return 'Sunucu hatasi';
 }
 
+function isZodValidationError(error: unknown): error is ZodError {
+  return error instanceof ZodError;
+}
+
 loadEnvironment();
 
 const server = Fastify({
@@ -96,12 +107,18 @@ async function start(): Promise<void> {
   await server.register(userRoutes, { prefix: '/api/users' });
   await server.register(categoryRoutes, { prefix: '/api/categories' });
   await server.register(productRoutes, { prefix: '/api/products' });
+  await server.register(customerRoutes, { prefix: '/api/customers' });
+  await server.register(supplierRoutes, { prefix: '/api/suppliers' });
+  await server.register(purchaseInvoiceRoutes, { prefix: '/api/purchase-invoices' });
   await server.register(saleRoutes, { prefix: '/api/sales' });
   await server.register(refundRoutes, { prefix: '/api/refunds' });
   await server.register(stockRoutes, { prefix: '/api/stock' });
+  await server.register(stockTransferRoutes, { prefix: '/api/stock-transfers' });
   await server.register(reportRoutes, { prefix: '/api/reports' });
   await server.register(syncRoutes, { prefix: '/api/sync' });
   await server.register(subscriptionRoutes, { prefix: '/api/subscription' });
+  await server.register(licenseRoutes, { prefix: '/api/license' });
+  await server.register(financeRoutes, { prefix: '/api/finance' });
 
   const stopSubscriptionAuditJob = startSubscriptionAuditJob(server);
   server.addHook('onClose', async () => {
@@ -110,6 +127,14 @@ async function start(): Promise<void> {
 
   server.setErrorHandler((error: unknown, _request, reply) => {
     server.log.error(error);
+
+    if (isZodValidationError(error)) {
+      return reply.status(400).send({
+        error: 'Gecersiz istek verisi',
+        success: false,
+      });
+    }
+
     const statusCode =
       typeof error === 'object' &&
       error !== null &&

@@ -24,6 +24,19 @@ export interface ApiEnvelope<T> {
   };
 }
 
+export interface PaginationMeta {
+  limit: number;
+  page: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  pagination: PaginationMeta;
+  success: boolean;
+}
+
 export interface ApiErrorModel {
   status: number;
   message: string;
@@ -33,6 +46,7 @@ export interface ApiErrorModel {
 
 export interface AuthUser {
   id: string;
+  email?: string | null;
   username: string;
   fullName: string;
   role: UserRole;
@@ -64,6 +78,8 @@ export interface Company {
   address?: string | null;
   phone?: string | null;
   email?: string | null;
+  maxItemDiscountPercent: number;
+  maxCartDiscountPercent: number;
   isActive: boolean;
   packageType: 'MONTHLY' | 'YEARLY';
   packageStatus: 'ACTIVE' | 'SUSPENDED';
@@ -71,6 +87,8 @@ export interface Company {
   packageStartedAt?: string | null;
   packageExpiresAt?: string | null;
   packageGraceEndsAt?: string | null;
+  licenseKey?: string | null;
+  licenseKeyActivatedAt?: string | null;
 }
 
 export interface Branch {
@@ -92,19 +110,51 @@ export interface Register {
 export interface Category {
   id: string;
   name: string;
+  parentId?: string | null;
   sortOrder: number;
   color?: string | null;
+  companyId?: string;
+  updatedAt?: string;
 }
 
 export interface Product {
   id: string;
   name: string;
   barcode: string;
+  brand?: string | null;
+  supplierId?: string | null;
   salePrice: number;
+  wholesalePrice?: number | null;
   purchasePrice: number;
   vatRate: number;
   minStock: number;
+  expiryDate?: string | null;
   categoryId: string | null;
+  isActive: boolean;
+  updatedAt: string;
+}
+
+export interface InvoiceTemplateConfig {
+  headerText?: string | null;
+  footerNote?: string | null;
+  logoUrl?: string | null;
+  taxOffice?: string | null;
+  tradeRegistryNo?: string | null;
+  sales?: { label?: string | null; headerText?: string | null; footerNote?: string | null };
+  purchase?: { label?: string | null; headerText?: string | null; footerNote?: string | null };
+  dispatch?: { label?: string | null; headerText?: string | null; footerNote?: string | null };
+}
+
+export interface LedgerSummary {
+  openingBalance: number;
+  totalDebt: number;
+  totalPayment: number;
+  closingBalance: number;
+  dueAmount: number;
+  last30DaysPayments: number;
+  netChange: number;
+  from: string;
+  to: string;
 }
 
 export interface StockLevel {
@@ -136,6 +186,7 @@ export interface User {
   id: string;
   companyId: string;
   branchId?: string | null;
+  email?: string | null;
   username: string;
   fullName: string;
   role: UserRole;
@@ -160,6 +211,30 @@ export interface TopProduct {
   count: number;
   totalQuantity: number;
   totalRevenue: number;
+}
+
+export interface ProfitabilityReport {
+  summary: {
+    margin: number;
+    totalCost: number;
+    totalProfit: number;
+    totalRevenue: number;
+  };
+  topProducts: Array<{
+    productId: string;
+    productName: string;
+    quantity: number;
+    revenue: number;
+  }>;
+}
+
+export interface ExpiringProduct {
+  barcode: string;
+  categoryName?: string;
+  expiryDate?: string;
+  id: string;
+  name: string;
+  stockQuantity: number;
 }
 
 export interface ReportSession {
@@ -193,13 +268,21 @@ export interface OperationsHealthResponse {
   company: { id: string; name: string };
   generatedAt: string;
   summary: {
+    accepted24hTotal?: number;
     branchCount: number;
+    degradedRegisters?: number;
+    failed24hTotal?: number;
     registerCount: number;
     onlineRegisters: number;
     offlineRegisters: number;
+    oldestPendingAgeSecMax?: number | null;
     pendingQueueTotal: number;
+    queuePeakMax?: number;
+    replayRate24h?: number;
+    replayed24hTotal?: number;
     failedQueueTotal: number;
     lastSyncAt: string | null;
+    staleHeartbeatRegisters?: number;
   };
   branches: Array<{
     id: string;
@@ -210,13 +293,24 @@ export interface OperationsHealthResponse {
     failedQueueTotal: number;
     lastSyncAt: string | null;
     registers: Array<{
+      accepted24h?: number;
+      degraded?: boolean;
+      failed24h?: number;
       id: string;
       name: string;
       isOnline: boolean;
+      lastHeartbeatAt?: string | null;
+      lastSyncErrorCode?: string | null;
+      lastSyncStatus?: string;
       openSessionUpdatedAt: string | null;
       lastSyncAt: string | null;
+      oldestPendingAgeSec?: number | null;
       pendingQueueCount: number;
       failedQueueCount: number;
+      queuePeak?: number;
+      replayRate24h?: number;
+      replayed24h?: number;
+      staleHeartbeat?: boolean;
     }>;
   }>;
 }

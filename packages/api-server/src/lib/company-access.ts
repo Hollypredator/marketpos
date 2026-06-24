@@ -1,3 +1,5 @@
+import crypto from 'crypto';
+
 export type CompanyAccessStatus =
   | 'ACTIVE'
   | 'EXPIRED'
@@ -42,12 +44,13 @@ export interface CompanyAccessSnapshot {
   reasonCode: CompanyAccessReasonCode;
   status: CompanyAccessStatus;
   summary: string;
+  signature: string;
 }
 
-const DEFAULT_OFFLINE_ACCESS_GRACE_DAYS = 7;
+const DEFAULT_OFFLINE_ACCESS_GRACE_DAYS = 365;
 const DEFAULT_PACKAGE_GRACE_DAYS = 7;
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
-const SUBSCRIPTION_GRACE_DAYS_MAX = 30;
+const SUBSCRIPTION_GRACE_DAYS_MAX = 400;
 const SUBSCRIPTION_GRACE_DAYS_MIN = 1;
 const TURKEY_OFFSET = '+03:00';
 
@@ -95,7 +98,7 @@ function readOfflineAccessGraceDays(): number {
   if (!Number.isFinite(parsed)) {
     return DEFAULT_OFFLINE_ACCESS_GRACE_DAYS;
   }
-  return Math.min(Math.max(parsed, 1), 30);
+  return Math.min(Math.max(parsed, 1), 400);
 }
 
 function minDate(left: Date, right: Date): Date {
@@ -264,7 +267,7 @@ export function buildCompanyAccessSnapshot(
     offlineAccessGraceDays,
   });
 
-  return {
+  const snapshotWithoutSignature = {
     checkedAt: now.toISOString(),
     companyId: company.id,
     daysRemaining,
@@ -278,5 +281,16 @@ export function buildCompanyAccessSnapshot(
     reasonCode,
     status,
     summary,
+  };
+
+  const dataToSign = `${snapshotWithoutSignature.companyId}|${snapshotWithoutSignature.offlineAccessValidUntil}|${snapshotWithoutSignature.status}`;
+  const signature = crypto
+    .createHmac('sha256', 'marketpos-offline-license-verification-secret-token-key')
+    .update(dataToSign)
+    .digest('hex');
+
+  return {
+    ...snapshotWithoutSignature,
+    signature,
   };
 }

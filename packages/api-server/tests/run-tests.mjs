@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
+import bcrypt from 'bcrypt';
 import Fastify from 'fastify';
+
+process.env.SYNC_V2_ENABLED = process.env.SYNC_V2_ENABLED ?? 'true';
 
 const {
   buildCompanyAccessSnapshot,
@@ -21,6 +24,13 @@ const {
   canManageRole,
 } = await import('../dist/lib/role-hierarchy.js');
 const { authPlugin } = await import('../dist/plugins/auth.js');
+const { authRoutes } = await import('../dist/routes/auth.js');
+const { refundRoutes } = await import('../dist/routes/refunds.js');
+const { reportRoutes } = await import('../dist/routes/reports.js');
+const { saleRoutes } = await import('../dist/routes/sales.js');
+const { purchaseInvoiceRoutes } = await import('../dist/routes/purchase-invoices.js');
+const { supplierRoutes } = await import('../dist/routes/suppliers.js');
+const { syncRoutes } = await import('../dist/routes/sync.js');
 const { subscriptionRoutes } = await import('../dist/routes/subscription.js');
 const { userRoutes } = await import('../dist/routes/users.js');
 const prisma = (await import('../dist/lib/prisma.js')).default;
@@ -266,6 +276,193 @@ async function withAuthGuardsServer(run) {
   }
 }
 
+async function withSalesAndRefundsSchemaServer(run) {
+  const originalCompanyFindFirst = prisma.company.findFirst;
+  prisma.company.findFirst = async () => ({
+    deletedAt: null,
+    id: 'company-1',
+    isActive: true,
+    packageExpiresAt: new Date('2030-01-10T03:00:00.000Z'),
+    packageGraceDays: 7,
+    packageGraceEndsAt: new Date('2030-01-17T20:59:59.999Z'),
+    packageStatus: 'ACTIVE',
+  });
+
+  const server = Fastify({ logger: false });
+  await authPlugin(server);
+  await server.register(saleRoutes, { prefix: '/api/sales' });
+  await server.register(refundRoutes, { prefix: '/api/refunds' });
+  await server.ready();
+
+  try {
+    await run({
+      makeToken(role = 'ADMIN') {
+        return server.jwt.sign({
+          branchId: 'branch-1',
+          companyId: 'company-1',
+          id: `${role.toLowerCase()}-1`,
+          role,
+        });
+      },
+      server,
+    });
+  } finally {
+    await server.close();
+    prisma.company.findFirst = originalCompanyFindFirst;
+  }
+}
+
+function installSyncRoutePrismaMocks() {
+  const company = {
+    deletedAt: null,
+    id: 'company-1',
+    isActive: true,
+    packageExpiresAt: new Date('2030-01-10T03:00:00.000Z'),
+    packageGraceDays: 7,
+    packageGraceEndsAt: new Date('2030-01-17T20:59:59.999Z'),
+    packageStatus: 'ACTIVE',
+  };
+
+  const register = {
+    branch: {
+      companyId: 'company-1',
+      id: 'branch-1',
+      name: 'Merkez',
+    },
+    branchId: 'branch-1',
+    id: '11111111-1111-4111-8111-111111111111',
+  };
+
+  const ingestionStore = new Map();
+
+  const patches = [
+    [prisma.company, 'findFirst', async () => company],
+    [prisma.register, 'findFirst', async (args = {}) => {
+      if (args?.where?.id && args.where.id !== register.id) {
+        return null;
+      }
+      return {
+        ...register,
+        branch: { companyId: register.branch.companyId },
+      };
+    }],
+    [prisma.register, 'findUnique', async (args = {}) => {
+      if (args?.where?.id && args.where.id !== register.id) {
+        return null;
+      }
+      return {
+        ...register,
+      };
+    }],
+    [prisma.syncLog, 'create', async () => ({ id: 'sync-log-1' })],
+    [prisma.product, 'findMany', async () => []],
+    [prisma.category, 'findMany', async () => []],
+    [prisma.user, 'findMany', async () => []],
+    [prisma.stockLevel, 'findMany', async () => []],
+    [prisma.supplier, 'findMany', async () => []],
+    [prisma.purchaseInvoice, 'findMany', async () => []],
+    [prisma.customer, 'findMany', async () => []],
+    [prisma, '$queryRawUnsafe', async (query, ...params) => {
+      if (typeof query !== 'string' || !query.includes('FROM sync_ingestion_operations')) {
+        return [];
+      }
+      const [registerId, operationKey] = params;
+      const key = `${registerId}:${operationKey}`;
+      const row = ingestionStore.get(key);
+      return row ? [row] : [];
+    }],
+    [prisma, '$executeRawUnsafe', async (query, ...params) => {
+      if (typeof query !== 'string') {
+        return 0;
+      }
+      if (query.includes('INSERT INTO sync_ingestion_operations')) {
+        const [registerId, operationKey, entityType, localId, status, payloadHash, errorCode, errorMessage] = params;
+        const key = `${registerId}:${operationKey}`;
+        ingestionStore.set(key, {
+          entity_type: entityType,
+          error_code: errorCode ?? null,
+          error_message: errorMessage ?? null,
+          local_id: localId,
+          operation_key: operationKey,
+          payload_hash: payloadHash ?? null,
+          status,
+        });
+        return 1;
+      }
+      return 0;
+    }],
+  ];
+
+  const restoreFns = patches.map(([target, key, replacement]) => {
+    const original = target[key];
+    target[key] = replacement;
+    return () => {
+      target[key] = original;
+    };
+  });
+
+  return () => {
+    for (let index = restoreFns.length - 1; index >= 0; index -= 1) {
+      restoreFns[index]();
+    }
+  };
+}
+
+async function withSyncRoutesServer(run) {
+  const restorePrisma = installSyncRoutePrismaMocks();
+  const server = Fastify({ logger: false });
+  await authPlugin(server);
+
+  const routeHitCount = {
+    productOps: 0,
+    refunds: 0,
+    sales: 0,
+    stockOps: 0,
+  };
+
+  server.post('/api/sales', async () => {
+    routeHitCount.sales += 1;
+    return { data: { id: `sale-${routeHitCount.sales}` }, success: true };
+  });
+  server.post('/api/refunds', async () => {
+    routeHitCount.refunds += 1;
+    return { data: { id: `refund-${routeHitCount.refunds}` }, success: true };
+  });
+  server.post('/api/stock/movement', async () => {
+    routeHitCount.stockOps += 1;
+    return { data: { id: `movement-${routeHitCount.stockOps}` }, success: true };
+  });
+  server.post('/api/products', async () => {
+    routeHitCount.productOps += 1;
+    return { data: { id: `product-${routeHitCount.productOps}` }, success: true };
+  });
+  server.put('/api/products/:id', async () => {
+    routeHitCount.productOps += 1;
+    return { data: { id: `product-${routeHitCount.productOps}` }, success: true };
+  });
+
+  await server.register(syncRoutes, { prefix: '/api/sync' });
+  await server.ready();
+
+  try {
+    await run({
+      makeToken(role = 'ADMIN') {
+        return server.jwt.sign({
+          branchId: 'branch-1',
+          companyId: 'company-1',
+          id: `${role.toLowerCase()}-1`,
+          role,
+        });
+      },
+      routeHitCount,
+      server,
+    });
+  } finally {
+    await server.close();
+    restorePrisma();
+  }
+}
+
 function createUserFixtureList(companyId) {
   const createdAt = new Date('2025-01-01T00:00:00.000Z');
   const updatedAt = new Date('2025-01-01T00:00:00.000Z');
@@ -275,6 +472,7 @@ function createUserFixtureList(companyId) {
       companyId,
       createdAt,
       deletedAt: null,
+      email: 'admin-1@demo.test',
       fullName: 'Admin Actor',
       id: 'admin-1',
       isActive: true,
@@ -289,6 +487,7 @@ function createUserFixtureList(companyId) {
       companyId,
       createdAt,
       deletedAt: null,
+      email: 'admin-2@demo.test',
       fullName: 'Admin Peer',
       id: 'admin-2',
       isActive: true,
@@ -303,6 +502,7 @@ function createUserFixtureList(companyId) {
       companyId,
       createdAt,
       deletedAt: null,
+      email: 'cashier-1@demo.test',
       fullName: 'Cashier One',
       id: 'cashier-1',
       isActive: true,
@@ -357,6 +557,28 @@ function installUsersPrismaMocks(company, users) {
   const findUserById = (id) =>
     users.find((row) => row.id === id && row.deletedAt === null) ?? null;
 
+  const matchesUserWhere = (row, where = {}) => {
+    if (where.deletedAt === null && row.deletedAt !== null) {
+      return false;
+    }
+    if (typeof where.id === 'string' && row.id !== where.id) {
+      return false;
+    }
+    if (typeof where.companyId === 'string' && row.companyId !== where.companyId) {
+      return false;
+    }
+    if (typeof where.email === 'string' && row.email !== where.email) {
+      return false;
+    }
+    if (typeof where.username === 'string' && row.username !== where.username) {
+      return false;
+    }
+    if (where.NOT && typeof where.NOT === 'object' && typeof where.NOT.id === 'string' && row.id === where.NOT.id) {
+      return false;
+    }
+    return true;
+  };
+
   const mockUserDelegate = {
     count: async (args = {}) => {
       const companyId = args?.where?.companyId;
@@ -379,6 +601,7 @@ function installUsersPrismaMocks(company, users) {
         companyId: data.companyId,
         createdAt: now,
         deletedAt: null,
+        email: data.email ?? null,
         fullName: data.fullName,
         id: `user-${userCounter}`,
         isActive: true,
@@ -392,11 +615,12 @@ function installUsersPrismaMocks(company, users) {
       return cloneUser(row);
     },
     findFirst: async (args = {}) => {
-      const id = args?.where?.id;
-      if (!id) {
-        return null;
+      const where = args?.where ?? {};
+      if (typeof where.id === 'string') {
+        const rowById = findUserById(where.id);
+        return rowById ? cloneUser(rowById) : null;
       }
-      const row = findUserById(id);
+      const row = users.find((candidate) => matchesUserWhere(candidate, where)) ?? null;
       return row ? cloneUser(row) : null;
     },
     findMany: async (args = {}) => {
@@ -488,6 +712,999 @@ async function withUsersServer(run) {
   }
 }
 
+function installAuthPrismaMocks(companies, users) {
+  let refreshCounter = 0;
+  const companyById = new Map(companies.map((company) => [company.id, company]));
+
+  const cloneUserWithRelations = (user) => ({
+    ...user,
+    branch: user.branchId
+      ? {
+          id: user.branchId,
+          name: 'Merkez',
+        }
+      : null,
+    company: cloneCompany(companyById.get(user.companyId)),
+    createdAt: cloneDate(user.createdAt),
+    deletedAt: cloneDate(user.deletedAt),
+    updatedAt: cloneDate(user.updatedAt),
+  });
+
+  const mockUserDelegate = {
+    findFirst: async (args = {}) => {
+      const where = args?.where ?? {};
+      const row =
+        users.find((candidate) => {
+          if (where.deletedAt === null && candidate.deletedAt !== null) {
+            return false;
+          }
+          if (where.isActive === true && candidate.isActive !== true) {
+            return false;
+          }
+          if (typeof where.email === 'string' && candidate.email !== where.email) {
+            return false;
+          }
+          if (typeof where.username === 'string' && candidate.username !== where.username) {
+            return false;
+          }
+          if (typeof where.companyId === 'string' && candidate.companyId !== where.companyId) {
+            return false;
+          }
+          return true;
+        }) ?? null;
+
+      return row ? cloneUserWithRelations(row) : null;
+    },
+  };
+
+  const mockRefreshTokenDelegate = {
+    create: async (args = {}) => {
+      const data = args?.data ?? {};
+      refreshCounter += 1;
+      return {
+        ...data,
+        id: `refresh-${refreshCounter}`,
+      };
+    },
+  };
+
+  const patches = [
+    [prisma.user, 'findFirst', mockUserDelegate.findFirst],
+    [prisma.refreshToken, 'create', mockRefreshTokenDelegate.create],
+  ];
+
+  const restoreFns = patches.map(([target, key, replacement]) => {
+    const original = target[key];
+    target[key] = replacement;
+    return () => {
+      target[key] = original;
+    };
+  });
+
+  return () => {
+    for (let index = restoreFns.length - 1; index >= 0; index -= 1) {
+      restoreFns[index]();
+    }
+  };
+}
+
+async function withAuthRoutesServer(run) {
+  const companyOne = createCompanyFixture({
+    id: '11111111-1111-4111-8111-111111111111',
+    name: 'Tenant One',
+    packageExpiresAt: new Date('2030-01-10T03:00:00.000Z'),
+    packageGraceEndsAt: new Date('2030-01-17T20:59:59.999Z'),
+    packageStatus: 'ACTIVE',
+  });
+  const companyTwo = createCompanyFixture({
+    id: '22222222-2222-4222-8222-222222222222',
+    name: 'Tenant Two',
+    packageExpiresAt: new Date('2030-02-10T03:00:00.000Z'),
+    packageGraceEndsAt: new Date('2030-02-17T20:59:59.999Z'),
+    packageStatus: 'ACTIVE',
+  });
+  const hashedPassword = await bcrypt.hash('Strong123', 4);
+  const createdAt = new Date('2025-01-01T00:00:00.000Z');
+  const users = [
+    {
+      branchId: null,
+      companyId: companyOne.id,
+      createdAt,
+      deletedAt: null,
+      email: 'admin@tenant-one.test',
+      fullName: 'Tenant One Admin',
+      id: 'auth-user-1',
+      isActive: true,
+      passwordHash: hashedPassword,
+      pin: null,
+      role: 'ADMIN',
+      updatedAt: createdAt,
+      username: 'admin',
+    },
+    {
+      branchId: null,
+      companyId: companyTwo.id,
+      createdAt,
+      deletedAt: null,
+      email: 'admin@tenant-two.test',
+      fullName: 'Tenant Two Admin',
+      id: 'auth-user-2',
+      isActive: true,
+      passwordHash: hashedPassword,
+      pin: null,
+      role: 'ADMIN',
+      updatedAt: createdAt,
+      username: 'admin',
+    },
+  ];
+
+  const restorePrisma = installAuthPrismaMocks([companyOne, companyTwo], users);
+  const server = Fastify({ logger: false });
+  await authPlugin(server);
+  await server.register(authRoutes, { prefix: '/api/auth' });
+  await server.ready();
+
+  try {
+    await run({
+      companyOne,
+      companyTwo,
+      server,
+    });
+  } finally {
+    await server.close();
+    restorePrisma();
+  }
+}
+
+function installReportsPrismaMocks(company) {
+  const registerId = '11111111-1111-4111-8111-111111111111';
+  const mockCompanyDelegate = {
+    findFirst: async (args = {}) => {
+      const id = args?.where?.id;
+      if (id && id !== company.id) {
+        return null;
+      }
+      return cloneCompany(company);
+    },
+  };
+
+  const mockBranchDelegate = {
+    findFirst: async (args = {}) => {
+      const id = args?.where?.id;
+      const scopedCompanyId = args?.where?.companyId;
+      if (scopedCompanyId !== company.id) {
+        return null;
+      }
+      if (id !== 'branch-1') {
+        return null;
+      }
+      return { id: 'branch-1', name: 'Merkez' };
+    },
+    findMany: async (args = {}) => {
+      if (args?.include?.registers) {
+        return [
+          {
+            id: 'branch-1',
+            name: 'Merkez',
+            registers: [
+              {
+                id: registerId,
+                isActive: true,
+                name: 'Kasa 1',
+              },
+            ],
+          },
+        ];
+      }
+      return [{ id: 'branch-1', name: 'Merkez' }];
+    },
+  };
+
+  const mockSaleDelegate = {
+    aggregate: async () => ({
+      _count: 1,
+      _sum: {
+        grandTotal: 100,
+        totalDiscount: 0,
+        totalVat: 10,
+      },
+    }),
+    groupBy: async () => [
+      {
+        _count: 3,
+        _sum: {
+          grandTotal: 300,
+          totalVat: 30,
+        },
+        branchId: 'branch-1',
+      },
+    ],
+  };
+
+  const mockRefundDelegate = {
+    aggregate: async () => ({
+      _count: 0,
+      _sum: {
+        totalAmount: 0,
+      },
+    }),
+    groupBy: async () => [
+      {
+        _count: 1,
+        _sum: {
+          totalAmount: 25,
+        },
+        branchId: 'branch-1',
+      },
+    ],
+  };
+
+  const mockPaymentDelegate = {
+    groupBy: async () => [],
+  };
+
+  const mockRegisterSessionDelegate = {
+    count: async () => 2,
+    findMany: async (args = {}) => {
+      if (args?.where?.status === 'OPEN') {
+        return [
+          {
+            registerId,
+            updatedAt: new Date('2026-03-02T12:00:00.000Z'),
+          },
+        ];
+      }
+      return [
+        {
+          closedAt: new Date('2026-03-02T12:00:00.000Z'),
+          closingBalance: 500,
+          createdAt: new Date('2026-03-02T08:00:00.000Z'),
+          difference: 0,
+          id: 'session-1',
+          openingBalance: 300,
+          register: { name: 'Kasa 1' },
+          status: 'CLOSED',
+          user: { fullName: 'Kasiyer 1' },
+        },
+        {
+          closedAt: new Date('2026-03-01T20:00:00.000Z'),
+          closingBalance: 420,
+          createdAt: new Date('2026-03-01T10:00:00.000Z'),
+          difference: -5,
+          id: 'session-2',
+          openingBalance: 250,
+          register: { name: 'Kasa 1' },
+          status: 'CLOSED',
+          user: { fullName: 'Kasiyer 2' },
+        },
+      ];
+    },
+  };
+
+  const mockSyncLogDelegate = {
+    groupBy: async (args = {}) => {
+      const by = Array.isArray(args?.by) ? args.by : [];
+      if (by.includes('status')) {
+        return [
+          {
+            _count: { _all: 3 },
+            registerId,
+            status: 'PENDING',
+          },
+          {
+            _count: { _all: 1 },
+            registerId,
+            status: 'FAILED',
+          },
+        ];
+      }
+      return [
+        {
+          _max: {
+            createdAt: new Date('2026-03-02T12:00:00.000Z'),
+            syncedAt: new Date('2026-03-02T12:00:00.000Z'),
+          },
+          registerId,
+        },
+      ];
+    },
+  };
+
+  const patches = [
+    [prisma.company, 'findFirst', mockCompanyDelegate.findFirst],
+    [prisma.branch, 'findFirst', mockBranchDelegate.findFirst],
+    [prisma.branch, 'findMany', mockBranchDelegate.findMany],
+    [prisma.sale, 'aggregate', mockSaleDelegate.aggregate],
+    [prisma.sale, 'groupBy', mockSaleDelegate.groupBy],
+    [prisma.refund, 'aggregate', mockRefundDelegate.aggregate],
+    [prisma.refund, 'groupBy', mockRefundDelegate.groupBy],
+    [prisma.payment, 'groupBy', mockPaymentDelegate.groupBy],
+    [prisma.registerSession, 'findMany', mockRegisterSessionDelegate.findMany],
+    [prisma.registerSession, 'count', mockRegisterSessionDelegate.count],
+    [prisma.syncLog, 'groupBy', mockSyncLogDelegate.groupBy],
+    [prisma, '$queryRawUnsafe', async (query) => {
+      if (typeof query !== 'string') {
+        return [];
+      }
+      if (query.includes('FROM register_sync_snapshots')) {
+        return [
+          {
+            last_sync_error_code: null,
+            last_sync_status: 'OK',
+            oldest_pending_age_sec: 120,
+            pending_count: 3,
+            product_ops: 0,
+            queue_peak: 8,
+            refunds: 0,
+            register_id: registerId,
+            sales: 3,
+            server_observed_at: new Date('2026-03-02T12:00:00.000Z'),
+            stock_ops: 0,
+          },
+        ];
+      }
+      if (query.includes('FROM sync_ingestion_operations')) {
+        return [
+          {
+            accepted_24h: 10,
+            failed_24h: 2,
+            register_id: registerId,
+            replayed_24h: 5,
+          },
+        ];
+      }
+      return [];
+    }],
+  ];
+
+  const restoreFns = patches.map(([target, key, replacement]) => {
+    const original = target[key];
+    target[key] = replacement;
+    return () => {
+      target[key] = original;
+    };
+  });
+
+  return () => {
+    for (let index = restoreFns.length - 1; index >= 0; index -= 1) {
+      restoreFns[index]();
+    }
+  };
+}
+
+async function withReportsServer(run) {
+  const company = createCompanyFixture({
+    id: '11111111-1111-4111-8111-111111111111',
+    packageExpiresAt: new Date('2030-01-10T03:00:00.000Z'),
+    packageGraceEndsAt: new Date('2030-01-17T20:59:59.999Z'),
+    packageStatus: 'ACTIVE',
+  });
+  const restorePrisma = installReportsPrismaMocks(company);
+
+  const server = Fastify({ logger: false });
+  await authPlugin(server);
+  await server.register(reportRoutes, { prefix: '/api/reports' });
+  await server.ready();
+
+  try {
+    await run({
+      company,
+      makeToken(role, options = {}) {
+        return server.jwt.sign({
+          branchId: options.branchId ?? null,
+          companyId: options.companyId ?? company.id,
+          id: options.userId ?? `${role.toLowerCase()}-1`,
+          role,
+        });
+      },
+      server,
+    });
+  } finally {
+    await server.close();
+    restorePrisma();
+  }
+}
+
+function createUuidFromCounter(counter) {
+  return `${String(counter).padStart(8, '0')}-0000-4000-8000-${String(counter).padStart(12, '0')}`;
+}
+
+function installPurchaseSupplierPrismaMocks(company) {
+  const branch = {
+    companyId: company.id,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    deletedAt: null,
+    id: '22222222-2222-4222-8222-222222222222',
+    name: 'Merkez',
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+  };
+
+  const suppliers = new Map([
+    [
+      '33333333-3333-4333-8333-333333333333',
+      {
+        address: null,
+        balance: 0,
+        balanceMinor: 0n,
+        companyId: company.id,
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        deletedAt: null,
+        email: null,
+        id: '33333333-3333-4333-8333-333333333333',
+        isActive: true,
+        name: 'Demo Supplier',
+        phone: null,
+        taxNumber: null,
+        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      },
+    ],
+  ]);
+
+  const products = new Map([
+    [
+      '44444444-4444-4444-8444-444444444444',
+      {
+        barcode: 'P-0001',
+        companyId: company.id,
+        id: '44444444-4444-4444-8444-444444444444',
+        name: 'Demo Product',
+        purchasePrice: 10,
+        purchasePriceMinor: 1000n,
+        salePrice: 20,
+        salePriceMinor: 2000n,
+      },
+    ],
+  ]);
+
+  const stockLevels = new Map([
+    [
+      `${branch.id}:44444444-4444-4444-8444-444444444444`,
+      {
+        branchId: branch.id,
+        id: 'stock-1',
+        productId: '44444444-4444-4444-8444-444444444444',
+        quantity: 10,
+      },
+    ],
+  ]);
+  const stockMovements = [];
+  const purchaseInvoices = new Map();
+  const purchaseInvoiceItems = new Map();
+  const supplierTransactions = [];
+
+  let invoiceCounter = 100;
+  let invoiceItemCounter = 200;
+  let transactionCounter = 300;
+
+  const clone = (value) => ({ ...value });
+
+  const applyInvoiceWhere = (invoice, where = {}) => {
+    if (where.deletedAt === null && invoice.deletedAt !== null) {
+      return false;
+    }
+    if (typeof where.id === 'string' && invoice.id !== where.id) {
+      return false;
+    }
+    if (typeof where.companyId === 'string' && invoice.companyId !== where.companyId) {
+      return false;
+    }
+    if (typeof where.branchId === 'string' && invoice.branchId !== where.branchId) {
+      return false;
+    }
+    if (typeof where.supplierId === 'string' && invoice.supplierId !== where.supplierId) {
+      return false;
+    }
+    if (typeof where.documentType === 'string' && invoice.documentType !== where.documentType) {
+      return false;
+    }
+    if (
+      Object.prototype.hasOwnProperty.call(where, 'sourceDispatchId') &&
+      invoice.sourceDispatchId !== where.sourceDispatchId
+    ) {
+      return false;
+    }
+    if (typeof where.status === 'string' && invoice.status !== where.status) {
+      return false;
+    }
+    return true;
+  };
+
+  const applySupplierWhere = (supplier, where = {}) => {
+    if (where.deletedAt === null && supplier.deletedAt !== null) {
+      return false;
+    }
+    if (typeof where.id === 'string' && supplier.id !== where.id) {
+      return false;
+    }
+    if (typeof where.companyId === 'string' && supplier.companyId !== where.companyId) {
+      return false;
+    }
+    if (typeof where.isActive === 'boolean' && supplier.isActive !== where.isActive) {
+      return false;
+    }
+    return true;
+  };
+
+  const applySupplierTransactionWhere = (transaction, where = {}) => {
+    if (typeof where.supplierId === 'string' && transaction.supplierId !== where.supplierId) {
+      return false;
+    }
+    if (typeof where.type === 'string' && transaction.type !== where.type) {
+      return false;
+    }
+    if (where.createdAt && typeof where.createdAt === 'object') {
+      if (where.createdAt.gte && transaction.createdAt < where.createdAt.gte) {
+        return false;
+      }
+      if (where.createdAt.lte && transaction.createdAt > where.createdAt.lte) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const mockCompanyDelegate = {
+    findFirst: async (args = {}) => {
+      if (args?.where?.id && args.where.id !== company.id) {
+        return null;
+      }
+      if (args?.where?.deletedAt === null && company.deletedAt !== null) {
+        return null;
+      }
+      return cloneCompany(company);
+    },
+  };
+
+  const mockBranchDelegate = {
+    findUnique: async (args = {}) => {
+      if (args?.where?.id !== branch.id) {
+        return null;
+      }
+      return clone(branch);
+    },
+  };
+
+  const mockSupplierDelegate = {
+    count: async (args = {}) => {
+      const where = args?.where ?? {};
+      return [...suppliers.values()].filter((row) => applySupplierWhere(row, where)).length;
+    },
+    create: async (args = {}) => {
+      const data = args?.data ?? {};
+      const id = createUuidFromCounter(suppliers.size + 900);
+      const now = new Date();
+      const row = {
+        address: data.address ?? null,
+        balance: data.balance ?? 0,
+        balanceMinor: data.balanceMinor ?? 0n,
+        companyId: data.companyId,
+        createdAt: now,
+        deletedAt: null,
+        email: data.email ?? null,
+        id,
+        isActive: data.isActive ?? true,
+        name: data.name,
+        phone: data.phone ?? null,
+        taxNumber: data.taxNumber ?? null,
+        updatedAt: now,
+      };
+      suppliers.set(id, row);
+      return clone(row);
+    },
+    findFirst: async (args = {}) => {
+      const where = args?.where ?? {};
+      const row = [...suppliers.values()].find((candidate) => applySupplierWhere(candidate, where));
+      return row ? clone(row) : null;
+    },
+    findMany: async (args = {}) => {
+      const where = args?.where ?? {};
+      let rows = [...suppliers.values()].filter((candidate) => applySupplierWhere(candidate, where));
+      rows = rows.sort((left, right) => left.name.localeCompare(right.name));
+      if (Number.isFinite(args?.skip) && args.skip > 0) {
+        rows = rows.slice(args.skip);
+      }
+      if (Number.isFinite(args?.take)) {
+        rows = rows.slice(0, args.take);
+      }
+      return rows.map(clone);
+    },
+    update: async (args = {}) => {
+      const id = args?.where?.id;
+      const row = suppliers.get(id);
+      if (!row) {
+        throw new Error('Supplier not found');
+      }
+      const data = args?.data ?? {};
+      if (data.balance && typeof data.balance === 'object' && typeof data.balance.increment === 'number') {
+        row.balance += data.balance.increment;
+      } else if (typeof data.balance === 'number') {
+        row.balance = data.balance;
+      }
+      if (data.balanceMinor && typeof data.balanceMinor === 'object' && typeof data.balanceMinor.increment === 'bigint') {
+        row.balanceMinor += data.balanceMinor.increment;
+      } else if (typeof data.balanceMinor === 'bigint') {
+        row.balanceMinor = data.balanceMinor;
+      }
+      if (typeof data.name === 'string') {
+        row.name = data.name;
+      }
+      if (typeof data.phone === 'string' || data.phone === null) {
+        row.phone = data.phone;
+      }
+      row.updatedAt = new Date();
+      suppliers.set(id, row);
+      return clone(row);
+    },
+  };
+
+  const mockProductDelegate = {
+    update: async (args = {}) => {
+      const id = args?.where?.id;
+      const row = products.get(id);
+      if (!row) {
+        throw new Error('Product not found');
+      }
+      const data = args?.data ?? {};
+      if (typeof data.purchasePrice === 'number') {
+        row.purchasePrice = data.purchasePrice;
+      }
+      if (typeof data.purchasePriceMinor === 'bigint') {
+        row.purchasePriceMinor = data.purchasePriceMinor;
+      }
+      if (typeof data.salePrice === 'number') {
+        row.salePrice = data.salePrice;
+      }
+      if (typeof data.salePriceMinor === 'bigint') {
+        row.salePriceMinor = data.salePriceMinor;
+      }
+      products.set(id, row);
+      return clone(row);
+    },
+  };
+
+  const mockStockLevelDelegate = {
+    findUnique: async (args = {}) => {
+      const key = `${args?.where?.productId_branchId?.branchId}:${args?.where?.productId_branchId?.productId}`;
+      const row = stockLevels.get(key);
+      return row ? clone(row) : null;
+    },
+    upsert: async (args = {}) => {
+      const key = `${args?.where?.productId_branchId?.branchId}:${args?.where?.productId_branchId?.productId}`;
+      const row = stockLevels.get(key);
+      if (row) {
+        const increment = args?.update?.quantity?.increment ?? 0;
+        row.quantity += increment;
+        stockLevels.set(key, row);
+        return clone(row);
+      }
+
+      const created = {
+        branchId: args?.create?.branchId,
+        id: createUuidFromCounter(stockLevels.size + 500),
+        productId: args?.create?.productId,
+        quantity: args?.create?.quantity ?? 0,
+      };
+      stockLevels.set(key, created);
+      return clone(created);
+    },
+  };
+
+  const mockStockMovementDelegate = {
+    create: async (args = {}) => {
+      const data = args?.data ?? {};
+      const row = {
+        ...data,
+        createdAt: new Date(),
+        id: createUuidFromCounter(stockMovements.length + 700),
+      };
+      stockMovements.push(row);
+      return clone(row);
+    },
+  };
+
+  const mockPurchaseInvoiceDelegate = {
+    count: async (args = {}) => {
+      const where = args?.where ?? {};
+      return [...purchaseInvoices.values()].filter((row) => applyInvoiceWhere(row, where)).length;
+    },
+    create: async (args = {}) => {
+      invoiceCounter += 1;
+      const id = createUuidFromCounter(invoiceCounter);
+      const now = new Date();
+      const data = args?.data ?? {};
+      const row = {
+        branchId: data.branchId,
+        companyId: data.companyId,
+        convertedAt: data.convertedAt ?? null,
+        convertedToInvoiceId: data.convertedToInvoiceId ?? null,
+        createdAt: now,
+        deletedAt: null,
+        dispatchNumber: data.dispatchNumber ?? null,
+        documentDate: data.documentDate ?? null,
+        documentType: data.documentType,
+        dueDate: data.dueDate ?? null,
+        grandTotal: data.grandTotal,
+        grandTotalMinor: data.grandTotalMinor ?? 0n,
+        id,
+        invoiceNumber: data.invoiceNumber,
+        note: data.note ?? null,
+        sourceDispatchId: data.sourceDispatchId ?? null,
+        status: data.status,
+        subtotal: data.subtotal,
+        subtotalMinor: data.subtotalMinor ?? 0n,
+        supplierId: data.supplierId,
+        totalDiscount: data.totalDiscount,
+        totalDiscountMinor: data.totalDiscountMinor ?? 0n,
+        totalVat: data.totalVat,
+        totalVatMinor: data.totalVatMinor ?? 0n,
+        updatedAt: now,
+        userId: data.userId,
+      };
+      purchaseInvoices.set(id, row);
+
+      const items = Array.isArray(data?.items?.create)
+        ? data.items.create.map((item) => {
+            invoiceItemCounter += 1;
+            return {
+              createdAt: now,
+              discount: item.discount,
+              discountMinor: item.discountMinor ?? 0n,
+              id: createUuidFromCounter(invoiceItemCounter),
+              invoiceId: id,
+              lineTotal: item.lineTotal,
+              lineTotalMinor: item.lineTotalMinor ?? 0n,
+              productId: item.productId,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              unitPriceMinor: item.unitPriceMinor ?? 0n,
+              vatAmount: item.vatAmount,
+              vatAmountMinor: item.vatAmountMinor ?? 0n,
+              vatRate: item.vatRate,
+            };
+          })
+        : [];
+      purchaseInvoiceItems.set(id, items);
+
+      return clone(row);
+    },
+    findFirst: async (args = {}) => {
+      const where = args?.where ?? {};
+      const row = [...purchaseInvoices.values()].find((candidate) => applyInvoiceWhere(candidate, where));
+      if (!row) {
+        return null;
+      }
+
+      const response = clone(row);
+      if (args?.include?.items) {
+        const items = purchaseInvoiceItems.get(row.id) ?? [];
+        if (args.include.items.include?.product) {
+          response.items = items.map((item) => ({
+            ...item,
+            product: (() => {
+              const product = products.get(item.productId);
+              return product ? { barcode: product.barcode, name: product.name } : null;
+            })(),
+          }));
+        } else {
+          response.items = items.map(clone);
+        }
+      }
+      if (args?.include?.supplier) {
+        const supplier = suppliers.get(row.supplierId);
+        response.supplier = supplier
+          ? {
+              id: supplier.id,
+              name: supplier.name,
+            }
+          : null;
+      }
+      if (args?.include?.branch) {
+        response.branch = {
+          id: branch.id,
+          name: branch.name,
+        };
+      }
+      return response;
+    },
+    findMany: async (args = {}) => {
+      const where = args?.where ?? {};
+      let rows = [...purchaseInvoices.values()].filter((candidate) => applyInvoiceWhere(candidate, where));
+      rows = rows.sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+      if (Number.isFinite(args?.skip) && args.skip > 0) {
+        rows = rows.slice(args.skip);
+      }
+      if (Number.isFinite(args?.take)) {
+        rows = rows.slice(0, args.take);
+      }
+
+      return rows.map((row) => {
+        const response = clone(row);
+        if (args?.include?.supplier) {
+          const supplier = suppliers.get(row.supplierId);
+          response.supplier = supplier
+            ? {
+                id: supplier.id,
+                name: supplier.name,
+              }
+            : null;
+        }
+        if (args?.include?.branch) {
+          response.branch = {
+            id: branch.id,
+            name: branch.name,
+          };
+        }
+        return response;
+      });
+    },
+    update: async (args = {}) => {
+      const id = args?.where?.id;
+      const row = purchaseInvoices.get(id);
+      if (!row) {
+        throw new Error('Purchase invoice not found');
+      }
+      const data = args?.data ?? {};
+      Object.assign(row, data, { updatedAt: new Date() });
+      purchaseInvoices.set(id, row);
+      return clone(row);
+    },
+  };
+
+  const mockSupplierTransactionDelegate = {
+    count: async (args = {}) => {
+      const where = args?.where ?? {};
+      return supplierTransactions.filter((row) => applySupplierTransactionWhere(row, where)).length;
+    },
+    create: async (args = {}) => {
+      transactionCounter += 1;
+      const data = args?.data ?? {};
+      const row = {
+        amount: data.amount,
+        amountMinor: data.amountMinor ?? 0n,
+        createdAt: new Date(),
+        description: data.description ?? null,
+        id: createUuidFromCounter(transactionCounter),
+        invoiceId: data.invoiceId ?? null,
+        supplierId: data.supplierId,
+        type: data.type,
+      };
+      supplierTransactions.push(row);
+      return clone(row);
+    },
+    findMany: async (args = {}) => {
+      const where = args?.where ?? {};
+      let rows = supplierTransactions.filter((candidate) => applySupplierTransactionWhere(candidate, where));
+      rows = rows.sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+      if (Number.isFinite(args?.skip) && args.skip > 0) {
+        rows = rows.slice(args.skip);
+      }
+      if (Number.isFinite(args?.take)) {
+        rows = rows.slice(0, args.take);
+      }
+
+      return rows.map((row) => {
+        const response = clone(row);
+        if (args?.include?.invoice) {
+          const invoice = row.invoiceId ? purchaseInvoices.get(row.invoiceId) : null;
+          response.invoice = invoice
+            ? {
+                documentType: invoice.documentType,
+                id: invoice.id,
+                invoiceNumber: invoice.invoiceNumber,
+              }
+            : null;
+        }
+        return response;
+      });
+    },
+  };
+
+  const patches = [
+    [prisma.company, 'findFirst', mockCompanyDelegate.findFirst],
+    [prisma.branch, 'findUnique', mockBranchDelegate.findUnique],
+    [prisma.supplier, 'count', mockSupplierDelegate.count],
+    [prisma.supplier, 'create', mockSupplierDelegate.create],
+    [prisma.supplier, 'findFirst', mockSupplierDelegate.findFirst],
+    [prisma.supplier, 'findMany', mockSupplierDelegate.findMany],
+    [prisma.supplier, 'update', mockSupplierDelegate.update],
+    [prisma.product, 'update', mockProductDelegate.update],
+    [prisma.stockLevel, 'findUnique', mockStockLevelDelegate.findUnique],
+    [prisma.stockLevel, 'upsert', mockStockLevelDelegate.upsert],
+    [prisma.stockMovement, 'create', mockStockMovementDelegate.create],
+    [prisma.purchaseInvoice, 'count', mockPurchaseInvoiceDelegate.count],
+    [prisma.purchaseInvoice, 'create', mockPurchaseInvoiceDelegate.create],
+    [prisma.purchaseInvoice, 'findFirst', mockPurchaseInvoiceDelegate.findFirst],
+    [prisma.purchaseInvoice, 'findMany', mockPurchaseInvoiceDelegate.findMany],
+    [prisma.purchaseInvoice, 'update', mockPurchaseInvoiceDelegate.update],
+    [prisma.supplierTransaction, 'count', mockSupplierTransactionDelegate.count],
+    [prisma.supplierTransaction, 'create', mockSupplierTransactionDelegate.create],
+    [prisma.supplierTransaction, 'findMany', mockSupplierTransactionDelegate.findMany],
+    [
+      prisma,
+      '$transaction',
+      async (callback) => {
+        if (typeof callback !== 'function') {
+          return callback;
+        }
+        return callback({
+          product: mockProductDelegate,
+          purchaseInvoice: mockPurchaseInvoiceDelegate,
+          stockLevel: mockStockLevelDelegate,
+          stockMovement: mockStockMovementDelegate,
+          supplier: mockSupplierDelegate,
+          supplierTransaction: mockSupplierTransactionDelegate,
+        });
+      },
+    ],
+  ];
+
+  const restoreFns = patches.map(([target, key, replacement]) => {
+    const original = target[key];
+    target[key] = replacement;
+    return () => {
+      target[key] = original;
+    };
+  });
+
+  return {
+    fixtures: {
+      branch,
+      productId: '44444444-4444-4444-8444-444444444444',
+      supplierId: '33333333-3333-4333-8333-333333333333',
+    },
+    state: {
+      products,
+      purchaseInvoiceItems,
+      purchaseInvoices,
+      stockLevels,
+      stockMovements,
+      supplierTransactions,
+      suppliers,
+    },
+    restore() {
+      for (let index = restoreFns.length - 1; index >= 0; index -= 1) {
+        restoreFns[index]();
+      }
+    },
+  };
+}
+
+async function withPurchaseAndSuppliersServer(run) {
+  const company = createCompanyFixture({
+    id: '11111111-1111-4111-8111-111111111111',
+    packageExpiresAt: new Date('2030-01-10T03:00:00.000Z'),
+    packageGraceEndsAt: new Date('2030-01-17T20:59:59.999Z'),
+    packageStatus: 'ACTIVE',
+  });
+  const { fixtures, restore, state } = installPurchaseSupplierPrismaMocks(company);
+
+  const server = Fastify({ logger: false });
+  await authPlugin(server);
+  await server.register(supplierRoutes, { prefix: '/api/suppliers' });
+  await server.register(purchaseInvoiceRoutes, { prefix: '/api/purchase-invoices' });
+  await server.ready();
+
+  try {
+    await run({
+      company,
+      fixtures,
+      makeToken(role, options = {}) {
+        return server.jwt.sign({
+          branchId: options.branchId ?? fixtures.branch.id,
+          companyId: options.companyId ?? company.id,
+          id: options.userId ?? `${role.toLowerCase()}-1`,
+          role,
+        });
+      },
+      server,
+      state,
+    });
+  } finally {
+    await server.close();
+    restore();
+  }
+}
+
 function createReplyMock() {
   return {
     payload: null,
@@ -511,7 +1728,8 @@ const tests = [
     run() {
       assert.equal(normalizePackageGraceDays(undefined), 7);
       assert.equal(normalizePackageGraceDays(0), 1);
-      assert.equal(normalizePackageGraceDays(99), 30);
+      assert.equal(normalizePackageGraceDays(99), 99);
+      assert.equal(normalizePackageGraceDays(500), 400);
       assert.equal(normalizePackageGraceDays(9), 9);
     },
   },
@@ -743,6 +1961,543 @@ const tests = [
     },
   },
   {
+    name: 'user routes return deterministic 409 when email is already in use',
+    async run() {
+      await withUsersServer(async ({ company, makeToken, server }) => {
+        const adminToken = makeToken('ADMIN', 'admin-1');
+
+        const duplicateCreateResponse = await server.inject({
+          headers: { authorization: `Bearer ${adminToken}` },
+          method: 'POST',
+          payload: {
+            companyId: company.id,
+            email: 'ADMIN-2@demo.test',
+            fullName: 'Duplicate Email User',
+            password: 'Strong123',
+            role: 'CASHIER',
+            username: 'cashier-2',
+          },
+          url: '/api/users',
+        });
+        assert.equal(duplicateCreateResponse.statusCode, 409);
+        assert.equal(
+          duplicateCreateResponse.json().errorCode,
+          'EMAIL_ALREADY_IN_USE',
+        );
+
+        const duplicateUpdateResponse = await server.inject({
+          headers: { authorization: `Bearer ${adminToken}` },
+          method: 'PUT',
+          payload: {
+            email: 'admin-2@demo.test',
+          },
+          url: '/api/users/cashier-1',
+        });
+        assert.equal(duplicateUpdateResponse.statusCode, 409);
+        assert.equal(
+          duplicateUpdateResponse.json().errorCode,
+          'EMAIL_ALREADY_IN_USE',
+        );
+      });
+    },
+  },
+  {
+    name: 'auth login supports email and legacy flows with deterministic email-first precedence',
+    async run() {
+      await withAuthRoutesServer(async ({ companyOne, companyTwo, server }) => {
+        const emailLoginResponse = await server.inject({
+          method: 'POST',
+          payload: {
+            email: 'ADMIN@TENANT-ONE.TEST',
+            password: 'Strong123',
+          },
+          url: '/api/auth/login',
+        });
+        assert.equal(emailLoginResponse.statusCode, 200);
+        assert.equal(emailLoginResponse.json().data.user.companyId, companyOne.id);
+
+        const legacyLoginResponse = await server.inject({
+          method: 'POST',
+          payload: {
+            companyId: companyTwo.id,
+            password: 'Strong123',
+            username: 'admin',
+          },
+          url: '/api/auth/login',
+        });
+        assert.equal(legacyLoginResponse.statusCode, 200);
+        assert.equal(legacyLoginResponse.json().data.user.companyId, companyTwo.id);
+
+        const precedenceResponse = await server.inject({
+          method: 'POST',
+          payload: {
+            companyId: companyTwo.id,
+            email: 'unknown@tenant-one.test',
+            password: 'Strong123',
+            username: 'admin',
+          },
+          url: '/api/auth/login',
+        });
+        assert.equal(precedenceResponse.statusCode, 401);
+        assert.equal(precedenceResponse.json().errorCode, 'INVALID_CREDENTIALS');
+      });
+    },
+  },
+  {
+    name: 'sales route rejects invalid payload with 400 before database work',
+    async run() {
+      await withSalesAndRefundsSchemaServer(async ({ makeToken, server }) => {
+        const response = await server.inject({
+          headers: { authorization: `Bearer ${makeToken('ADMIN')}` },
+          method: 'POST',
+          payload: {
+            items: [],
+            payments: [],
+          },
+          url: '/api/sales',
+        });
+
+        assert.equal(response.statusCode, 400);
+        assert.equal(response.json().success, false);
+      });
+    },
+  },
+  {
+    name: 'refund route rejects invalid payload with 400 before database work',
+    async run() {
+      await withSalesAndRefundsSchemaServer(async ({ makeToken, server }) => {
+        const response = await server.inject({
+          headers: { authorization: `Bearer ${makeToken('ADMIN')}` },
+          method: 'POST',
+          payload: {
+            items: [],
+            registerId: '',
+            saleId: '',
+            sessionId: '',
+          },
+          url: '/api/refunds',
+        });
+
+        assert.equal(response.statusCode, 400);
+        assert.equal(response.json().success, false);
+      });
+    },
+  },
+  {
+    name: 'sync push applies idempotency and replays duplicate operationKey as no-op',
+    async run() {
+      await withSyncRoutesServer(async ({ makeToken, routeHitCount, server }) => {
+        const token = makeToken('ADMIN');
+        const payload = {
+          productOps: [],
+          refunds: [],
+          registerId: '11111111-1111-4111-8111-111111111111',
+          sales: [
+            {
+              localId: 'sale-local-1',
+              payload: {
+                clientRequestId: 'sale-client-1',
+                items: [],
+                payments: [],
+                registerId: '11111111-1111-4111-8111-111111111111',
+                sessionId: 'session-1',
+              },
+            },
+          ],
+          stockOps: [],
+        };
+
+        const firstResponse = await server.inject({
+          headers: { authorization: `Bearer ${token}` },
+          method: 'POST',
+          payload,
+          url: '/api/sync/push',
+        });
+        assert.equal(firstResponse.statusCode, 200);
+        const firstBody = firstResponse.json();
+        assert.equal(firstBody.success, true);
+        assert.equal(firstBody.data.acceptedCount, 1);
+        assert.equal(firstBody.data.replayedCount, 0);
+        assert.equal(firstBody.data.failedCount, 0);
+        assert.equal(firstBody.data.resultsByEntity.sales[0].status, 'ACCEPTED');
+        assert.equal(routeHitCount.sales, 1);
+
+        const secondResponse = await server.inject({
+          headers: { authorization: `Bearer ${token}` },
+          method: 'POST',
+          payload,
+          url: '/api/sync/push',
+        });
+        assert.equal(secondResponse.statusCode, 200);
+        const secondBody = secondResponse.json();
+        assert.equal(secondBody.success, true);
+        assert.equal(secondBody.data.acceptedCount, 0);
+        assert.equal(secondBody.data.replayedCount, 1);
+        assert.equal(secondBody.data.failedCount, 0);
+        assert.equal(secondBody.data.resultsByEntity.sales[0].status, 'REPLAYED');
+        assert.equal(routeHitCount.sales, 1);
+      });
+    },
+  },
+  {
+    name: 'sync pull returns nextCursor and accepts cursor query',
+    async run() {
+      await withSyncRoutesServer(async ({ makeToken, server }) => {
+        const token = makeToken('ADMIN');
+        const firstResponse = await server.inject({
+          headers: { authorization: `Bearer ${token}` },
+          method: 'GET',
+          url: '/api/sync/pull?registerId=11111111-1111-4111-8111-111111111111',
+        });
+        assert.equal(firstResponse.statusCode, 200);
+        const firstBody = firstResponse.json();
+        assert.equal(firstBody.success, true);
+        assert.equal(typeof firstBody.data.nextCursor, 'string');
+        assert.equal(Array.isArray(firstBody.data.products), true);
+        assert.equal(Array.isArray(firstBody.data.categories), true);
+        assert.equal(Array.isArray(firstBody.data.users), true);
+        assert.equal(Array.isArray(firstBody.data.stockLevels), true);
+        assert.equal(Array.isArray(firstBody.data.suppliers), true);
+        assert.equal(Array.isArray(firstBody.data.purchaseInvoices), true);
+        assert.equal(Array.isArray(firstBody.data.customers), true);
+
+        const secondResponse = await server.inject({
+          headers: { authorization: `Bearer ${token}` },
+          method: 'GET',
+          url: `/api/sync/pull?registerId=11111111-1111-4111-8111-111111111111&cursor=${encodeURIComponent(firstBody.data.nextCursor)}`,
+        });
+        assert.equal(secondResponse.statusCode, 200);
+        const secondBody = secondResponse.json();
+        assert.equal(secondBody.success, true);
+        assert.equal(typeof secondBody.data.nextCursor, 'string');
+      });
+    },
+  },
+  {
+    name: 'sync heartbeat accepts valid payload and enforces company scope',
+    async run() {
+      await withSyncRoutesServer(async ({ makeToken, server }) => {
+        const token = makeToken('ADMIN');
+        const payload = {
+          clientObservedAt: '2026-04-19T09:00:00.000Z',
+          lastSyncErrorCode: null,
+          lastSyncedAt: '2026-04-19T08:59:30.000Z',
+          lastSyncStatus: 'OK',
+          oldestPendingAgeSec: 0,
+          pendingCount: 0,
+          productOps: 0,
+          queuePeak: 3,
+          refunds: 0,
+          registerId: '11111111-1111-4111-8111-111111111111',
+          sales: 0,
+          stockOps: 0,
+        };
+
+        const okResponse = await server.inject({
+          headers: { authorization: `Bearer ${token}` },
+          method: 'POST',
+          payload,
+          url: '/api/sync/heartbeat',
+        });
+        assert.equal(okResponse.statusCode, 200);
+        const okBody = okResponse.json();
+        assert.equal(okBody.success, true);
+        assert.equal(typeof okBody.data.serverObservedAt, 'string');
+
+        const foreignToken = server.jwt.sign({
+          branchId: 'branch-1',
+          companyId: 'company-2',
+          id: 'admin-foreign',
+          role: 'ADMIN',
+        });
+        const forbiddenResponse = await server.inject({
+          headers: { authorization: `Bearer ${foreignToken}` },
+          method: 'POST',
+          payload,
+          url: '/api/sync/heartbeat',
+        });
+        assert.equal(forbiddenResponse.statusCode, 403);
+      });
+    },
+  },
+  {
+    name: 'purchase ORDER keeps stock and supplier debt unchanged with DRAFT status',
+    async run() {
+      await withPurchaseAndSuppliersServer(async ({ fixtures, makeToken, server, state }) => {
+        const token = makeToken('ADMIN');
+        const stockKey = `${fixtures.branch.id}:${fixtures.productId}`;
+        const initialQty = state.stockLevels.get(stockKey).quantity;
+
+        const response = await server.inject({
+          headers: { authorization: `Bearer ${token}` },
+          method: 'POST',
+          payload: {
+            branchId: fixtures.branch.id,
+            documentType: 'ORDER',
+            invoiceNumber: 'ORD-1001',
+            items: [
+              {
+                discount: 0,
+                productId: fixtures.productId,
+                quantity: 2,
+                unitPrice: 50,
+                vatRate: 10,
+              },
+            ],
+            supplierId: fixtures.supplierId,
+            totalDiscount: 0,
+          },
+          url: '/api/purchase-invoices',
+        });
+
+        assert.equal(response.statusCode, 201);
+        const body = response.json();
+        assert.equal(body.data.documentType, 'ORDER');
+        assert.equal(body.data.status, 'DRAFT');
+        assert.equal(state.stockLevels.get(stockKey).quantity, initialQty);
+        assert.equal(state.suppliers.get(fixtures.supplierId).balance, 0);
+        assert.equal(state.supplierTransactions.length, 0);
+      });
+    },
+  },
+  {
+    name: 'purchase DISPATCH increments stock only and create INVOICE increments stock and debt',
+    async run() {
+      await withPurchaseAndSuppliersServer(async ({ fixtures, makeToken, server, state }) => {
+        const token = makeToken('ADMIN');
+        const stockKey = `${fixtures.branch.id}:${fixtures.productId}`;
+
+        const dispatchResponse = await server.inject({
+          headers: { authorization: `Bearer ${token}` },
+          method: 'POST',
+          payload: {
+            branchId: fixtures.branch.id,
+            dispatchNumber: 'DISP-1',
+            documentDate: '2026-04-20T00:00:00.000Z',
+            documentType: 'DISPATCH',
+            invoiceNumber: 'DISP-DOC-1',
+            items: [
+              {
+                discount: 0,
+                productId: fixtures.productId,
+                quantity: 3,
+                unitPrice: 20,
+                vatRate: 10,
+              },
+            ],
+            supplierId: fixtures.supplierId,
+            totalDiscount: 0,
+          },
+          url: '/api/purchase-invoices',
+        });
+        assert.equal(dispatchResponse.statusCode, 201);
+        assert.equal(state.stockLevels.get(stockKey).quantity, 13);
+        assert.equal(state.suppliers.get(fixtures.supplierId).balance, 0);
+        assert.equal(state.supplierTransactions.length, 0);
+
+        const invoiceResponse = await server.inject({
+          headers: { authorization: `Bearer ${token}` },
+          method: 'POST',
+          payload: {
+            branchId: fixtures.branch.id,
+            documentDate: '2026-04-20T00:00:00.000Z',
+            documentType: 'INVOICE',
+            dueDate: '2026-04-30T00:00:00.000Z',
+            invoiceNumber: 'INV-1',
+            items: [
+              {
+                discount: 0,
+                productId: fixtures.productId,
+                quantity: 2,
+                unitPrice: 50,
+                vatRate: 10,
+              },
+            ],
+            supplierId: fixtures.supplierId,
+            totalDiscount: 0,
+          },
+          url: '/api/purchase-invoices',
+        });
+        assert.equal(invoiceResponse.statusCode, 201);
+        assert.equal(state.stockLevels.get(stockKey).quantity, 15);
+        assert.equal(state.suppliers.get(fixtures.supplierId).balance, 110);
+        assert.equal(state.suppliers.get(fixtures.supplierId).balanceMinor, 11000n);
+        assert.equal(state.supplierTransactions.length, 1);
+        assert.equal(state.supplierTransactions[0].type, 'DEBT');
+      });
+    },
+  },
+  {
+    name: 'dispatch to invoice conversion adds debt without double stock and blocks duplicate conversion',
+    async run() {
+      await withPurchaseAndSuppliersServer(async ({ fixtures, makeToken, server, state }) => {
+        const token = makeToken('ADMIN');
+        const stockKey = `${fixtures.branch.id}:${fixtures.productId}`;
+
+        const dispatchResponse = await server.inject({
+          headers: { authorization: `Bearer ${token}` },
+          method: 'POST',
+          payload: {
+            branchId: fixtures.branch.id,
+            dispatchNumber: 'DISP-2',
+            documentDate: '2026-04-20T00:00:00.000Z',
+            documentType: 'DISPATCH',
+            invoiceNumber: 'DISP-DOC-2',
+            items: [
+              {
+                discount: 0,
+                productId: fixtures.productId,
+                quantity: 3,
+                unitPrice: 20,
+                vatRate: 10,
+              },
+            ],
+            supplierId: fixtures.supplierId,
+            totalDiscount: 0,
+          },
+          url: '/api/purchase-invoices',
+        });
+        assert.equal(dispatchResponse.statusCode, 201);
+        const dispatchId = dispatchResponse.json().data.id;
+        assert.equal(state.stockLevels.get(stockKey).quantity, 13);
+
+        const convertResponse = await server.inject({
+          headers: { authorization: `Bearer ${token}` },
+          method: 'POST',
+          payload: {
+            documentDate: '2026-04-21T00:00:00.000Z',
+            dueDate: '2026-05-01T00:00:00.000Z',
+            invoiceNumber: 'INV-CONVERT-1',
+          },
+          url: `/api/purchase-invoices/${dispatchId}/convert-to-invoice`,
+        });
+        assert.equal(convertResponse.statusCode, 201);
+        assert.equal(state.stockLevels.get(stockKey).quantity, 13);
+        assert.equal(state.suppliers.get(fixtures.supplierId).balance, 66);
+        assert.equal(state.suppliers.get(fixtures.supplierId).balanceMinor, 6600n);
+        assert.equal(state.supplierTransactions.length, 1);
+        assert.equal(state.supplierTransactions[0].type, 'DEBT');
+
+        const dispatchRow = state.purchaseInvoices.get(dispatchId);
+        assert.equal(typeof dispatchRow.convertedToInvoiceId, 'string');
+        const convertedInvoice = state.purchaseInvoices.get(dispatchRow.convertedToInvoiceId);
+        assert.equal(convertedInvoice.sourceDispatchId, dispatchId);
+
+        const duplicateResponse = await server.inject({
+          headers: { authorization: `Bearer ${token}` },
+          method: 'POST',
+          payload: {
+            invoiceNumber: 'INV-CONVERT-2',
+          },
+          url: `/api/purchase-invoices/${dispatchId}/convert-to-invoice`,
+        });
+        assert.equal(duplicateResponse.statusCode, 409);
+      });
+    },
+  },
+  {
+    name: 'supplier transactions enforce invoice ownership and update balance with filters/pagination',
+    async run() {
+      await withPurchaseAndSuppliersServer(async ({ fixtures, makeToken, server, state }) => {
+        const token = makeToken('ADMIN');
+
+        const invalidInvoiceResponse = await server.inject({
+          headers: { authorization: `Bearer ${token}` },
+          method: 'POST',
+          payload: {
+            amount: 10,
+            invoiceId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+            type: 'DEBT',
+          },
+          url: `/api/suppliers/${fixtures.supplierId}/transactions`,
+        });
+        assert.equal(invalidInvoiceResponse.statusCode, 400);
+
+        const debtResponse = await server.inject({
+          headers: { authorization: `Bearer ${token}` },
+          method: 'POST',
+          payload: {
+            amount: 50,
+            description: 'Ek borc',
+            type: 'DEBT',
+          },
+          url: `/api/suppliers/${fixtures.supplierId}/transactions`,
+        });
+        assert.equal(debtResponse.statusCode, 201);
+
+        const paymentResponse = await server.inject({
+          headers: { authorization: `Bearer ${token}` },
+          method: 'POST',
+          payload: {
+            amount: 20,
+            description: 'Odeme',
+            type: 'PAYMENT',
+          },
+          url: `/api/suppliers/${fixtures.supplierId}/transactions`,
+        });
+        assert.equal(paymentResponse.statusCode, 201);
+
+        assert.equal(state.suppliers.get(fixtures.supplierId).balance, 30);
+        assert.equal(state.suppliers.get(fixtures.supplierId).balanceMinor, 3000n);
+
+        const paymentListResponse = await server.inject({
+          headers: { authorization: `Bearer ${token}` },
+          method: 'GET',
+          url: `/api/suppliers/${fixtures.supplierId}/transactions?type=PAYMENT&limit=1&page=1`,
+        });
+        assert.equal(paymentListResponse.statusCode, 200);
+        const paymentListBody = paymentListResponse.json();
+        assert.equal(paymentListBody.data.length, 1);
+        assert.equal(paymentListBody.data[0].type, 'PAYMENT');
+        assert.equal(paymentListBody.pagination.total, 1);
+      });
+    },
+  },
+  {
+    name: 'cashier role cannot mutate purchase invoices or supplier transactions',
+    async run() {
+      await withPurchaseAndSuppliersServer(async ({ fixtures, makeToken, server }) => {
+        const cashierToken = makeToken('CASHIER');
+
+        const invoiceForbiddenResponse = await server.inject({
+          headers: { authorization: `Bearer ${cashierToken}` },
+          method: 'POST',
+          payload: {
+            branchId: fixtures.branch.id,
+            documentDate: '2026-04-20T00:00:00.000Z',
+            documentType: 'INVOICE',
+            dueDate: '2026-04-30T00:00:00.000Z',
+            invoiceNumber: 'INV-FORBIDDEN',
+            items: [
+              {
+                discount: 0,
+                productId: fixtures.productId,
+                quantity: 1,
+                unitPrice: 10,
+                vatRate: 10,
+              },
+            ],
+            supplierId: fixtures.supplierId,
+            totalDiscount: 0,
+          },
+          url: '/api/purchase-invoices',
+        });
+        assert.equal(invoiceForbiddenResponse.statusCode, 403);
+
+        const supplierTxForbiddenResponse = await server.inject({
+          headers: { authorization: `Bearer ${cashierToken}` },
+          method: 'POST',
+          payload: {
+            amount: 10,
+            type: 'DEBT',
+          },
+          url: `/api/suppliers/${fixtures.supplierId}/transactions`,
+        });
+        assert.equal(supplierTxForbiddenResponse.statusCode, 403);
+      });
+    },
+  },
+  {
     name: 'auth guards enforce writer and report-reader role matrix',
     async run() {
       await withAuthGuardsServer(async ({ makeToken, server }) => {
@@ -785,6 +2540,145 @@ const tests = [
           url: '/guard/report',
         });
         assert.equal(accountantReport.statusCode, 200);
+      });
+    },
+  },
+  {
+    name: 'reports enforce branch scope for CASHIER/ACCOUNTANT while ADMIN keeps company-wide access',
+    async run() {
+      await withReportsServer(async ({ company, makeToken, server }) => {
+        const adminToken = makeToken('ADMIN', { branchId: null });
+        const adminResponse = await server.inject({
+          headers: { authorization: `Bearer ${adminToken}` },
+          method: 'GET',
+          url: `/api/reports/daily?companyId=${company.id}&branchId=branch-1`,
+        });
+        assert.equal(adminResponse.statusCode, 200);
+
+        const cashierToken = makeToken('CASHIER', {
+          branchId: 'branch-1',
+          userId: 'cashier-1',
+        });
+        const cashierForbiddenResponse = await server.inject({
+          headers: { authorization: `Bearer ${cashierToken}` },
+          method: 'GET',
+          url: `/api/reports/daily?companyId=${company.id}&branchId=branch-2`,
+        });
+        assert.equal(cashierForbiddenResponse.statusCode, 403);
+        assert.equal(
+          cashierForbiddenResponse.json().errorCode,
+          'BRANCH_SCOPE_FORBIDDEN',
+        );
+
+        const accountantNoBranchToken = makeToken('ACCOUNTANT', {
+          branchId: null,
+          userId: 'accountant-1',
+        });
+        const branchRequiredResponse = await server.inject({
+          headers: { authorization: `Bearer ${accountantNoBranchToken}` },
+          method: 'GET',
+          url: `/api/reports/daily?companyId=${company.id}&branchId=branch-1`,
+        });
+        assert.equal(branchRequiredResponse.statusCode, 403);
+        assert.equal(
+          branchRequiredResponse.json().errorCode,
+          'BRANCH_SCOPE_REQUIRED',
+        );
+      });
+    },
+  },
+  {
+    name: 'reports sessions endpoint returns bounded pagination meta',
+    async run() {
+      await withReportsServer(async ({ company, makeToken, server }) => {
+        const adminToken = makeToken('ADMIN', { branchId: null });
+        const response = await server.inject({
+          headers: { authorization: `Bearer ${adminToken}` },
+          method: 'GET',
+          url: `/api/reports/sessions?companyId=${company.id}&from=2026-03-01&to=2026-03-31&limit=5000&page=1`,
+        });
+
+        assert.equal(response.statusCode, 200);
+        const body = response.json();
+        assert.equal(body.success, true);
+        assert.equal(body.meta.limit, 1000);
+        assert.equal(body.meta.page, 1);
+        assert.equal(body.meta.total, 2);
+        assert.equal(body.meta.totalPages, 1);
+        assert.equal(body.data.length, 2);
+      });
+    },
+  },
+  {
+    name: 'reports branch-comparison endpoint returns ranked branch rows',
+    async run() {
+      await withReportsServer(async ({ company, makeToken, server }) => {
+        const adminToken = makeToken('ADMIN', { branchId: null });
+        const response = await server.inject({
+          headers: { authorization: `Bearer ${adminToken}` },
+          method: 'GET',
+          url: `/api/reports/branch-comparison?companyId=${company.id}&from=2026-03-01&to=2026-03-31`,
+        });
+
+        assert.equal(response.statusCode, 200);
+        const body = response.json();
+        assert.equal(body.success, true);
+        assert.equal(body.data.length, 1);
+        assert.equal(body.data[0].branchId, 'branch-1');
+        assert.equal(body.data[0].totalSales, 300);
+        assert.equal(body.data[0].totalRefunds, 25);
+        assert.equal(body.data[0].netSales, 275);
+      });
+    },
+  },
+  {
+    name: 'reports operations-health returns heartbeat and ingestion aggregates',
+    async run() {
+      await withReportsServer(async ({ company, makeToken, server }) => {
+        const adminToken = makeToken('ADMIN', { branchId: null });
+        const response = await server.inject({
+          headers: { authorization: `Bearer ${adminToken}` },
+          method: 'GET',
+          url: `/api/reports/operations-health?companyId=${company.id}`,
+        });
+
+        assert.equal(response.statusCode, 200);
+        const body = response.json();
+        assert.equal(body.success, true);
+        assert.equal(body.data.summary.queuePeakMax, 8);
+        assert.equal(body.data.summary.oldestPendingAgeSecMax, 120);
+        assert.equal(body.data.summary.accepted24hTotal, 10);
+        assert.equal(body.data.summary.replayed24hTotal, 5);
+        assert.equal(body.data.summary.failed24hTotal, 2);
+        assert.equal(Number(body.data.summary.replayRate24h.toFixed(2)), 33.33);
+        assert.equal(body.data.branches[0].registers[0].queuePeak, 8);
+        assert.equal(body.data.branches[0].registers[0].failed24h, 2);
+      });
+    },
+  },
+  {
+    name: 'subscription provisioning requires adminEmail for new company onboarding',
+    async run() {
+      await withSubscriptionServer(async ({ makeToken, server }) => {
+        const superToken = makeToken('SUPER_ADMIN');
+        const response = await server.inject({
+          headers: { authorization: `Bearer ${superToken}` },
+          method: 'POST',
+          payload: {
+            adminFullName: 'Yeni Admin',
+            adminPassword: 'Strong123',
+            adminUsername: 'new-admin',
+            branchName: 'Merkez',
+            companyName: 'Yeni Firma',
+            graceDays: 7,
+            packageDays: 365,
+            registerName: 'Kasa 1',
+            templateCode: 'bakkal-v1',
+          },
+          url: '/api/subscription/admin/provision',
+        });
+        assert.equal(response.statusCode, 400);
+        assert.match(response.json().error, /adminEmail/i);
       });
     },
   },

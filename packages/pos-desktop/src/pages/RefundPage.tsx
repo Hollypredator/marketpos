@@ -3,6 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { formatCurrency } from '@marketpos/shared';
 
 import ManagerApprovalModal from '../components/ManagerApprovalModal';
+import type { ManagerApprovalPayload } from '../components/ManagerApprovalModal';
 import {
   explainRuntimeError,
   fetchSaleByReceipt,
@@ -51,10 +52,6 @@ export default function RefundPage() {
       toast.error('Aktif oturum bulunamadi.');
       return;
     }
-    if (!activeSession.accessToken) {
-      toast.error('Fis sorgulama icin online baglanti gereklidir.');
-      return;
-    }
     if (receiptNo.trim().length === 0) {
       return;
     }
@@ -98,12 +95,7 @@ export default function RefundPage() {
     setApprovalOpen(true);
   };
 
-  const executeRefund = async (approval: {
-    managerFullName: string;
-    managerUserId: string;
-    method: 'PASSWORD' | 'PIN';
-    reason: string;
-  }): Promise<void> => {
+  const executeRefund = async (approval: ManagerApprovalPayload): Promise<void> => {
     if (!activeSession || !sale) {
       toast.error('Iade icin gerekli oturum bulunamadi.');
       return;
@@ -124,8 +116,17 @@ export default function RefundPage() {
         items: selectedItems,
         reason: `${reason.trim()} | Onay: ${approval.reason}`,
         registerId: activeSession.registerId,
+        reportItems: sale.items
+          .map((item) => ({
+            productId: item.productId,
+            productName: item.productName,
+            quantity: quantityMap[item.id] ?? 0,
+            unitPrice: item.unitPrice,
+          }))
+          .filter((item) => item.quantity > 0),
         saleId: sale.id,
         sessionId: activeSession.sessionId,
+        totalAmount: selectedTotal,
       });
 
       const queueStatus = await getQueueStatus();

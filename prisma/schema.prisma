@@ -7,37 +7,635 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ========================
-// FİRMA / ŞUBE / KASA
-// ========================
-
 model Company {
-  id        String   @id @default(uuid())
-  name      String
-  taxNumber String?  @map("tax_number")
-  address   String?
-  phone     String?
-  email     String?
-  isActive  Boolean  @default(true) @map("is_active")
-  packageType PackageType   @default(YEARLY) @map("package_type")
-  packageStatus PackageStatus @default(ACTIVE) @map("package_status")
-  packageGraceDays Int @default(7) @map("package_grace_days")
-  packageStartedAt DateTime? @map("package_started_at")
-  packageExpiresAt DateTime? @map("package_expires_at")
-  packageGraceEndsAt DateTime? @map("package_grace_ends_at")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
-
-  branches   Branch[]
-  users      User[]
-  categories Category[]
-  products   Product[]
-  sales      Sale[]
-  refunds    Refund[]
-  subscriptionAudits CompanySubscriptionAudit[]
+  id                     String                     @id @default(uuid())
+  name                   String
+  licenseKey             String?                    @unique @map("license_key")
+  licenseKeyActivatedAt  DateTime?                  @map("license_key_activated_at")
+  taxNumber              String?                    @map("tax_number")
+  address                String?
+  phone                  String?
+  email                  String?
+  isActive               Boolean                    @default(true) @map("is_active")
+  createdAt              DateTime                   @default(now()) @map("created_at")
+  updatedAt              DateTime                   @updatedAt @map("updated_at")
+  deletedAt              DateTime?                  @map("deleted_at")
+  packageExpiresAt       DateTime?                  @map("package_expires_at")
+  packageGraceEndsAt     DateTime?                  @map("package_grace_ends_at")
+  packageStartedAt       DateTime?                  @map("package_started_at")
+  packageStatus          PackageStatus              @default(ACTIVE) @map("package_status")
+  packageType            PackageType                @default(YEARLY) @map("package_type")
+  packageGraceDays       Int                        @default(7) @map("package_grace_days")
+  maxCartDiscountPercent Float                      @default(25) @map("max_cart_discount_percent")
+  maxItemDiscountPercent Float                      @default(40) @map("max_item_discount_percent")
+  branches               Branch[]
+  categories             Category[]
+  subscriptionAudits     CompanySubscriptionAudit[]
+  customers              Customer[]
+  products               Product[]
+  purchaseInvoices       PurchaseInvoice[]
+  refunds                Refund[]
+  sales                  Sale[]
+  stockTransfers         StockTransfer[]
+  suppliers              Supplier[]
+  invoiceTemplates       InvoiceTemplateConfig[]
+  users                  User[]
 
   @@map("companies")
+}
+
+model Branch {
+  id               String            @id @default(uuid())
+  companyId        String            @map("company_id")
+  name             String
+  address          String?
+  phone            String?
+  isActive         Boolean           @default(true) @map("is_active")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+  deletedAt        DateTime?         @map("deleted_at")
+  company          Company           @relation(fields: [companyId], references: [id])
+  purchaseInvoices PurchaseInvoice[]
+  refunds          Refund[]
+  registerSessions RegisterSession[]
+  registers        Register[]
+  sales            Sale[]
+  stockLevels      StockLevel[]
+  stockMovements   StockMovement[]
+  sourceTransfers  StockTransfer[]   @relation("SourceTransfers")
+  targetTransfers  StockTransfer[]   @relation("TargetTransfers")
+  users            User[]
+
+  @@map("branches")
+}
+
+model Register {
+  id               String            @id @default(uuid())
+  branchId         String            @map("branch_id")
+  name             String
+  isActive         Boolean           @default(true) @map("is_active")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+  deletedAt        DateTime?         @map("deleted_at")
+  refunds          Refund[]
+  registerSessions RegisterSession[]
+  branch           Branch            @relation(fields: [branchId], references: [id])
+  sales            Sale[]
+  syncLogs         SyncLog[]
+
+  @@map("registers")
+}
+
+model User {
+  id                      String                     @id @default(uuid())
+  companyId               String                     @map("company_id")
+  branchId                String?                    @map("branch_id")
+  username                String
+  passwordHash            String                     @map("password_hash")
+  pin                     String?
+  fullName                String                     @map("full_name")
+  role                    UserRole                   @default(CASHIER)
+  isActive                Boolean                    @default(true) @map("is_active")
+  createdAt               DateTime                   @default(now()) @map("created_at")
+  updatedAt               DateTime                   @updatedAt @map("updated_at")
+  deletedAt               DateTime?                  @map("deleted_at")
+  email                   String?                    @unique
+  subscriptionAuditEvents CompanySubscriptionAudit[] @relation("SubscriptionAuditActor")
+  purchaseInvoices        PurchaseInvoice[]
+  refreshTokens           RefreshToken[]
+  refunds                 Refund[]
+  registerSessions        RegisterSession[]
+  sales                   Sale[]
+  stockMovements          StockMovement[]
+  stockTransfers          StockTransfer[]
+  branch                  Branch?                    @relation(fields: [branchId], references: [id])
+  company                 Company                    @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, username])
+  @@map("users")
+}
+
+model Customer {
+  id           String                @id @default(uuid())
+  companyId    String                @map("company_id")
+  name         String
+  phone        String?
+  email        String?
+  address      String?
+  taxNumber    String?               @map("tax_number")
+  priceTier    PriceTier             @default(RETAIL) @map("price_tier")
+  balance      Float                 @default(0)
+  isActive     Boolean               @default(true) @map("is_active")
+  createdAt    DateTime              @default(now()) @map("created_at")
+  updatedAt    DateTime              @updatedAt @map("updated_at")
+  deletedAt    DateTime?             @map("deleted_at")
+  transactions CustomerTransaction[]
+  company      Company               @relation(fields: [companyId], references: [id])
+  sales        Sale[]
+
+  @@index([companyId])
+  @@map("customers")
+}
+
+model CustomerTransaction {
+  id          String                  @id @default(uuid())
+  customerId  String                  @map("customer_id")
+  type        CustomerTransactionType
+  amount      Float
+  description String?
+  saleId      String?                 @map("sale_id")
+  createdAt   DateTime                @default(now()) @map("created_at")
+  customer    Customer                @relation(fields: [customerId], references: [id])
+  sale        Sale?                   @relation(fields: [saleId], references: [id])
+
+  @@index([customerId, createdAt])
+  @@map("customer_transactions")
+}
+
+model Supplier {
+  id           String                @id @default(uuid())
+  companyId    String                @map("company_id")
+  name         String
+  phone        String?
+  email        String?
+  address      String?
+  taxNumber    String?               @map("tax_number")
+  balance      Float                 @default(0)
+  balanceMinor BigInt                @default(0) @map("balance_minor")
+  isActive     Boolean               @default(true) @map("is_active")
+  createdAt    DateTime              @default(now()) @map("created_at")
+  updatedAt    DateTime              @updatedAt @map("updated_at")
+  deletedAt    DateTime?             @map("deleted_at")
+  invoices     PurchaseInvoice[]
+  products     Product[]
+  transactions SupplierTransaction[]
+  company      Company               @relation(fields: [companyId], references: [id])
+
+  @@index([companyId])
+  @@map("suppliers")
+}
+
+model SupplierTransaction {
+  id          String                  @id @default(uuid())
+  supplierId  String                  @map("supplier_id")
+  type        SupplierTransactionType
+  amount      Float
+  amountMinor BigInt                  @default(0) @map("amount_minor")
+  description String?
+  invoiceId   String?                 @map("invoice_id")
+  createdAt   DateTime                @default(now()) @map("created_at")
+  invoice     PurchaseInvoice?        @relation(fields: [invoiceId], references: [id])
+  supplier    Supplier                @relation(fields: [supplierId], references: [id])
+
+  @@index([supplierId, createdAt])
+  @@map("supplier_transactions")
+}
+
+model PurchaseInvoice {
+  id                   String                @id @default(uuid())
+  companyId            String                @map("company_id")
+  branchId             String                @map("branch_id")
+  supplierId           String                @map("supplier_id")
+  userId               String                @map("user_id")
+  invoiceNumber        String                @map("invoice_number")
+  documentType         PurchaseDocumentType  @default(INVOICE) @map("document_type")
+  dispatchNumber       String?               @map("dispatch_number")
+  documentDate         DateTime?             @map("document_date")
+  dueDate              DateTime?             @map("due_date")
+  status               PurchaseInvoiceStatus @default(COMPLETED)
+  subtotal             Float
+  subtotalMinor        BigInt                @default(0) @map("subtotal_minor")
+  totalVat             Float                 @map("total_vat")
+  totalVatMinor        BigInt                @default(0) @map("total_vat_minor")
+  totalDiscount        Float                 @default(0) @map("total_discount")
+  totalDiscountMinor   BigInt                @default(0) @map("total_discount_minor")
+  grandTotal           Float                 @map("grand_total")
+  grandTotalMinor      BigInt                @default(0) @map("grand_total_minor")
+  sourceDispatchId     String?               @unique @map("source_dispatch_id")
+  convertedToInvoiceId String?               @map("converted_to_invoice_id")
+  convertedAt          DateTime?             @map("converted_at")
+  note                 String?
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+  deletedAt            DateTime?             @map("deleted_at")
+  items                PurchaseInvoiceItem[]
+  branch               Branch                @relation(fields: [branchId], references: [id])
+  company              Company               @relation(fields: [companyId], references: [id])
+  supplier             Supplier              @relation(fields: [supplierId], references: [id])
+  user                 User                  @relation(fields: [userId], references: [id])
+  transactions         SupplierTransaction[]
+  sourceDispatch       PurchaseInvoice?      @relation("PurchaseInvoiceSourceDispatch", fields: [sourceDispatchId], references: [id])
+  derivedInvoices      PurchaseInvoice[]     @relation("PurchaseInvoiceSourceDispatch")
+  convertedToInvoice   PurchaseInvoice?      @relation("PurchaseInvoiceConvertedTo", fields: [convertedToInvoiceId], references: [id])
+  convertedFrom        PurchaseInvoice[]     @relation("PurchaseInvoiceConvertedTo")
+
+  @@index([companyId, createdAt])
+  @@index([branchId, createdAt])
+  @@index([supplierId, createdAt])
+  @@map("purchase_invoices")
+}
+
+model PurchaseInvoiceItem {
+  id        String          @id @default(uuid())
+  invoiceId String          @map("invoice_id")
+  productId String          @map("product_id")
+  quantity  Float
+  unitPrice Float           @map("unit_price")
+  unitPriceMinor BigInt     @default(0) @map("unit_price_minor")
+  vatRate   Int             @map("vat_rate")
+  vatAmount Float           @map("vat_amount")
+  vatAmountMinor BigInt     @default(0) @map("vat_amount_minor")
+  discount  Float           @default(0)
+  discountMinor BigInt      @default(0) @map("discount_minor")
+  lineTotal Float           @map("line_total")
+  lineTotalMinor BigInt     @default(0) @map("line_total_minor")
+  createdAt DateTime        @default(now()) @map("created_at")
+  invoice   PurchaseInvoice @relation(fields: [invoiceId], references: [id])
+  product   Product         @relation(fields: [productId], references: [id])
+
+  @@index([invoiceId])
+  @@index([productId])
+  @@map("purchase_invoice_items")
+}
+
+model CompanySubscriptionAudit {
+  id              String                            @id @default(uuid())
+  companyId       String                            @map("company_id")
+  actorUserId     String?                           @map("actor_user_id")
+  actorType       SubscriptionAuditActorType        @map("actor_type")
+  eventType       CompanySubscriptionAuditEventType @map("event_type")
+  previousStatus  CompanyAccessStatus?              @map("previous_status")
+  nextStatus      CompanyAccessStatus               @map("next_status")
+  previousPayload Json?                             @map("previous_payload")
+  nextPayload     Json                              @map("next_payload")
+  note            String?
+  createdAt       DateTime                          @default(now()) @map("created_at")
+  actorUser       User?                             @relation("SubscriptionAuditActor", fields: [actorUserId], references: [id])
+  company         Company                           @relation(fields: [companyId], references: [id])
+
+  @@index([companyId, createdAt(sort: Desc)])
+  @@index([eventType, createdAt(sort: Desc)])
+  @@map("company_subscription_audits")
+}
+
+model Category {
+  id        String     @id @default(uuid())
+  companyId String     @map("company_id")
+  name      String
+  parentId  String?    @map("parent_id")
+  sortOrder Int        @default(0) @map("sort_order")
+  color     String?
+  icon      String?
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+  deletedAt DateTime?  @map("deleted_at")
+  company   Company    @relation(fields: [companyId], references: [id])
+  parent    Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children  Category[] @relation("CategoryHierarchy")
+  products  Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id                   String                @id @default(uuid())
+  companyId            String                @map("company_id")
+  categoryId           String?               @map("category_id")
+  supplierId           String?               @map("supplier_id")
+  barcode              String
+  name                 String
+  brand                String?
+  description          String?
+  unitType             UnitType              @default(PIECE) @map("unit_type")
+  purchasePrice        Float                 @map("purchase_price")
+  purchasePriceMinor   BigInt                @default(0) @map("purchase_price_minor")
+  salePrice            Float                 @map("sale_price")
+  wholesalePrice       Float?                @map("wholesale_price")
+  salePriceMinor       BigInt                @default(0) @map("sale_price_minor")
+  vatRate              Int                   @map("vat_rate")
+  minStock             Int                   @default(0) @map("min_stock")
+  isActive             Boolean               @default(true) @map("is_active")
+  isQuickAccess        Boolean               @default(false) @map("is_quick_access")
+  quickAccessColor     String?               @map("quick_access_color")
+  quickAccessOrder     Int?                  @map("quick_access_order")
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+  deletedAt            DateTime?             @map("deleted_at")
+  expiryDate           DateTime?             @map("expiry_date")
+  category             Category?             @relation(fields: [categoryId], references: [id])
+  company              Company               @relation(fields: [companyId], references: [id])
+  supplier             Supplier?             @relation(fields: [supplierId], references: [id])
+  purchaseInvoiceItems PurchaseInvoiceItem[]
+  saleItems            SaleItem[]
+  stockLevels          StockLevel[]
+  stockMovements       StockMovement[]
+  stockTransferItems   StockTransferItem[]
+
+  @@unique([companyId, barcode])
+  @@index([supplierId])
+  @@map("products")
+}
+
+model InvoiceTemplateConfig {
+  id              String   @id @default(uuid())
+  companyId       String   @map("company_id")
+  headerText      String?  @map("header_text")
+  footerNote      String?  @map("footer_note")
+  logoUrl         String?  @map("logo_url")
+  taxOffice       String?  @map("tax_office")
+  tradeRegistryNo String?  @map("trade_registry_no")
+  salesLabel      String?  @map("sales_label")
+  purchaseLabel   String?  @map("purchase_label")
+  dispatchLabel   String?  @map("dispatch_label")
+  salesHeader     String?  @map("sales_header")
+  purchaseHeader  String?  @map("purchase_header")
+  dispatchHeader  String?  @map("dispatch_header")
+  salesFooter     String?  @map("sales_footer")
+  purchaseFooter  String?  @map("purchase_footer")
+  dispatchFooter  String?  @map("dispatch_footer")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  company         Company  @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId])
+  @@map("invoice_template_configs")
+}
+
+model StockLevel {
+  id        String   @id @default(uuid())
+  productId String   @map("product_id")
+  branchId  String   @map("branch_id")
+  quantity  Float    @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  branch    Branch   @relation(fields: [branchId], references: [id])
+  product   Product  @relation(fields: [productId], references: [id])
+
+  @@unique([productId, branchId])
+  @@map("stock_levels")
+}
+
+model StockMovement {
+  id               String            @id @default(uuid())
+  productId        String            @map("product_id")
+  branchId         String            @map("branch_id")
+  userId           String            @map("user_id")
+  clientRequestId  String?           @map("client_request_id")
+  type             StockMovementType
+  quantity         Float
+  previousQuantity Float             @map("previous_quantity")
+  newQuantity      Float             @map("new_quantity")
+  reference        String?
+  note             String?
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+  branch           Branch            @relation(fields: [branchId], references: [id])
+  product          Product           @relation(fields: [productId], references: [id])
+  user             User              @relation(fields: [userId], references: [id])
+
+  @@unique([branchId, clientRequestId])
+  @@map("stock_movements")
+}
+
+model StockTransfer {
+  id             String              @id @default(uuid())
+  companyId      String              @map("company_id")
+  sourceBranchId String              @map("source_branch_id")
+  targetBranchId String              @map("target_branch_id")
+  createdById    String              @map("created_by_id")
+  status         StockTransferStatus @default(PENDING)
+  note           String?
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+  items          StockTransferItem[]
+  company        Company             @relation(fields: [companyId], references: [id])
+  createdBy      User                @relation(fields: [createdById], references: [id])
+  sourceBranch   Branch              @relation("SourceTransfers", fields: [sourceBranchId], references: [id])
+  targetBranch   Branch              @relation("TargetTransfers", fields: [targetBranchId], references: [id])
+
+  @@index([companyId, createdAt])
+  @@index([sourceBranchId, status])
+  @@index([targetBranchId, status])
+  @@map("stock_transfers")
+}
+
+model StockTransferItem {
+  id         String        @id @default(uuid())
+  transferId String        @map("transfer_id")
+  productId  String        @map("product_id")
+  quantity   Float
+  createdAt  DateTime      @default(now()) @map("created_at")
+  product    Product       @relation(fields: [productId], references: [id])
+  transfer   StockTransfer @relation(fields: [transferId], references: [id])
+
+  @@index([transferId])
+  @@map("stock_transfer_items")
+}
+
+model Sale {
+  id                   String                @id @default(uuid())
+  companyId            String                @map("company_id")
+  branchId             String                @map("branch_id")
+  registerId           String                @map("register_id")
+  userId               String                @map("user_id")
+  sessionId            String                @map("session_id")
+  receiptNumber        String                @unique @map("receipt_number")
+  status               SaleStatus            @default(COMPLETED)
+  subtotal             Float
+  totalVat             Float                 @map("total_vat")
+  totalDiscount        Float                 @default(0) @map("total_discount")
+  grandTotal           Float                 @map("grand_total")
+  note                 String?
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+  deletedAt            DateTime?             @map("deleted_at")
+  clientRequestId      String?               @map("client_request_id")
+  customerId           String?               @map("customer_id")
+  totalCartDiscount    Float                 @default(0) @map("total_cart_discount")
+  customerTransactions CustomerTransaction[]
+  payments             Payment[]
+  refunds              Refund[]
+  items                SaleItem[]
+  branch               Branch                @relation(fields: [branchId], references: [id])
+  company              Company               @relation(fields: [companyId], references: [id])
+  customer             Customer?             @relation(fields: [customerId], references: [id])
+  register             Register              @relation(fields: [registerId], references: [id])
+  session              RegisterSession       @relation(fields: [sessionId], references: [id])
+  user                 User                  @relation(fields: [userId], references: [id])
+
+  @@unique([companyId, clientRequestId])
+  @@index([companyId, createdAt])
+  @@index([branchId, createdAt])
+  @@index([companyId, branchId, createdAt])
+  @@index([companyId, status, createdAt])
+  @@map("sales")
+}
+
+model SaleItem {
+  id            String       @id @default(uuid())
+  saleId        String       @map("sale_id")
+  productId     String       @map("product_id")
+  productName   String       @map("product_name")
+  barcode       String
+  quantity      Float
+  unitPrice     Float        @map("unit_price")
+  vatRate       Int          @map("vat_rate")
+  vatAmount     Float        @map("vat_amount")
+  discount      Float        @default(0)
+  lineTotal     Float        @map("line_total")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+  purchasePrice Float?       @map("purchase_price")
+  refundItems   RefundItem[]
+  product       Product      @relation(fields: [productId], references: [id])
+  sale          Sale         @relation(fields: [saleId], references: [id])
+
+  @@index([saleId])
+  @@index([productId])
+  @@map("sale_items")
+}
+
+model Payment {
+  id        String        @id @default(uuid())
+  saleId    String        @map("sale_id")
+  method    PaymentMethod
+  amount    Float
+  reference String?
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+  sale      Sale          @relation(fields: [saleId], references: [id])
+
+  @@index([saleId, method])
+  @@map("payments")
+}
+
+model Refund {
+  id              String       @id @default(uuid())
+  saleId          String       @map("sale_id")
+  companyId       String       @map("company_id")
+  branchId        String       @map("branch_id")
+  registerId      String       @map("register_id")
+  userId          String       @map("user_id")
+  receiptNumber   String       @unique @map("receipt_number")
+  totalAmount     Float        @map("total_amount")
+  reason          String?
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+  clientRequestId String?      @map("client_request_id")
+  items           RefundItem[]
+  branch          Branch       @relation(fields: [branchId], references: [id])
+  company         Company      @relation(fields: [companyId], references: [id])
+  register        Register     @relation(fields: [registerId], references: [id])
+  sale            Sale         @relation(fields: [saleId], references: [id])
+  user            User         @relation(fields: [userId], references: [id])
+
+  @@unique([companyId, clientRequestId])
+  @@index([companyId, createdAt])
+  @@index([branchId, createdAt])
+  @@map("refunds")
+}
+
+model RefundItem {
+  id          String   @id @default(uuid())
+  refundId    String   @map("refund_id")
+  saleItemId  String   @map("sale_item_id")
+  productId   String   @map("product_id")
+  productName String   @map("product_name")
+  quantity    Float
+  unitPrice   Float    @map("unit_price")
+  vatRate     Int      @map("vat_rate")
+  vatAmount   Float    @map("vat_amount")
+  lineTotal   Float    @map("line_total")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  refund      Refund   @relation(fields: [refundId], references: [id])
+  saleItem    SaleItem @relation(fields: [saleItemId], references: [id])
+
+  @@index([refundId])
+  @@index([saleItemId])
+  @@map("refund_items")
+}
+
+model RegisterSession {
+  id              String                @id @default(uuid())
+  registerId      String                @map("register_id")
+  userId          String                @map("user_id")
+  branchId        String                @map("branch_id")
+  status          RegisterSessionStatus @default(OPEN)
+  openingBalance  Float                 @map("opening_balance")
+  closingBalance  Float?                @map("closing_balance")
+  expectedBalance Float?                @map("expected_balance")
+  difference      Float?
+  totalCashSales  Float                 @default(0) @map("total_cash_sales")
+  totalCardSales  Float                 @default(0) @map("total_card_sales")
+  totalRefunds    Float                 @default(0) @map("total_refunds")
+  totalSalesCount Int                   @default(0) @map("total_sales_count")
+  closedAt        DateTime?             @map("closed_at")
+  note            String?
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
+  declaredCash    Float?                @map("declared_cash")
+  branch          Branch                @relation(fields: [branchId], references: [id])
+  register        Register              @relation(fields: [registerId], references: [id])
+  user            User                  @relation(fields: [userId], references: [id])
+  sales           Sale[]
+
+  @@index([branchId, status, createdAt])
+  @@index([registerId, status, updatedAt])
+  @@map("register_sessions")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([token])
+  @@map("refresh_tokens")
+}
+
+model SyncLog {
+  id         String        @id @default(uuid())
+  registerId String        @map("register_id")
+  tableName  String        @map("table_name")
+  recordId   String        @map("record_id")
+  operation  SyncOperation
+  status     SyncStatus    @default(PENDING)
+  data       String
+  error      String?
+  syncedAt   DateTime?     @map("synced_at")
+  createdAt  DateTime      @default(now()) @map("created_at")
+  updatedAt  DateTime      @updatedAt @map("updated_at")
+  register   Register      @relation(fields: [registerId], references: [id])
+
+  @@index([registerId, status])
+  @@index([registerId, status, createdAt])
+  @@index([createdAt])
+  @@map("sync_logs")
+}
+
+model RegisterSyncSnapshot {
+  registerId          String    @id @map("register_id")
+  pendingCount        Int       @default(0) @map("pending_count")
+  sales               Int       @default(0)
+  refunds             Int       @default(0)
+  productOps          Int       @default(0) @map("product_ops")
+  stockOps            Int       @default(0) @map("stock_ops")
+  queuePeak           Int       @default(0) @map("queue_peak")
+  oldestPendingAgeSec Int?      @map("oldest_pending_age_sec")
+  lastSyncErrorCode   String?   @map("last_sync_error_code")
+  lastSyncStatus      String    @default("IDLE") @map("last_sync_status")
+  lastSyncedAt        DateTime? @map("last_synced_at")
+  clientObservedAt    DateTime  @map("client_observed_at")
+  serverObservedAt    DateTime  @default(now()) @map("server_observed_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@index([lastSyncStatus, updatedAt(sort: Desc)], map: "idx_sync_snapshots_status")
+  @@index([updatedAt(sort: Desc)], map: "idx_sync_snapshots_updated")
+  @@map("register_sync_snapshots")
 }
 
 enum PackageType {
@@ -73,97 +671,26 @@ enum CompanySubscriptionAuditEventType {
   SYSTEM_RESTORE_ACTIVE
 }
 
-model Branch {
-  id        String   @id @default(uuid())
-  companyId String   @map("company_id")
-  name      String
-  address   String?
-  phone     String?
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
-
-  company         Company          @relation(fields: [companyId], references: [id])
-  registers       Register[]
-  users           User[]
-  stockLevels     StockLevel[]
-  stockMovements  StockMovement[]
-  sales           Sale[]
-  refunds         Refund[]
-  registerSessions RegisterSession[]
-
-  @@map("branches")
+enum CustomerTransactionType {
+  DEBT
+  PAYMENT
 }
 
-model Register {
-  id        String   @id @default(uuid())
-  branchId  String   @map("branch_id")
-  name      String
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
-
-  branch           Branch            @relation(fields: [branchId], references: [id])
-  sales            Sale[]
-  refunds          Refund[]
-  registerSessions RegisterSession[]
-  syncLogs         SyncLog[]
-
-  @@map("registers")
+enum SupplierTransactionType {
+  DEBT
+  PAYMENT
 }
 
-// ========================
-// KULLANICI
-// ========================
-
-model User {
-  id           String   @id @default(uuid())
-  companyId    String   @map("company_id")
-  branchId     String?  @map("branch_id")
-  username     String
-  passwordHash String   @map("password_hash")
-  pin          String?
-  fullName     String   @map("full_name")
-  role         UserRole @default(CASHIER)
-  isActive     Boolean  @default(true) @map("is_active")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
-  deletedAt    DateTime? @map("deleted_at")
-
-  company          Company           @relation(fields: [companyId], references: [id])
-  branch           Branch?           @relation(fields: [branchId], references: [id])
-  sales            Sale[]
-  refunds          Refund[]
-  stockMovements   StockMovement[]
-  registerSessions RegisterSession[]
-  refreshTokens    RefreshToken[]
-  subscriptionAuditEvents CompanySubscriptionAudit[] @relation("SubscriptionAuditActor")
-
-  @@unique([companyId, username])
-  @@map("users")
+enum PurchaseDocumentType {
+  ORDER
+  DISPATCH
+  INVOICE
 }
 
-model CompanySubscriptionAudit {
-  id              String                            @id @default(uuid())
-  companyId       String                            @map("company_id")
-  actorUserId     String?                           @map("actor_user_id")
-  actorType       SubscriptionAuditActorType        @map("actor_type")
-  eventType       CompanySubscriptionAuditEventType @map("event_type")
-  previousStatus  CompanyAccessStatus?              @map("previous_status")
-  nextStatus      CompanyAccessStatus               @map("next_status")
-  previousPayload Json?                             @map("previous_payload")
-  nextPayload     Json                              @map("next_payload")
-  note            String?
-  createdAt       DateTime                          @default(now()) @map("created_at")
-
-  company         Company                           @relation(fields: [companyId], references: [id])
-  actorUser       User?                             @relation("SubscriptionAuditActor", fields: [actorUserId], references: [id])
-
-  @@index([companyId, createdAt(sort: Desc)])
-  @@index([eventType, createdAt(sort: Desc)])
-  @@map("company_subscription_audits")
+enum PurchaseInvoiceStatus {
+  DRAFT
+  COMPLETED
+  CANCELLED
 }
 
 enum UserRole {
@@ -173,103 +700,10 @@ enum UserRole {
   ACCOUNTANT
 }
 
-// ========================
-// KATEGORİ / ÜRÜN
-// ========================
-
-model Category {
-  id        String   @id @default(uuid())
-  companyId String   @map("company_id")
-  name      String
-  parentId  String?  @map("parent_id")
-  sortOrder Int      @default(0) @map("sort_order")
-  color     String?
-  icon      String?
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
-
-  company  Company    @relation(fields: [companyId], references: [id])
-  parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
-  children Category[] @relation("CategoryHierarchy")
-  products Product[]
-
-  @@map("categories")
-}
-
-model Product {
-  id               String   @id @default(uuid())
-  companyId        String   @map("company_id")
-  categoryId       String?  @map("category_id")
-  barcode          String
-  name             String
-  description      String?
-  unitType         UnitType @default(PIECE) @map("unit_type")
-  purchasePrice    Float    @map("purchase_price")
-  salePrice        Float    @map("sale_price")
-  vatRate          Int      @map("vat_rate")
-  minStock         Int      @default(0) @map("min_stock")
-  isActive         Boolean  @default(true) @map("is_active")
-  isQuickAccess    Boolean  @default(false) @map("is_quick_access")
-  quickAccessColor String?  @map("quick_access_color")
-  quickAccessOrder Int?     @map("quick_access_order")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
-  deletedAt        DateTime? @map("deleted_at")
-
-  company        Company         @relation(fields: [companyId], references: [id])
-  category       Category?       @relation(fields: [categoryId], references: [id])
-  stockLevels    StockLevel[]
-  stockMovements StockMovement[]
-  saleItems      SaleItem[]
-
-  @@unique([companyId, barcode])
-  @@map("products")
-}
-
 enum UnitType {
   PIECE
   KG
   LITER
-}
-
-// ========================
-// STOK
-// ========================
-
-model StockLevel {
-  id        String   @id @default(uuid())
-  productId String   @map("product_id")
-  branchId  String   @map("branch_id")
-  quantity  Float    @default(0)
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  product Product @relation(fields: [productId], references: [id])
-  branch  Branch  @relation(fields: [branchId], references: [id])
-
-  @@unique([productId, branchId])
-  @@map("stock_levels")
-}
-
-model StockMovement {
-  id               String            @id @default(uuid())
-  productId        String            @map("product_id")
-  branchId         String            @map("branch_id")
-  userId           String            @map("user_id")
-  type             StockMovementType
-  quantity         Float
-  previousQuantity Float             @map("previous_quantity")
-  newQuantity      Float             @map("new_quantity")
-  reference        String?
-  note             String?
-  createdAt        DateTime          @default(now()) @map("created_at")
-  updatedAt        DateTime          @updatedAt @map("updated_at")
-
-  product Product @relation(fields: [productId], references: [id])
-  branch  Branch  @relation(fields: [branchId], references: [id])
-  user    User    @relation(fields: [userId], references: [id])
-
-  @@map("stock_movements")
 }
 
 enum StockMovementType {
@@ -281,40 +715,11 @@ enum StockMovementType {
   COUNT
 }
 
-// ========================
-// SATIŞ
-// ========================
-
-model Sale {
-  id            String     @id @default(uuid())
-  companyId     String     @map("company_id")
-  branchId      String     @map("branch_id")
-  registerId    String     @map("register_id")
-  userId        String     @map("user_id")
-  sessionId     String     @map("session_id")
-  receiptNumber String     @unique @map("receipt_number")
-  status        SaleStatus @default(COMPLETED)
-  subtotal      Float
-  totalVat      Float      @map("total_vat")
-  totalDiscount Float      @default(0) @map("total_discount")
-  grandTotal    Float      @map("grand_total")
-  note          String?
-  createdAt     DateTime   @default(now()) @map("created_at")
-  updatedAt     DateTime   @updatedAt @map("updated_at")
-  deletedAt     DateTime?  @map("deleted_at")
-
-  company  Company   @relation(fields: [companyId], references: [id])
-  branch   Branch    @relation(fields: [branchId], references: [id])
-  register Register  @relation(fields: [registerId], references: [id])
-  user     User      @relation(fields: [userId], references: [id])
-  session  RegisterSession @relation(fields: [sessionId], references: [id])
-  items    SaleItem[]
-  payments Payment[]
-  refunds  Refund[]
-
-  @@index([companyId, createdAt])
-  @@index([branchId, createdAt])
-  @@map("sales")
+enum StockTransferStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
 }
 
 enum SaleStatus {
@@ -324,174 +729,16 @@ enum SaleStatus {
   CANCELLED
 }
 
-model SaleItem {
-  id          String   @id @default(uuid())
-  saleId      String   @map("sale_id")
-  productId   String   @map("product_id")
-  productName String   @map("product_name")
-  barcode     String
-  quantity    Float
-  unitPrice   Float    @map("unit_price")
-  vatRate     Int      @map("vat_rate")
-  vatAmount   Float    @map("vat_amount")
-  discount    Float    @default(0)
-  lineTotal   Float    @map("line_total")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  sale        Sale         @relation(fields: [saleId], references: [id])
-  product     Product      @relation(fields: [productId], references: [id])
-  refundItems RefundItem[]
-
-  @@map("sale_items")
-}
-
-// ========================
-// ÖDEME
-// ========================
-
-model Payment {
-  id        String        @id @default(uuid())
-  saleId    String        @map("sale_id")
-  method    PaymentMethod
-  amount    Float
-  reference String?
-  createdAt DateTime      @default(now()) @map("created_at")
-  updatedAt DateTime      @updatedAt @map("updated_at")
-
-  sale Sale @relation(fields: [saleId], references: [id])
-
-  @@map("payments")
-}
-
 enum PaymentMethod {
   CASH
   CREDIT_CARD
   DEBIT_CARD
-}
-
-// ========================
-// İADE
-// ========================
-
-model Refund {
-  id            String   @id @default(uuid())
-  saleId        String   @map("sale_id")
-  companyId     String   @map("company_id")
-  branchId      String   @map("branch_id")
-  registerId    String   @map("register_id")
-  userId        String   @map("user_id")
-  receiptNumber String   @unique @map("receipt_number")
-  totalAmount   Float    @map("total_amount")
-  reason        String?
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-
-  sale     Sale         @relation(fields: [saleId], references: [id])
-  company  Company      @relation(fields: [companyId], references: [id])
-  branch   Branch       @relation(fields: [branchId], references: [id])
-  register Register     @relation(fields: [registerId], references: [id])
-  user     User         @relation(fields: [userId], references: [id])
-  items    RefundItem[]
-
-  @@map("refunds")
-}
-
-model RefundItem {
-  id          String   @id @default(uuid())
-  refundId    String   @map("refund_id")
-  saleItemId  String   @map("sale_item_id")
-  productId   String   @map("product_id")
-  productName String   @map("product_name")
-  quantity    Float
-  unitPrice   Float    @map("unit_price")
-  vatRate     Int      @map("vat_rate")
-  vatAmount   Float    @map("vat_amount")
-  lineTotal   Float    @map("line_total")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  refund   Refund   @relation(fields: [refundId], references: [id])
-  saleItem SaleItem @relation(fields: [saleItemId], references: [id])
-
-  @@map("refund_items")
-}
-
-// ========================
-// KASA OTURUM (Açılış/Kapanış)
-// ========================
-
-model RegisterSession {
-  id              String                @id @default(uuid())
-  registerId      String                @map("register_id")
-  userId          String                @map("user_id")
-  branchId        String                @map("branch_id")
-  status          RegisterSessionStatus @default(OPEN)
-  openingBalance  Float                 @map("opening_balance")
-  closingBalance  Float?                @map("closing_balance")
-  expectedBalance Float?                @map("expected_balance")
-  difference      Float?
-  totalCashSales  Float                 @default(0) @map("total_cash_sales")
-  totalCardSales  Float                 @default(0) @map("total_card_sales")
-  totalRefunds    Float                 @default(0) @map("total_refunds")
-  totalSalesCount Int                   @default(0) @map("total_sales_count")
-  closedAt        DateTime?             @map("closed_at")
-  note            String?
-  createdAt       DateTime              @default(now()) @map("created_at")
-  updatedAt       DateTime              @updatedAt @map("updated_at")
-
-  register Register @relation(fields: [registerId], references: [id])
-  user     User     @relation(fields: [userId], references: [id])
-  branch   Branch   @relation(fields: [branchId], references: [id])
-  sales    Sale[]
-
-  @@map("register_sessions")
+  ON_ACCOUNT
 }
 
 enum RegisterSessionStatus {
   OPEN
   CLOSED
-}
-
-// ========================
-// AUTH - REFRESH TOKEN
-// ========================
-
-model RefreshToken {
-  id        String   @id @default(uuid())
-  userId    String   @map("user_id")
-  token     String   @unique
-  expiresAt DateTime @map("expires_at")
-  createdAt DateTime @default(now()) @map("created_at")
-
-  user User @relation(fields: [userId], references: [id])
-
-  @@index([token])
-  @@map("refresh_tokens")
-}
-
-// ========================
-// SENKRONİZASYON
-// ========================
-
-model SyncLog {
-  id         String     @id @default(uuid())
-  registerId String     @map("register_id")
-  tableName  String     @map("table_name")
-  recordId   String     @map("record_id")
-  operation  SyncOperation
-  status     SyncStatus @default(PENDING)
-  data       String     @db.Text
-  error      String?    @db.Text
-  syncedAt   DateTime?  @map("synced_at")
-  createdAt  DateTime   @default(now()) @map("created_at")
-  updatedAt  DateTime   @updatedAt @map("updated_at")
-
-  register Register @relation(fields: [registerId], references: [id])
-
-  @@index([registerId, status])
-  @@index([createdAt])
-  @@map("sync_logs")
 }
 
 enum SyncOperation {
@@ -505,4 +752,9 @@ enum SyncStatus {
   SYNCED
   CONFLICT
   FAILED
+}
+
+enum PriceTier {
+  RETAIL
+  WHOLESALE
 }

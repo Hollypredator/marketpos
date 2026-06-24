@@ -114,6 +114,27 @@ describe('reports hooks', () => {
         totalSales: 100,
         totalVat: 10,
       },
+      expiringProducts: [],
+      ledgerSummary: {
+        openingBalance: 0,
+        totalDebt: 0,
+        totalPayment: 0,
+        closingBalance: 0,
+        dueAmount: 0,
+        last30DaysPayments: 0,
+        netChange: 0,
+        from: '2026-03-01',
+        to: '2026-03-31',
+      },
+      profitabilityReport: {
+        summary: {
+          margin: 20,
+          totalCost: 80,
+          totalProfit: 20,
+          totalRevenue: 100,
+        },
+        topProducts: [],
+      },
       sessions: [],
       topProducts: [],
     });

@@ -33,6 +33,7 @@ export async function branchRoutes(server: FastifyInstance): Promise<void> {
         request,
         reply,
         request.query.companyId,
+        { requiredForSuperAdmin: true },
       );
       if (reply.sent) {
         return;

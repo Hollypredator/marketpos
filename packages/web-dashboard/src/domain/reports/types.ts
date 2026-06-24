@@ -2,6 +2,9 @@ import type {
   BranchComparisonRow,
   DailyReport,
   OperationsHealthResponse,
+  ProfitabilityReport,
+  LedgerSummary,
+  ExpiringProduct,
   ReportSession,
   TopProduct,
 } from '../shared/types';
@@ -9,7 +12,10 @@ import type {
 export type {
   BranchComparisonRow,
   DailyReport,
+  LedgerSummary,
   OperationsHealthResponse,
+  ProfitabilityReport,
+  ExpiringProduct,
   ReportSession,
   TopProduct,
 };
@@ -25,6 +31,7 @@ export interface ReportsParams {
   dailyDate: string;
   from: string;
   registerId: string;
+  sessionLimit?: number;
   to: string;
 }
 
@@ -33,4 +40,7 @@ export interface ReportsPayload {
   dailyReport: DailyReport;
   sessions: ReportSession[];
   topProducts: TopProduct[];
+  profitabilityReport: ProfitabilityReport;
+  expiringProducts: ExpiringProduct[];
+  ledgerSummary: LedgerSummary;
 }

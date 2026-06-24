@@ -1,6 +1,10 @@
 import type { AuthSession, UserRole } from '../shared/types';
 
+export type LoginMode = 'EMAIL' | 'LEGACY';
+
 export interface LoginFormState {
+  email: string;
+  mode: LoginMode;
   companyId: string;
   password: string;
   username: string;

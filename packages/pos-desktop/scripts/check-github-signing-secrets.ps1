@@ -1,9 +1,9 @@
-$ErrorActionPreference = 'Stop'
-
 param(
   [Parameter(Mandatory = $false)]
   [string]$Repo
 )
+
+$ErrorActionPreference = 'Stop'
 
 $requiredSecrets = @(
   'CSC_LINK',
@@ -11,11 +11,33 @@ $requiredSecrets = @(
   'CSC_KEY_PASSWORD'
 )
 
-if ([string]::IsNullOrWhiteSpace($Repo)) {
-  $Repo = $env:GITHUB_REPOSITORY
+function Resolve-Repo {
+  param([string]$ProvidedRepo)
+
+  if (-not [string]::IsNullOrWhiteSpace($ProvidedRepo)) {
+    return $ProvidedRepo
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_REPOSITORY)) {
+    return $env:GITHUB_REPOSITORY
+  }
+
+  $remoteUrl = git config --get remote.origin.url 2>$null
+  if ([string]::IsNullOrWhiteSpace($remoteUrl)) {
+    return $null
+  }
+
+  $normalized = $remoteUrl.Trim()
+  if ($normalized -match 'github\.com[:/](?<repo>[^/]+/[^/]+?)(\.git)?$') {
+    return $Matches['repo']
+  }
+
+  return $null
 }
+
+$Repo = Resolve-Repo -ProvidedRepo $Repo
 if ([string]::IsNullOrWhiteSpace($Repo)) {
-  throw 'Repo parametresi zorunlu. Ornek: -Repo "OWNER/REPO"'
+  throw 'Repo parametresi zorunlu. Ornek: -Repo "OWNER/REPO" veya git remote origin tanimlayin.'
 }
 
 function Get-GhCommand {

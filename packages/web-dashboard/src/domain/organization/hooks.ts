@@ -5,8 +5,10 @@ import {
   createCompanyApi,
   deleteBranchApi,
   deleteCompanyApi,
+  fetchInvoiceTemplateApi,
   listBranchesApi,
   listCompaniesApi,
+  updateInvoiceTemplateApi,
   updateBranchApi,
   updateCompanyApi,
 } from './api';
@@ -30,6 +32,15 @@ export function useBranchesQuery(companyId: string, enabled: boolean) {
   });
 }
 
+export function useInvoiceTemplateQuery(companyId: string, enabled: boolean) {
+  return useQuery({
+    enabled: enabled && companyId.length > 0,
+    queryFn: () => fetchInvoiceTemplateApi(companyId),
+    queryKey: queryKeys.invoiceTemplate(companyId),
+    staleTime: 30_000,
+  });
+}
+
 export function useCompanyMutations(companyId: string) {
   const queryClient = useQueryClient();
 
@@ -45,6 +56,8 @@ export function useCompanyMutations(companyId: string) {
       address: string;
       email: string;
       isActive: boolean;
+      maxCartDiscountPercent: string;
+      maxItemDiscountPercent: string;
       name: string;
       phone: string;
       taxNumber: string;
@@ -92,4 +105,15 @@ export function useBranchMutations(companyId: string, branchId: string) {
   });
 
   return { createBranch, deleteBranch, updateBranch };
+}
+
+export function useInvoiceTemplateMutation(companyId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (params: import('./api').InvoiceTemplateConfigPayload) =>
+      updateInvoiceTemplateApi(companyId, params),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.invoiceTemplate(companyId) });
+    },
+  });
 }

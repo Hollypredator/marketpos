@@ -1,20 +1,26 @@
 import type { PaymentMethod } from '@marketpos/shared';
 import type {
+  BackofficeSettings,
   BackupFileRecord,
   BackupPolicy,
   BackupPolicyState,
   CashMovementRecord,
   CashMovementType,
   CompanyAccessSnapshot,
+  CustomerOpQueueRecord,
   HardwareConfig,
   HardwareErrorCode,
   HardwareOperatorAction,
   LogSecurityEventPayload,
   ManagerUnlockMethod,
+  ProductOpQueueRecord,
+  PurchaseOpQueueRecord,
   RecordCashMovementPayload,
   RecordShiftHandoverPayload,
   SecurityEventRecord,
   ShiftHandoverRecord,
+  StockOpQueueRecord,
+  SupplierOpQueueRecord,
 } from '../electron-api';
 
 export interface AuthUser {
@@ -44,6 +50,7 @@ export interface OfflineCredential {
 
 export interface PendingSaleItem {
   discount?: number;
+  campaignDiscount?: number;
   productId: string;
   quantity: number;
   unitPrice: number;
@@ -56,11 +63,146 @@ export interface PendingSalePayment {
 }
 
 export interface PendingSale {
+  clientRequestId?: string;
+  customerId?: string;
   items: PendingSaleItem[];
+  localReceiptNumber?: string;
   note?: string;
   payments: PendingSalePayment[];
   registerId: string;
   sessionId: string;
+  totalCartDiscount?: number;
+}
+
+export interface CustomerRecord {
+  address: string | null;
+  balance: number;
+  companyId: string;
+  email: string | null;
+  fullName: string;
+  id: string;
+  isActive: boolean;
+  name?: string;
+  loyaltyPoints: number;
+  phone: string | null;
+  priceTier?: 'RETAIL' | 'WHOLESALE';
+  taxNumber: string | null;
+}
+
+export interface PaginationMeta {
+  limit: number;
+  page: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface PaginatedResult<TData> {
+  data: TData[];
+  pagination: PaginationMeta;
+}
+
+export interface SupplierRecord {
+  address?: string | null;
+  balance: number;
+  companyId: string;
+  createdAt?: string;
+  email?: string | null;
+  id: string;
+  isActive: boolean;
+  name: string;
+  phone?: string | null;
+  taxNumber?: string | null;
+  updatedAt?: string;
+}
+
+export interface SupplierFormInput {
+  address?: string;
+  email?: string;
+  name: string;
+  phone?: string;
+  taxNumber?: string;
+}
+
+export interface SupplierTransactionRecord {
+  amount: number;
+  createdAt: string;
+  description?: string | null;
+  id: string;
+  invoice?: {
+    documentType: 'DISPATCH' | 'INVOICE' | 'ORDER';
+    id: string;
+    invoiceNumber: string;
+  } | null;
+  invoiceId?: string | null;
+  supplierId: string;
+  type: 'DEBT' | 'PAYMENT';
+}
+
+export interface CreateSupplierTransactionInput {
+  amount: number;
+  description?: string;
+  invoiceId?: string;
+  type: 'DEBT' | 'PAYMENT';
+}
+
+export interface PurchaseInvoiceItemRecord {
+  discount?: number;
+  id: string;
+  lineTotal: number;
+  productId: string;
+  quantity: number;
+  unitPrice: number;
+  vatAmount?: number;
+}
+
+export interface PurchaseInvoiceRecord {
+  branchId: string;
+  convertedAt?: string | null;
+  convertedToInvoiceId?: string | null;
+  createdAt?: string;
+  dispatchNumber?: string | null;
+  documentDate?: string | null;
+  documentType: 'DISPATCH' | 'INVOICE' | 'ORDER';
+  dueDate?: string | null;
+  grandTotal: number;
+  id: string;
+  invoiceNumber: string;
+  sourceDispatchId?: string | null;
+  status: 'CANCELLED' | 'COMPLETED' | 'DRAFT';
+  subtotal?: number;
+  supplierId: string;
+  supplierName?: string;
+  totalDiscount?: number;
+  totalVat?: number;
+  updatedAt?: string;
+  items?: PurchaseInvoiceItemRecord[];
+}
+
+export interface CreatePurchaseInvoiceInput {
+  branchId: string;
+  dispatchNumber?: string;
+  documentDate?: string | null;
+  documentType: 'DISPATCH' | 'INVOICE' | 'ORDER';
+  dueDate?: string | null;
+  invoiceNumber: string;
+  items: Array<{
+    discount: number;
+    productId: string;
+    quantity: number;
+    unitPrice: number;
+    vatRate: number;
+  }>;
+  note?: string;
+  supplierId: string;
+  totalDiscount: number;
+}
+
+export interface CreateCustomerInput {
+  address?: string;
+  email?: string;
+  name: string;
+  phone?: string;
+  taxNumber?: string;
 }
 
 export interface PendingRefundItem {
@@ -69,11 +211,19 @@ export interface PendingRefundItem {
 }
 
 export interface PendingRefund {
+  clientRequestId?: string;
   items: PendingRefundItem[];
   reason?: string;
   registerId: string;
+  reportItems?: Array<{
+    productId: string;
+    productName: string;
+    quantity: number;
+    unitPrice: number;
+  }>;
   saleId: string;
   sessionId: string;
+  totalAmount?: number;
 }
 
 export interface SaleReceiptItem {
@@ -145,24 +295,39 @@ export interface StockLevelRow {
 
 export interface CreateProductInput {
   barcode: string;
+  brand?: string | null;
   categoryId?: string;
+  clientRequestId?: string;
+  companyId?: string;
+  description?: string;
+  expiryDate?: string | null;
+  id?: string;
   isQuickAccess?: boolean;
   minStock: number;
   name: string;
   purchasePrice: number;
   quickAccessOrder?: number;
   salePrice: number;
+  supplierId?: string | null;
   vatRate: number;
 }
 
 export interface UpdateProductInput {
   barcode?: string;
+  brand?: string | null;
   categoryId?: string;
+  clientRequestId?: string;
+  companyId?: string;
+  description?: string | null;
+  expiryDate?: string | null;
+  id?: string;
   isQuickAccess?: boolean;
   minStock?: number;
   name?: string;
+  purchasePrice?: number;
   quickAccessOrder?: number;
   salePrice?: number;
+  supplierId?: string | null;
   vatRate?: number;
 }
 
@@ -172,6 +337,16 @@ export interface SyncState {
   lastSyncAt: string | null;
   queueRefunds: number;
   queueSales: number;
+}
+
+export interface OfflineQueuedProductOperation {
+  body: Record<string, unknown>;
+  method: 'DELETE' | 'POST' | 'PUT';
+  path: string;
+}
+
+export interface OfflineQueuedStockOperation {
+  body: Record<string, unknown>;
 }
 
 export type UiPreset = 'cafe' | 'kasap' | 'market' | 'pide';
@@ -203,6 +378,7 @@ export interface SaleHardwareStepState {
 }
 
 export type {
+  BackofficeSettings,
   BackupFileRecord,
   BackupPolicy,
   BackupPolicyState,
@@ -213,6 +389,11 @@ export type {
   RecordShiftHandoverPayload,
   SecurityEventRecord,
   ShiftHandoverRecord,
+  CustomerOpQueueRecord,
+  ProductOpQueueRecord,
+  PurchaseOpQueueRecord,
+  StockOpQueueRecord,
+  SupplierOpQueueRecord,
 };
 
 export type { HardwareConfig };

@@ -1,7 +1,9 @@
 import bcrypt from 'bcrypt';
 import { Prisma } from '@prisma/client';
 
+import { generateLicenseKey } from './license-utils';
 import prisma from './prisma';
+import { toMinor } from './money';
 import {
   loadCatalogTemplateByCode,
   TemplateCatalogError,
@@ -11,6 +13,7 @@ import {
 export interface ProvisionCompanyParams {
   actorUserId: string;
   address?: string | null;
+  adminEmail?: string | null;
   adminFullName: string;
   adminPassword: string;
   adminUsername: string;
@@ -44,7 +47,20 @@ export interface ProvisionCompanyResult {
   };
 }
 
-export class ProvisioningInputError extends Error {}
+export class ProvisioningInputError extends Error {
+  public readonly errorCode: string;
+  public readonly statusCode: number;
+
+  public constructor(
+    message: string,
+    statusCode = 400,
+    errorCode = 'PROVISION_INPUT_ERROR',
+  ) {
+    super(message);
+    this.errorCode = errorCode;
+    this.statusCode = statusCode;
+  }
+}
 
 function cleanOptional(value?: string | null): string | null {
   if (!value) {
@@ -54,12 +70,27 @@ function cleanOptional(value?: string | null): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function normalizeOptionalEmail(value?: string | null): string | null {
+  const cleaned = cleanOptional(value);
+  if (!cleaned) {
+    return null;
+  }
+  return cleaned.toLowerCase();
+}
+
 function validateProvisionParams(params: ProvisionCompanyParams): void {
   const usingExisting = typeof params.companyId === 'string' && params.companyId.trim().length > 0;
   const usingNew = typeof params.companyName === 'string' && params.companyName.trim().length > 0;
 
   if (!usingExisting && !usingNew) {
     throw new ProvisioningInputError('Mevcut firma id veya yeni firma adi zorunludur');
+  }
+  if (!usingExisting && !normalizeOptionalEmail(params.adminEmail)) {
+    throw new ProvisioningInputError(
+      'Yeni firma acilisinda admin email zorunludur',
+      400,
+      'ADMIN_EMAIL_REQUIRED',
+    );
   }
   if (params.adminPassword.trim().length < 6) {
     throw new ProvisioningInputError('Admin sifresi en az 6 karakter olmalidir');
@@ -165,9 +196,11 @@ async function upsertProductsAndStock(params: {
       minStock,
       name: productTemplate.name,
       purchasePrice: productTemplate.purchasePrice,
+      purchasePriceMinor: toMinor(productTemplate.purchasePrice),
       quickAccessColor: cleanOptional(productTemplate.quickAccessColor),
       quickAccessOrder: productTemplate.quickAccessOrder ?? null,
       salePrice: productTemplate.salePrice,
+      salePriceMinor: toMinor(productTemplate.salePrice),
       unitType: productTemplate.unitType,
       vatRate: productTemplate.vatRate,
     } as const;
@@ -252,6 +285,7 @@ export async function provisionCompanyFromTemplate(
     packageExpiresAt.getTime() + params.graceDays * 24 * 60 * 60 * 1000,
   );
   const adminPasswordHash = await bcrypt.hash(params.adminPassword.trim(), 12);
+  const normalizedAdminEmail = normalizeOptionalEmail(params.adminEmail);
 
   return prisma.$transaction(async (tx) => {
     const companyIdInput = params.companyId?.trim() ?? '';
@@ -264,6 +298,7 @@ export async function provisionCompanyFromTemplate(
             address: cleanOptional(params.address),
             email: cleanOptional(params.email),
             name: companyNameInput,
+            licenseKey: generateLicenseKey(),
             packageExpiresAt,
             packageGraceDays: params.graceDays,
             packageGraceEndsAt,
@@ -329,12 +364,29 @@ export async function provisionCompanyFromTemplate(
       },
     });
 
+    if (normalizedAdminEmail) {
+      const existingEmailOwner = await tx.user.findFirst({
+        where: {
+          deletedAt: null,
+          email: normalizedAdminEmail,
+        },
+      });
+      if (existingEmailOwner && existingEmailOwner.id !== existingAdmin?.id) {
+        throw new ProvisioningInputError(
+          'Admin email baska bir kullanici tarafindan kullaniliyor',
+          409,
+          'ADMIN_EMAIL_ALREADY_IN_USE',
+        );
+      }
+    }
+
     if (existingAdmin) {
       await tx.user.update({
         where: { id: existingAdmin.id },
         data: {
           branchId: branch.id,
           deletedAt: null,
+          email: normalizedAdminEmail ?? existingAdmin.email ?? null,
           fullName: params.adminFullName.trim(),
           isActive: true,
           passwordHash: adminPasswordHash,
@@ -347,6 +399,7 @@ export async function provisionCompanyFromTemplate(
         data: {
           branchId: branch.id,
           companyId: company.id,
+          email: normalizedAdminEmail,
           fullName: params.adminFullName.trim(),
           passwordHash: adminPasswordHash,
           role: 'ADMIN',
@@ -373,6 +426,7 @@ export async function provisionCompanyFromTemplate(
       company: {
         id: company.id,
         name: company.name,
+        licenseKey: company.licenseKey,
       },
       register: {
         id: register.id,

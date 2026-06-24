@@ -1,0 +1,51 @@
+name: Repo Hygiene
+
+on:
+  pull_request:
+    paths:
+      - 'packages/**'
+      - 'prisma/**'
+      - '.gitignore'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/repo-hygiene.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'packages/**'
+      - 'prisma/**'
+      - '.gitignore'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/repo-hygiene.yml'
+
+jobs:
+  hygiene:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Generated Artifact Guard
+        run: npm run repo:hygiene
+
+      - name: Prisma Validate
+        run: npm run prisma:validate
+
+      - name: Prisma Migration Guard
+        run: npm run prisma:migration:check

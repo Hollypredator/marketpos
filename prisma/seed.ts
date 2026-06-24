@@ -1,7 +1,11 @@
-﻿import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
+
+function toMinor(value: number): bigint {
+  return BigInt(Math.round(value * 100));
+}
 
 async function main() {
   const now = new Date();
@@ -14,9 +18,11 @@ async function main() {
   // Demo firma
   const company = await prisma.company.create({
     data: {
-      name: 'Demo Market A.Å.',
+      name: 'Demo Market A.Åž.',
       taxNumber: '1234567890',
       address: 'Ä°stanbul, TÃ¼rkiye',
+      licenseKey: 'MP-DEMO-YEAR-2026-KEYS',
+      licenseKeyActivatedAt: now,
       packageStartedAt: now,
       packageExpiresAt,
       packageGraceEndsAt,
@@ -25,7 +31,7 @@ async function main() {
   });
   console.log('âœ… Firma oluÅŸturuldu:', company.name);
 
-  // Åube
+  // Åžube
   const branch = await prisma.branch.create({
     data: { companyId: company.id, name: 'Merkez Åube', address: 'KadÄ±kÃ¶y, Ä°stanbul' },
   });
@@ -40,9 +46,16 @@ async function main() {
   // Admin kullanÄ±cÄ±
   const adminHash = await bcrypt.hash('admin123', 12);
   const admin = await prisma.user.create({
-    data: { companyId: company.id, branchId: branch.id, username: 'admin', passwordHash: adminHash, fullName: 'Sistem YÃ¶neticisi', role: 'ADMIN' },
+    data: { companyId: company.id, branchId: branch.id, username: 'admin', email: 'admin@marketpos.com', passwordHash: adminHash, fullName: 'Sistem YÃ¶neticisi', role: 'ADMIN' },
   });
   console.log('âœ… Admin oluÅŸturuldu:', admin.username);
+
+  // Super Admin kullanÄ±cÄ± (Platform Owner)
+  const superAdminHash = await bcrypt.hash('admin123', 12);
+  const superAdmin = await prisma.user.create({
+    data: { companyId: company.id, branchId: branch.id, username: 'superadmin', email: 'superadmin@marketpos.com', passwordHash: superAdminHash, fullName: 'Platform Sahibi', role: 'SUPER_ADMIN' },
+  });
+  console.log('âœ… Super Admin oluÅŸturuldu:', superAdmin.username);
 
   // Kasiyer
   const cashierHash = await bcrypt.hash('1234', 12);
@@ -86,7 +99,13 @@ async function main() {
 
   for (const p of products) {
     await prisma.product.create({
-      data: { companyId: company.id, ...p, minStock: 10 },
+      data: {
+        companyId: company.id,
+        ...p,
+        minStock: 10,
+        purchasePriceMinor: toMinor(p.purchasePrice),
+        salePriceMinor: toMinor(p.salePrice),
+      },
     });
   }
   console.log(`âœ… ${products.length} Ã¼rÃ¼n oluÅŸturuldu`);
@@ -102,11 +121,11 @@ async function main() {
   }
   console.log('âœ… BaÅŸlangÄ±Ã§ stoklarÄ± oluÅŸturuldu');
 
-  console.log('\nğŸ‰ Seed tamamlandÄ±!');
+  console.log('\nğŸŽ‰ Seed tamamlandÄ±!');
   console.log('ğŸ“‹ GiriÅŸ bilgileri:');
-  console.log('   Admin   â†’ kullanÄ±cÄ±: admin, ÅŸifre: admin123');
-  console.log('   Kasiyer â†’ kullanÄ±cÄ±: kasiyer1, ÅŸifre: 1234, PIN: 1234');
+  console.log('   Super Admin â†’ kullanÄ±cÄ±: superadmin, e-posta: superadmin@marketpos.com, ÅŸifre: admin123');
+  console.log('   Admin       â†’ kullanÄ±cÄ±: admin, e-posta: admin@marketpos.com, ÅŸifre: admin123');
+  console.log('   Kasiyer     â†’ kullanÄ±cÄ±: kasiyer1, ÅŸifre: 1234, PIN: 1234');
 }
 
 main().catch(console.error).finally(() => prisma.$disconnect());
-

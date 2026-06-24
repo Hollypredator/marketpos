@@ -2,17 +2,21 @@
   "name": "@marketpos/api-server",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "main": "./dist/server.js",
   "scripts": {
     "build": "tsc",
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "npm run typecheck",
     "test": "npm run build && node --import ./tests/register-loader.mjs tests/run-tests.mjs",
     "clean": "rimraf dist",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "tsx ../../prisma/seed.ts",
     "db:provision": "tsx ../../prisma/provision-company.ts",
+    "db:backfill:money-minor": "tsx src/scripts/backfill-money-minor.ts",
     "db:studio": "prisma studio"
   },
   "dependencies": {
@@ -20,8 +24,12 @@
     "@fastify/jwt": "^9.0.0",
     "@marketpos/shared": "*",
     "@prisma/client": "^6.4.0",
+    "@types/cheerio": "^0.22.35",
+    "axios": "^1.15.0",
     "bcrypt": "^5.1.1",
+    "cheerio": "^1.2.0",
     "fastify": "^5.2.0",
+    "pg": "^8.20.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {

@@ -83,3 +83,30 @@ export function isCompanyInScope(
   return request.user.role === 'SUPER_ADMIN' || request.user.companyId === targetCompanyId;
 }
 
+export function resolveScopedBranchId(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  requestedBranchId?: string | null,
+): string | null {
+  const normalizedRequestedBranchId = trimOptional(requestedBranchId);
+
+  // Super admin can see any branch
+  if (request.user.role === 'SUPER_ADMIN') {
+    return normalizedRequestedBranchId ?? null;
+  }
+
+  // Branch manager/Cashier can only see their own branch
+  const ownBranchId = request.user.branchId;
+  if (!ownBranchId) {
+    // If user has no branchId (e.g. company admin), they might be allowed to see any branch 
+    // within their company. The resolveScopedCompanyId handles company isolation.
+    return normalizedRequestedBranchId ?? null;
+  }
+
+  if (normalizedRequestedBranchId && normalizedRequestedBranchId !== ownBranchId) {
+    sendForbidden(reply, 'Sadece kendi sube verisine erisebilirsiniz');
+    return null;
+  }
+
+  return ownBranchId;
+}

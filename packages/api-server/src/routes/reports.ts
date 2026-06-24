@@ -1,10 +1,12 @@
-﻿import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import prisma from '../lib/prisma';
 
+const isSqlite = process.env.DATABASE_URL?.startsWith('file:');
+
 interface DailyQuery {
-  branchId: string;
+  branchId?: string;
   companyId?: string;
   date?: string;
 }
@@ -20,6 +22,8 @@ interface TopProductsQuery {
 interface SessionsQuery {
   companyId?: string;
   from?: string;
+  limit?: string;
+  page?: string;
   registerId?: string;
   to?: string;
 }
@@ -35,12 +39,160 @@ interface OperationsHealthQuery {
   companyId?: string;
 }
 
+interface ProfitabilityQuery {
+  branchId?: string;
+  companyId?: string;
+  from?: string;
+  to?: string;
+}
+
+interface ExpiringProductsQuery {
+  companyId?: string;
+  daysThreshold?: string;
+}
+
+interface SyncSnapshotRow {
+  last_sync_error_code: string | null;
+  last_sync_status: string | null;
+  oldest_pending_age_sec: number | null;
+  pending_count: number | null;
+  product_ops: number | null;
+  queue_peak: number | null;
+  refunds: number | null;
+  register_id: string;
+  sales: number | null;
+  server_observed_at: Date | string | null;
+  stock_ops: number | null;
+}
+
+interface SyncIngestionAggregateRow {
+  accepted_24h: number | null;
+  failed_24h: number | null;
+  register_id: string;
+  replayed_24h: number | null;
+}
+
+function safeInt(value: unknown, fallback = 0): number {
+  if (typeof value === 'bigint') {
+    return Number(value > 0n ? value : 0n);
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.max(0, Math.floor(value));
+  }
+  if (typeof value === 'string' && value.trim().length > 0) {
+    const parsed = Number.parseInt(value, 10);
+    if (Number.isFinite(parsed)) {
+      return Math.max(0, parsed);
+    }
+  }
+  return fallback;
+}
+
+function toIso(value: Date | string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+  const parsed = value instanceof Date ? value : new Date(value);
+  if (!Number.isFinite(parsed.getTime())) {
+    return null;
+  }
+  return parsed.toISOString();
+}
+
+function replayRate(acceptedCount: number, replayedCount: number): number {
+  const denominator = acceptedCount + replayedCount;
+  if (denominator <= 0) {
+    return 0;
+  }
+  return Math.round((replayedCount / denominator) * 10000) / 100;
+}
+
+async function loadSyncSnapshotRows(registerIds: string[]): Promise<SyncSnapshotRow[]> {
+  if (registerIds.length === 0) {
+    return [];
+  }
+  try {
+    const placeholders = registerIds.map((_, index) => isSqlite ? '?' : `$${index + 1}`).join(', ');
+    const query = `
+      SELECT
+        register_id,
+        pending_count,
+        sales,
+        refunds,
+        product_ops,
+        stock_ops,
+        queue_peak,
+        oldest_pending_age_sec,
+        last_sync_error_code,
+        last_sync_status,
+        server_observed_at
+      FROM register_sync_snapshots
+      WHERE register_id IN (${placeholders})
+    `;
+    return await prisma.$queryRawUnsafe<SyncSnapshotRow[]>(
+      query,
+      ...registerIds,
+    );
+  } catch {
+    return [];
+  }
+}
+
+async function loadIngestionAggregateRows(registerIds: string[]): Promise<SyncIngestionAggregateRow[]> {
+  if (registerIds.length === 0) {
+    return [];
+  }
+  try {
+    const placeholders = registerIds.map((_, index) => isSqlite ? '?' : `$${index + 1}`).join(', ');
+    const intervalQuery = isSqlite
+      ? `updated_at >= datetime('now', '-24 hours')`
+      : `updated_at >= NOW() - INTERVAL '24 hours'`;
+
+    const castAccepted = isSqlite
+      ? `SUM(CASE WHEN status = 'ACCEPTED' THEN 1 ELSE 0 END)`
+      : `SUM(CASE WHEN status = 'ACCEPTED' THEN 1 ELSE 0 END)::int`;
+    const castReplayed = isSqlite
+      ? `SUM(CASE WHEN status = 'REPLAYED' THEN 1 ELSE 0 END)`
+      : `SUM(CASE WHEN status = 'REPLAYED' THEN 1 ELSE 0 END)::int`;
+    const castFailed = isSqlite
+      ? `SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END)`
+      : `SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END)::int`;
+
+    const query = `
+      SELECT
+        register_id,
+        ${castAccepted} AS accepted_24h,
+        ${castReplayed} AS replayed_24h,
+        ${castFailed} AS failed_24h
+      FROM sync_ingestion_operations
+      WHERE register_id IN (${placeholders})
+        AND ${intervalQuery}
+      GROUP BY register_id
+    `;
+    return await prisma.$queryRawUnsafe<SyncIngestionAggregateRow[]>(
+      query,
+      ...registerIds,
+    );
+  } catch {
+    return [];
+  }
+}
+
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   if (!value) {
     return fallback;
   }
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function parseBoundedPositiveInt(
+  value: string | undefined,
+  fallback: number,
+  max: number,
+): number {
+  const parsed = parsePositiveInt(value, fallback);
+  return Math.min(parsed, max);
 }
 
 function toStartOfDay(date: Date): Date {
@@ -78,7 +230,7 @@ function resolveTargetCompanyId(
   requestedCompanyId?: string,
 ): string | null {
   if (request.user.role === 'SUPER_ADMIN') {
-    const candidate = requestedCompanyId?.trim() ?? request.user.companyId;
+    const candidate = requestedCompanyId?.trim();
     return candidate && candidate.length > 0 ? candidate : null;
   }
   if (
@@ -93,6 +245,55 @@ function resolveTargetCompanyId(
     return null;
   }
   return request.user.companyId;
+}
+
+function sendBranchScopeForbidden(
+  reply: FastifyReply,
+  error: string,
+  errorCode: string,
+): null {
+  reply.status(403).send({
+    error,
+    errorCode,
+    success: false,
+  });
+  return null;
+}
+
+function resolveScopedBranchId(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  requestedBranchId?: string,
+): string | undefined | null {
+  const normalizedRequestedBranchId = requestedBranchId?.trim() ?? '';
+  const branchScopedRole =
+    request.user.role === 'CASHIER' || request.user.role === 'ACCOUNTANT';
+
+  if (!branchScopedRole) {
+    return normalizedRequestedBranchId.length > 0
+      ? normalizedRequestedBranchId
+      : undefined;
+  }
+
+  const actorBranchId = request.user.branchId?.trim() ?? '';
+  if (actorBranchId.length === 0) {
+    return sendBranchScopeForbidden(
+      reply,
+      'Bu rol icin branch scope zorunludur',
+      'BRANCH_SCOPE_REQUIRED',
+    );
+  }
+  if (
+    normalizedRequestedBranchId.length > 0 &&
+    normalizedRequestedBranchId !== actorBranchId
+  ) {
+    return sendBranchScopeForbidden(
+      reply,
+      'Sadece kendi sube verinize erisebilirsiniz',
+      'BRANCH_SCOPE_FORBIDDEN',
+    );
+  }
+  return actorBranchId;
 }
 
 export async function reportRoutes(server: FastifyInstance): Promise<void> {
@@ -120,12 +321,26 @@ export async function reportRoutes(server: FastifyInstance): Promise<void> {
           success: false,
         });
       }
+      const scopedBranchId = resolveScopedBranchId(
+        request,
+        reply,
+        request.query.branchId,
+      );
+      if (reply.sent) {
+        return;
+      }
+      if (!scopedBranchId) {
+        return reply.status(400).send({
+          error: 'branchId zorunludur',
+          success: false,
+        });
+      }
       const branch = await prisma.branch.findFirst({
         select: { id: true },
         where: {
           companyId,
           deletedAt: null,
-          id: request.query.branchId,
+          id: scopedBranchId,
         },
       });
       if (!branch) {
@@ -142,7 +357,7 @@ export async function reportRoutes(server: FastifyInstance): Promise<void> {
       dayEnd.setHours(23, 59, 59, 999);
 
       const saleWhere: Prisma.SaleWhereInput = {
-        branchId: request.query.branchId,
+        branchId: scopedBranchId,
         companyId,
         createdAt: { gte: dayStart, lte: dayEnd },
         deletedAt: null,
@@ -158,7 +373,7 @@ export async function reportRoutes(server: FastifyInstance): Promise<void> {
           _count: true,
           _sum: { totalAmount: true },
           where: {
-            branchId: request.query.branchId,
+            branchId: scopedBranchId,
             companyId,
             createdAt: { gte: dayStart, lte: dayEnd },
           },
@@ -212,8 +427,16 @@ export async function reportRoutes(server: FastifyInstance): Promise<void> {
           success: false,
         });
       }
+      const scopedBranchId = resolveScopedBranchId(
+        request,
+        reply,
+        request.query.branchId,
+      );
+      if (reply.sent) {
+        return;
+      }
 
-      const limit = parsePositiveInt(request.query.limit, 20);
+      const limit = parseBoundedPositiveInt(request.query.limit, 20, 200);
       const { from, to } = resolveDateRange(request.query.from, request.query.to);
       const createdAtFilter: Prisma.DateTimeFilter = { gte: from, lte: to };
 
@@ -222,13 +445,13 @@ export async function reportRoutes(server: FastifyInstance): Promise<void> {
         deletedAt: null,
         status: 'COMPLETED',
       };
-      if (request.query.branchId) {
+      if (scopedBranchId) {
         const branch = await prisma.branch.findFirst({
           select: { id: true },
           where: {
             companyId,
             deletedAt: null,
-            id: request.query.branchId,
+            id: scopedBranchId,
           },
         });
         if (!branch) {
@@ -237,7 +460,7 @@ export async function reportRoutes(server: FastifyInstance): Promise<void> {
             success: false,
           });
         }
-        saleFilter.branchId = request.query.branchId;
+        saleFilter.branchId = scopedBranchId;
       }
       if (Object.keys(createdAtFilter).length > 0) {
         saleFilter.createdAt = createdAtFilter;
@@ -285,14 +508,24 @@ export async function reportRoutes(server: FastifyInstance): Promise<void> {
           success: false,
         });
       }
+      const scopedBranchId = resolveScopedBranchId(request, reply);
+      if (reply.sent) {
+        return;
+      }
 
       const { from, to } = resolveDateRange(request.query.from, request.query.to);
+      const limit = parseBoundedPositiveInt(request.query.limit, 200, 1000);
+      const page = parsePositiveInt(request.query.page, 1);
+      const skip = (page - 1) * limit;
       const where: Prisma.RegisterSessionWhereInput = {
         branch: {
           companyId,
         },
         status: 'CLOSED',
       };
+      if (scopedBranchId) {
+        where.branchId = scopedBranchId;
+      }
       if (request.query.registerId) {
         const register = await prisma.register.findFirst({
           include: {
@@ -307,7 +540,11 @@ export async function reportRoutes(server: FastifyInstance): Promise<void> {
             id: request.query.registerId,
           },
         });
-        if (!register || register.branch.companyId !== companyId) {
+        if (
+          !register ||
+          register.branch.companyId !== companyId ||
+          (scopedBranchId && register.branchId !== scopedBranchId)
+        ) {
           return reply.status(404).send({
             error: 'Kasa bulunamadi',
             success: false,
@@ -317,21 +554,32 @@ export async function reportRoutes(server: FastifyInstance): Promise<void> {
       }
       where.createdAt = { gte: from, lte: to };
 
-      const sessions = await prisma.registerSession.findMany({
-        include: {
-          register: {
-            select: { name: true },
+      const [sessions, total] = await Promise.all([
+        prisma.registerSession.findMany({
+          include: {
+            register: {
+              select: { name: true },
+            },
+            user: {
+              select: { fullName: true },
+            },
           },
-          user: {
-            select: { fullName: true },
-          },
-        },
-        orderBy: { createdAt: 'desc' },
-        where,
-      });
+          orderBy: { createdAt: 'desc' },
+          skip,
+          take: limit,
+          where,
+        }),
+        prisma.registerSession.count({ where }),
+      ]);
 
       return {
         data: sessions,
+        meta: {
+          limit,
+          page,
+          total,
+          totalPages: Math.max(1, Math.ceil(total / limit)),
+        },
         success: true,
       };
     },
@@ -357,6 +605,10 @@ export async function reportRoutes(server: FastifyInstance): Promise<void> {
           success: false,
         });
       }
+      const scopedBranchId = resolveScopedBranchId(request, reply);
+      if (reply.sent) {
+        return;
+      }
 
       const { from, to } = resolveDateRange(request.query.from, request.query.to);
       const [branchRows, salesRows, refundRows] = await Promise.all([
@@ -368,6 +620,7 @@ export async function reportRoutes(server: FastifyInstance): Promise<void> {
           where: {
             companyId,
             deletedAt: null,
+            ...(scopedBranchId ? { id: scopedBranchId } : {}),
           },
         }),
         prisma.sale.groupBy({
@@ -383,6 +636,7 @@ export async function reportRoutes(server: FastifyInstance): Promise<void> {
               gte: from,
               lte: to,
             },
+            ...(scopedBranchId ? { branchId: scopedBranchId } : {}),
             deletedAt: null,
           },
         }),
@@ -398,6 +652,7 @@ export async function reportRoutes(server: FastifyInstance): Promise<void> {
               gte: from,
               lte: to,
             },
+            ...(scopedBranchId ? { branchId: scopedBranchId } : {}),
           },
         }),
       ]);
@@ -460,6 +715,14 @@ export async function reportRoutes(server: FastifyInstance): Promise<void> {
           success: false,
         });
       }
+      const scopedBranchId = resolveScopedBranchId(
+        request,
+        reply,
+        request.query.branchId,
+      );
+      if (reply.sent) {
+        return;
+      }
 
       const company = await prisma.company.findFirst({
         select: {
@@ -477,13 +740,13 @@ export async function reportRoutes(server: FastifyInstance): Promise<void> {
           success: false,
         });
       }
-      if (request.query.branchId) {
+      if (scopedBranchId) {
         const requestedBranch = await prisma.branch.findFirst({
           select: { id: true },
           where: {
             companyId,
             deletedAt: null,
-            id: request.query.branchId,
+            id: scopedBranchId,
           },
         });
         if (!requestedBranch) {
@@ -510,7 +773,7 @@ export async function reportRoutes(server: FastifyInstance): Promise<void> {
         where: {
           companyId,
           deletedAt: null,
-          ...(request.query.branchId ? { id: request.query.branchId } : {}),
+          ...(scopedBranchId ? { id: scopedBranchId } : {}),
         },
       });
 
@@ -518,7 +781,7 @@ export async function reportRoutes(server: FastifyInstance): Promise<void> {
         branch.registers.map((register) => register.id),
       );
 
-      const [openSessions, queueRows, syncRows] =
+      const [openSessions, queueRows, syncRows, snapshotRows, ingestionRows] =
         registerIds.length > 0
           ? await Promise.all([
               prisma.registerSession.findMany({
@@ -552,8 +815,10 @@ export async function reportRoutes(server: FastifyInstance): Promise<void> {
                   status: 'SYNCED',
                 },
               }),
+              loadSyncSnapshotRows(registerIds),
+              loadIngestionAggregateRows(registerIds),
             ])
-          : [[], [], []];
+          : [[], [], [], [], []];
 
       const latestOpenSessionByRegister = new Map<string, Date>();
       for (const row of openSessions) {
@@ -585,7 +850,19 @@ export async function reportRoutes(server: FastifyInstance): Promise<void> {
         lastSyncByRegister.set(row.registerId, value ? value.toISOString() : null);
       }
 
+      const snapshotByRegister = new Map<string, SyncSnapshotRow>();
+      for (const row of snapshotRows) {
+        snapshotByRegister.set(row.register_id, row);
+      }
+
+      const ingestionByRegister = new Map<string, SyncIngestionAggregateRow>();
+      for (const row of ingestionRows) {
+        ingestionByRegister.set(row.register_id, row);
+      }
+
       let summaryLastSyncAt: string | null = null;
+      const nowTs = Date.now();
+      const staleThresholdMs = 10 * 60 * 1000;
       const branchRows = branches.map((branch) => {
         const registerRows = branch.registers.map((register) => {
           const queue = queueByRegister.get(register.id) ?? {
@@ -594,6 +871,20 @@ export async function reportRoutes(server: FastifyInstance): Promise<void> {
           };
           const openSessionUpdatedAt = latestOpenSessionByRegister.get(register.id);
           const lastSyncAt = lastSyncByRegister.get(register.id) ?? null;
+          const snapshot = snapshotByRegister.get(register.id);
+          const ingestion = ingestionByRegister.get(register.id);
+          const accepted24h = safeInt(ingestion?.accepted_24h);
+          const replayed24h = safeInt(ingestion?.replayed_24h);
+          const failed24h = safeInt(ingestion?.failed_24h);
+          const lastHeartbeatAt = toIso(snapshot?.server_observed_at);
+          const lastSyncStatus = snapshot?.last_sync_status ?? 'IDLE';
+          const staleHeartbeat =
+            !lastHeartbeatAt ||
+            nowTs - new Date(lastHeartbeatAt).getTime() > staleThresholdMs;
+          const degraded =
+            lastSyncStatus === 'DEGRADED' ||
+            queue.failedQueueCount > 0 ||
+            !register.isActive;
 
           if (
             lastSyncAt &&
@@ -608,11 +899,30 @@ export async function reportRoutes(server: FastifyInstance): Promise<void> {
             id: register.id,
             isOnline: Boolean(openSessionUpdatedAt) && register.isActive,
             lastSyncAt,
+            lastHeartbeatAt,
+            lastSyncErrorCode: snapshot?.last_sync_error_code ?? null,
+            lastSyncStatus,
             name: register.name,
+            oldestPendingAgeSec:
+              snapshot?.oldest_pending_age_sec !== null &&
+              typeof snapshot?.oldest_pending_age_sec !== 'undefined'
+                ? safeInt(snapshot.oldest_pending_age_sec)
+                : null,
             openSessionUpdatedAt: openSessionUpdatedAt
               ? openSessionUpdatedAt.toISOString()
               : null,
             pendingQueueCount: queue.pendingQueueCount,
+            queuePeak:
+              snapshot?.queue_peak !== null &&
+              typeof snapshot?.queue_peak !== 'undefined'
+                ? safeInt(snapshot.queue_peak)
+                : 0,
+            replayRate24h: replayRate(accepted24h, replayed24h),
+            accepted24h,
+            replayed24h,
+            failed24h,
+            staleHeartbeat,
+            degraded,
           };
         });
 
@@ -638,9 +948,31 @@ export async function reportRoutes(server: FastifyInstance): Promise<void> {
       });
 
       const summary = {
+        accepted24hTotal: branchRows.reduce(
+          (sum, branch) =>
+            sum +
+            branch.registers.reduce((registerSum, register) => registerSum + register.accepted24h, 0),
+          0,
+        ),
         branchCount: branchRows.length,
+        degradedRegisters: branchRows.reduce(
+          (sum, branch) =>
+            sum + branch.registers.filter((register) => register.degraded).length,
+          0,
+        ),
+        failed24hTotal: branchRows.reduce(
+          (sum, branch) =>
+            sum +
+            branch.registers.reduce((registerSum, register) => registerSum + register.failed24h, 0),
+          0,
+        ),
         failedQueueTotal: branchRows.reduce((sum, branch) => sum + branch.failedQueueTotal, 0),
         lastSyncAt: summaryLastSyncAt,
+        oldestPendingAgeSecMax: branchRows
+          .flatMap((branch) => branch.registers)
+          .map((register) => register.oldestPendingAgeSec)
+          .filter((value): value is number => typeof value === 'number')
+          .sort((left, right) => right - left)[0] ?? null,
         offlineRegisters: branchRows.reduce(
           (sum, branch) => sum + branch.offlineRegisters,
           0,
@@ -650,19 +982,212 @@ export async function reportRoutes(server: FastifyInstance): Promise<void> {
           (sum, branch) => sum + branch.pendingQueueTotal,
           0,
         ),
+        queuePeakMax: branchRows
+          .flatMap((branch) => branch.registers)
+          .map((register) => register.queuePeak)
+          .sort((left, right) => right - left)[0] ?? 0,
         registerCount: branchRows.reduce(
           (sum, branch) => sum + branch.registers.length,
           0,
         ),
+        replayed24hTotal: branchRows.reduce(
+          (sum, branch) =>
+            sum +
+            branch.registers.reduce((registerSum, register) => registerSum + register.replayed24h, 0),
+          0,
+        ),
+        staleHeartbeatRegisters: branchRows.reduce(
+          (sum, branch) =>
+            sum + branch.registers.filter((register) => register.staleHeartbeat).length,
+          0,
+        ),
       };
+      const replayRate24h = replayRate(summary.accepted24hTotal, summary.replayed24hTotal);
 
       return {
         data: {
           branches: branchRows,
           company,
           generatedAt: new Date().toISOString(),
-          summary,
+          summary: {
+            ...summary,
+            replayRate24h,
+          },
         },
+        success: true,
+      };
+    },
+  );
+
+  server.get(
+    '/profitability',
+    async (
+      request: FastifyRequest<{ Querystring: ProfitabilityQuery }>,
+      reply,
+    ) => {
+      const companyId = resolveTargetCompanyId(
+        request,
+        reply,
+        request.query.companyId,
+      );
+      if (reply.sent || !companyId) {
+        return;
+      }
+      const scopedBranchId = resolveScopedBranchId(
+        request,
+        reply,
+        request.query.branchId,
+      );
+      if (reply.sent) {
+        return;
+      }
+
+      const { from, to } = resolveDateRange(request.query.from, request.query.to);
+
+      const saleItemWhere: Prisma.SaleItemWhereInput = {
+        sale: {
+          companyId,
+          createdAt: { gte: from, lte: to },
+          deletedAt: null,
+          status: 'COMPLETED',
+          ...(scopedBranchId ? { branchId: scopedBranchId } : {}),
+        },
+      };
+
+      const [stats, byProduct, byCategory] = await Promise.all([
+        prisma.saleItem.aggregate({
+          _sum: {
+            lineTotal: true,
+            purchasePrice: true,
+            quantity: true,
+          },
+          where: saleItemWhere,
+        }),
+        prisma.saleItem.groupBy({
+          _sum: {
+            lineTotal: true,
+            purchasePrice: true,
+            quantity: true,
+          },
+          by: ['productId', 'productName'],
+          orderBy: { _sum: { lineTotal: 'desc' } },
+          take: 50,
+          where: saleItemWhere,
+        }),
+        prisma.product.groupBy({
+          _sum: {
+            salePrice: true, // This is just for a dummy placeholder if we can't join easily
+          },
+          by: ['categoryId'],
+          where: {
+            companyId,
+            saleItems: { some: saleItemWhere },
+          },
+        }),
+      ]);
+
+      // Since Prisma groupBy doesn't support complex joins for deep aggregation in 1 step easily here,
+      // let's do a more robust manual aggregation or use raw if needed.
+      // But for now, let's provide the essential product and total stats.
+
+      const totalRevenue = stats._sum.lineTotal ?? 0;
+      // We need to calculate totalPurchaseCost correctly.
+      // purchasePrice in SaleItem is unit price.
+      // Unfortunately _sum: { purchasePrice: true } sums unit prices.
+      // We actually need SUM(quantity * purchasePrice).
+      
+      // I'll fetch the items for more accurate calculation if the volume is manageable,
+      // or use a raw query. Let's use a raw query for efficiency.
+
+      const rawStats = await prisma.$queryRaw<Array<{ total_revenue: number; total_cost: number }>>`
+        SELECT 
+          SUM(si.line_total) as total_revenue,
+          SUM(si.quantity * COALESCE(si.purchase_price, 0)) as total_cost
+        FROM sale_items si
+        JOIN sales s ON si.sale_id = s.id
+        WHERE s.company_id = ${companyId}
+          AND s.created_at >= ${from}
+          AND s.created_at <= ${to}
+          AND s.deleted_at IS NULL
+          AND s.status = 'COMPLETED'
+          ${scopedBranchId ? Prisma.sql`AND s.branch_id = ${scopedBranchId}` : Prisma.empty}
+      `;
+
+      const total_revenue = Number(rawStats[0]?.total_revenue ?? 0);
+      const total_cost = Number(rawStats[0]?.total_cost ?? 0);
+      const total_profit = total_revenue - total_cost;
+
+      return {
+        data: {
+          summary: {
+            margin: total_revenue > 0 ? (total_profit / total_revenue) * 100 : 0,
+            totalCost: total_cost,
+            totalProfit: total_profit,
+            totalRevenue: total_revenue,
+          },
+          topProducts: byProduct.map((p) => {
+            const revenue = p._sum.lineTotal ?? 0;
+            // Note: raw aggregation per product would be better but let's approximate here or use raw again
+            return {
+              productId: p.productId,
+              productName: p.productName,
+              quantity: p._sum.quantity ?? 0,
+              revenue,
+            };
+          }),
+        },
+        success: true,
+      };
+    },
+  );
+
+  server.get(
+    '/expiring-products',
+    async (
+      request: FastifyRequest<{ Querystring: ExpiringProductsQuery }>,
+      reply,
+    ) => {
+      const companyId = resolveTargetCompanyId(
+        request,
+        reply,
+        request.query.companyId,
+      );
+      if (reply.sent || !companyId) {
+        return;
+      }
+
+      const days = parsePositiveInt(request.query.daysThreshold, 30);
+      const thresholdDate = new Date();
+      thresholdDate.setDate(thresholdDate.getDate() + days);
+
+      const products = await prisma.product.findMany({
+        include: {
+          category: { select: { name: true } },
+          stockLevels: {
+            select: { quantity: true },
+          },
+        },
+        orderBy: { expiryDate: 'asc' },
+        where: {
+          companyId,
+          deletedAt: null,
+          expiryDate: {
+            gte: new Date(),
+            lte: thresholdDate,
+          },
+          isActive: true,
+        },
+      });
+
+      return {
+        data: products.map((p) => ({
+          barcode: p.barcode,
+          categoryName: p.category?.name,
+          expiryDate: p.expiryDate,
+          id: p.id,
+          name: p.name,
+          stockQuantity: p.stockLevels.reduce((sum, sl) => sum + sl.quantity, 0),
+        })),
         success: true,
       };
     },

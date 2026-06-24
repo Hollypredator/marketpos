@@ -73,6 +73,10 @@ interface ProvisionSummary {
 
 const prisma = new PrismaClient();
 
+function toMinor(value: number): bigint {
+  return BigInt(Math.round(value * 100));
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -528,9 +532,11 @@ async function provisionCompany(
         minStock,
         name: productTemplate.name,
         purchasePrice: productTemplate.purchasePrice,
+        purchasePriceMinor: toMinor(productTemplate.purchasePrice),
         quickAccessColor: productTemplate.quickAccessColor,
         quickAccessOrder: productTemplate.quickAccessOrder,
         salePrice: productTemplate.salePrice,
+        salePriceMinor: toMinor(productTemplate.salePrice),
         unitType: productTemplate.unitType,
         vatRate: productTemplate.vatRate,
       } as const;

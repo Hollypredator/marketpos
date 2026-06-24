@@ -11,6 +11,7 @@ export async function listUsersApi(companyId: string): Promise<User[]> {
 export async function createUserApi(payload: {
   branchId: string;
   companyId: string;
+  email: string;
   fullName: string;
   password: string;
   pin: string;
@@ -21,6 +22,7 @@ export async function createUserApi(payload: {
     body: {
       branchId: toOptionalString(payload.branchId),
       companyId: payload.companyId,
+      email: toOptionalString(payload.email)?.toLowerCase(),
       fullName: payload.fullName.trim(),
       password: payload.password,
       pin: toOptionalString(payload.pin),
@@ -35,6 +37,7 @@ export async function updateUserApi(
   userId: string,
   payload: {
     branchId: string;
+    email: string;
     fullName: string;
     isActive: boolean;
     password: string;
@@ -45,6 +48,7 @@ export async function updateUserApi(
 ): Promise<User> {
   const nextPayload: {
     branchId: string | null;
+    email?: string | null;
     fullName: string;
     isActive: boolean;
     password?: string;
@@ -59,6 +63,11 @@ export async function updateUserApi(
     role: payload.role,
     username: payload.username.trim(),
   };
+  if (payload.email.trim().length > 0) {
+    nextPayload.email = payload.email.trim().toLowerCase();
+  } else {
+    nextPayload.email = null;
+  }
   const nextPassword = payload.password.trim();
   if (nextPassword.length > 0) {
     nextPayload.password = nextPassword;

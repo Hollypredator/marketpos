@@ -125,6 +125,7 @@ export async function provisionCompanyApi(
   return requestData<ProvisionCompanyResult>('/api/subscription/admin/provision', {
     body: {
       address: toOptionalString(params.address),
+      adminEmail: toOptionalString(params.adminEmail)?.toLowerCase(),
       adminFullName: params.adminFullName.trim(),
       adminPassword: params.adminPassword,
       adminUsername: params.adminUsername.trim(),
@@ -142,4 +143,12 @@ export async function provisionCompanyApi(
     },
     method: 'POST',
   });
+}
+
+export async function generateLicenseKeyApi(companyId: string): Promise<string> {
+  const result = await requestData<{ licenseKey: string }>(
+    `/api/subscription/admin/companies/${companyId}/generate-license`,
+    { method: 'POST' }
+  );
+  return result.licenseKey;
 }

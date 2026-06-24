@@ -2,8 +2,10 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { createCompanySchema, paginationSchema, updateCompanySchema } from '@marketpos/shared';
 
 import prisma from '../lib/prisma';
+import { DefaultCatalogService } from '../lib/catalog/defaultCatalogService';
 import { resolveScopedCompanyId } from '../lib/request-scope';
 import { findRestrictedSubscriptionFields } from '../lib/subscription-admin-helpers';
+import { generateLicenseKey } from '../lib/license-utils';
 
 interface IdParams {
   id: string;
@@ -107,7 +109,16 @@ export async function companyRoutes(server: FastifyInstance): Promise<void> {
     }
 
     const company = await prisma.company.create({
-      data: parsed.data,
+      data: {
+        ...parsed.data,
+        licenseKey: generateLicenseKey(),
+      },
+    });
+
+    // Automatically seed default catalog for the new company in the background
+    // We don't await it to avoid delaying the response, but we trigger it now
+    void DefaultCatalogService.seedForCompany(company.id).catch((err) => {
+      console.error(`Failed to automatically seed company ${company.id}:`, err);
     });
 
     return reply.status(201).send({

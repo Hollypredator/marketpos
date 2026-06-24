@@ -34,6 +34,7 @@ export interface ProvisionTemplateSummary {
 
 export interface SubscriptionProvisionForm {
   address: string;
+  adminEmail: string;
   adminFullName: string;
   adminPassword: string;
   adminUsername: string;
@@ -52,7 +53,7 @@ export interface SubscriptionProvisionForm {
 
 export interface ProvisionCompanyResult {
   branch: { id: string; name: string };
-  company: { id: string; name: string };
+  company: { id: string; name: string; licenseKey?: string | null };
   register: { id: string; name: string };
   stats: {
     categoriesCreatedOrUpdated: number;

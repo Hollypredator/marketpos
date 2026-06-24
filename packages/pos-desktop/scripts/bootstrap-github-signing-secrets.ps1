@@ -1,5 +1,3 @@
-$ErrorActionPreference = 'Stop'
-
 param(
   [Parameter(Mandatory = $false)]
   [string]$Repo,
@@ -10,6 +8,8 @@ param(
   [string]$CertificateName = 'MarketPOS Team',
   [string]$TeamName = 'MarketPOS Team'
 )
+
+$ErrorActionPreference = 'Stop'
 
 function Assert-GhCli {
   if (-not (Get-GhCommand)) {
@@ -50,14 +50,36 @@ function Assert-GhAuth {
   }
 }
 
+function Resolve-Repo {
+  param([string]$ProvidedRepo)
+
+  if (-not [string]::IsNullOrWhiteSpace($ProvidedRepo)) {
+    return $ProvidedRepo
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_REPOSITORY)) {
+    return $env:GITHUB_REPOSITORY
+  }
+
+  $remoteUrl = git config --get remote.origin.url 2>$null
+  if ([string]::IsNullOrWhiteSpace($remoteUrl)) {
+    return $null
+  }
+
+  $normalized = $remoteUrl.Trim()
+  if ($normalized -match 'github\.com[:/](?<repo>[^/]+/[^/]+?)(\.git)?$') {
+    return $Matches['repo']
+  }
+
+  return $null
+}
+
 Assert-GhCli
 Assert-GhAuth
 
+$Repo = Resolve-Repo -ProvidedRepo $Repo
 if ([string]::IsNullOrWhiteSpace($Repo)) {
-  $Repo = $env:GITHUB_REPOSITORY
-}
-if ([string]::IsNullOrWhiteSpace($Repo)) {
-  throw 'Repo parametresi zorunlu. Ornek: -Repo "OWNER/REPO"'
+  throw 'Repo parametresi zorunlu. Ornek: -Repo "OWNER/REPO" veya git remote origin tanimlayin.'
 }
 
 $resolvedPath = (Resolve-Path $CertificatePath).Path

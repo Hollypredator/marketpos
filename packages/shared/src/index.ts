@@ -23,8 +23,14 @@ export type {
   Register,
   User,
   UserPublic,
+  Customer,
+  CustomerTransaction,
+  InvoiceTemplateConfig,
+  LedgerSummary,
   Category,
   Product,
+  Campaign,
+  CampaignType,
   StockLevel,
   StockMovement,
   Sale,
@@ -43,9 +49,22 @@ export type {
   CreatePaymentRequest,
   CreateRefundRequest,
   CreateRefundItemRequest,
+  SyncPushEntity,
+  SyncPushCustomerOpEntry,
+  SyncPushEntityResult,
+  SyncHeartbeatPayload,
+  SyncHeartbeatResponsePayload,
+  SyncPushProductOpEntry,
+  SyncPushPurchaseOpEntry,
   SyncPushPayload,
+  SyncPushResponsePayload,
+  SyncPushResultStatus,
+  SyncPushSupplierOpEntry,
   SyncPullPayload,
+  ResolvedPriceTier,
 } from './types';
+
+export type { ScaleBarcodeResult } from './utils';
 
 // Validators
 export {
@@ -61,10 +80,14 @@ export {
   updateRegisterSchema,
   createUserSchema,
   updateUserSchema,
+  createCustomerSchema,
+  updateCustomerSchema,
   createCategorySchema,
   updateCategorySchema,
   createProductSchema,
   updateProductSchema,
+  bulkProductUpdateModeSchema,
+  bulkProductUpdateSchema,
   createSaleItemSchema,
   createPaymentSchema,
   createSaleSchema,
@@ -73,7 +96,18 @@ export {
   createStockMovementSchema,
   openRegisterSessionSchema,
   closeRegisterSessionSchema,
+  createSupplierSchema,
+  updateSupplierSchema,
+  createPurchaseInvoiceItemSchema,
+  createPurchaseInvoiceSchema,
 } from './validators';
+
+export type {
+  Supplier,
+  SupplierTransaction,
+  PurchaseInvoice,
+  PurchaseInvoiceItem,
+} from './types';
 
 // Utils
 export {
@@ -85,4 +119,5 @@ export {
   formatCurrency,
   generateReceiptNumber,
   calculateChange,
+  parseScaleBarcode,
 } from './utils';

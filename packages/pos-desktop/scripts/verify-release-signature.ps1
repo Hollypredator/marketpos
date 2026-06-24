@@ -1,8 +1,8 @@
-$ErrorActionPreference = 'Stop'
-
 param(
   [string]$InstallerPath
 )
+
+$ErrorActionPreference = 'Stop'
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $packageDir = Resolve-Path (Join-Path $scriptDir '..')
