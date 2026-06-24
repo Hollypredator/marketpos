@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx watch src/server.ts",
-    "start": "node --experimental-specifier-resolution=node dist/server.js",
+    "start": "tsx src/server.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "npm run typecheck",
     "test": "npm run build && node --import ./tests/register-loader.mjs tests/run-tests.mjs",
