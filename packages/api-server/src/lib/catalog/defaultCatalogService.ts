@@ -1,8 +1,31 @@
-﻿import axios, { type AxiosInstance } from 'axios';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+
+import axios, { type AxiosInstance } from 'axios';
 import * as cheerio from 'cheerio';
 
 import { toMinor } from '../money';
 import prisma from '../prisma';
+
+interface CatalogJsonProduct {
+  barcode: string;
+  name: string;
+  categoryName: string;
+  salePrice: number;
+  vatRate: number;
+  unitType: string;
+}
+
+interface CatalogJsonCategory {
+  name: string;
+  products: CatalogJsonProduct[];
+}
+
+interface CatalogJsonFile {
+  exportedAt: string;
+  totalProducts: number;
+  categories: CatalogJsonCategory[];
+}
 
 interface ScrapedProduct {
   barcode: string;
@@ -21,6 +44,7 @@ interface PageInfo {
   pageSize: number;
   totalNumber: number;
 }
+
 
 const BASE_URL = 'https://ebeymar.com';
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -388,13 +412,108 @@ export class DefaultCatalogService {
   }
 
   /**
-   * Seeds the product catalog for a specific company by scraping current market data.
+   * Loads the bundled static catalog JSON from disk.
+   */
+  private static loadBundledCatalog(): CatalogJsonFile | null {
+    try {
+      const catalogPath = path.join(__dirname, 'catalog.json');
+      const raw = fs.readFileSync(catalogPath, 'utf-8');
+      return JSON.parse(raw) as CatalogJsonFile;
+    } catch (err) {
+      console.error('Failed to load bundled catalog.json:', err);
+      return null;
+    }
+  }
+
+  /**
+   * Seeds the product catalog for a specific company from the bundled catalog.json.
+   * Fast and reliable — no external dependencies.
+   * After seeding, triggers a background price refresh from ebeymar.com.
    */
   static async seedForCompany(companyId: string): Promise<number> {
-    console.log(`Starting catalog seeding for company: ${companyId}`);
+    console.log(`[Catalog] Starting fast JSON seeding for company: ${companyId}`);
+
+    const catalog = this.loadBundledCatalog();
+
+    if (!catalog || catalog.categories.length === 0) {
+      console.warn('[Catalog] Bundled catalog.json not found or empty, falling back to live scrape.');
+      return this.refreshPricesForCompany(companyId);
+    }
+
+    console.log(`[Catalog] Loaded ${catalog.totalProducts} products from bundled catalog (exported: ${catalog.exportedAt}).`);
+
+    let totalSynced = 0;
+    const syncedBarcodes = new Set<string>();
+
+    for (const catalogCategory of catalog.categories) {
+      let category = await prisma.category.findFirst({
+        where: { companyId, deletedAt: null, name: catalogCategory.name },
+      });
+
+      if (!category) {
+        category = await prisma.category.create({
+          data: { companyId, name: catalogCategory.name, sortOrder: 0 },
+        });
+      }
+
+      for (const product of catalogCategory.products) {
+        if (syncedBarcodes.has(product.barcode)) continue;
+
+        try {
+          await prisma.product.upsert({
+            create: {
+              barcode: product.barcode,
+              categoryId: category.id,
+              companyId,
+              minStock: 0,
+              name: product.name,
+              purchasePrice: 0,
+              purchasePriceMinor: 0n,
+              salePrice: product.salePrice,
+              salePriceMinor: toMinor(product.salePrice),
+              unitType: product.unitType as import('@prisma/client').UnitType,
+              vatRate: product.vatRate,
+            },
+            update: {
+              categoryId: category.id,
+              deletedAt: null,
+              isActive: true,
+              name: product.name,
+              salePrice: product.salePrice,
+              salePriceMinor: toMinor(product.salePrice),
+              updatedAt: new Date(),
+            },
+            where: { companyId_barcode: { barcode: product.barcode, companyId } },
+          });
+
+          syncedBarcodes.add(product.barcode);
+          totalSynced += 1;
+        } catch (error) {
+          console.error(`[Catalog] Failed to upsert product ${product.barcode}:`, error);
+        }
+      }
+    }
+
+    console.log(`[Catalog] Fast seeding complete. ${totalSynced} products written.`);
+
+    // Trigger background price refresh from ebeymar.com (non-blocking)
+    void this.refreshPricesForCompany(companyId).catch((err) => {
+      console.error(`[Catalog] Background price refresh failed for company ${companyId}:`, err);
+    });
+
+    return totalSynced;
+  }
+
+  /**
+   * Refreshes product prices for a company by scraping ebeymar.com.
+   * This is a best-effort operation — used as a background price updater.
+   * Can also be called directly for a full live re-sync.
+   */
+  static async refreshPricesForCompany(companyId: string): Promise<number> {
+    console.log(`[Catalog] Starting ebeymar price refresh for company: ${companyId}`);
 
     const categories = await this.discoverCategories();
-    console.log(`Discovered ${categories.length} categories to process.`);
+    console.log(`[Catalog] Discovered ${categories.length} categories to refresh.`);
 
     let totalSynced = 0;
     let categoriesWithProducts = 0;
@@ -404,70 +523,53 @@ export class DefaultCatalogService {
       console.log(`Processing category: ${categoryInfo.name} (${categoryInfo.url})`);
       const products = await this.scrapeCategory(categoryInfo.url, categoryInfo.name);
 
-      if (products.length === 0) {
-        continue;
-      }
+      if (products.length === 0) continue;
       categoriesWithProducts += 1;
 
       let category = await prisma.category.findFirst({
-        where: {
-          companyId,
-          name: categoryInfo.name,
-          deletedAt: null,
-        },
+        where: { companyId, deletedAt: null, name: categoryInfo.name },
       });
 
       if (!category) {
         category = await prisma.category.create({
-          data: {
-            companyId,
-            name: categoryInfo.name,
-            sortOrder: 0,
-          },
+          data: { companyId, name: categoryInfo.name, sortOrder: 0 },
         });
       }
 
       for (const product of products) {
-        if (syncedBarcodes.has(product.barcode)) {
-          continue;
-        }
+        if (syncedBarcodes.has(product.barcode)) continue;
 
         try {
           await prisma.product.upsert({
-            where: {
-              companyId_barcode: {
-                barcode: product.barcode,
-                companyId,
-              },
+            create: {
+              barcode: product.barcode,
+              categoryId: category.id,
+              companyId,
+              minStock: 0,
+              name: product.name,
+              purchasePrice: 0,
+              purchasePriceMinor: 0n,
+              salePrice: product.price,
+              salePriceMinor: toMinor(product.price),
+              unitType: 'PIECE',
+              vatRate: 20,
             },
             update: {
               categoryId: category.id,
               deletedAt: null,
               isActive: true,
               name: product.name,
-              salePriceMinor: toMinor(product.price),
               salePrice: product.price,
+              salePriceMinor: toMinor(product.price),
               updatedAt: new Date(),
             },
-            create: {
-              name: product.name,
-              barcode: product.barcode,
-              salePrice: product.price,
-              salePriceMinor: toMinor(product.price),
-              companyId,
-              categoryId: category.id,
-              purchasePrice: 0,
-              purchasePriceMinor: 0n,
-              vatRate: 20,
-              unitType: 'PIECE',
-              minStock: 0,
-            },
+            where: { companyId_barcode: { barcode: product.barcode, companyId } },
           });
 
           syncedBarcodes.add(product.barcode);
           totalSynced += 1;
         } catch (error) {
-          console.error(`Failed to upsert product ${product.barcode}:`, error);
+          console.error(`[Catalog] Failed to upsert product ${product.barcode}:`, error);
         }
       }
     }
@@ -477,31 +579,21 @@ export class DefaultCatalogService {
       categoriesWithProducts >= Math.max(1, Math.ceil(categories.length * 0.7));
 
     if (shouldDeactivateStaleProducts) {
-      const staleProducts = await prisma.product.updateMany({
-        data: {
-          deletedAt: new Date(),
-          isActive: false,
-          updatedAt: new Date(),
-        },
+      const staleResult = await prisma.product.updateMany({
+        data: { deletedAt: new Date(), isActive: false, updatedAt: new Date() },
         where: {
-          barcode: {
-            notIn: Array.from(syncedBarcodes),
-          },
+          barcode: { notIn: Array.from(syncedBarcodes) },
           companyId,
           deletedAt: null,
           isActive: true,
         },
       });
-      if (staleProducts.count > 0) {
-        console.log(`Deactivated ${staleProducts.count} stale products not found on eBeymar.`);
+      if (staleResult.count > 0) {
+        console.log(`[Catalog] Deactivated ${staleResult.count} stale products.`);
       }
-    } else {
-      console.warn(
-        `Skipped stale product cleanup because scrape coverage was too low (${categoriesWithProducts}/${categories.length}).`,
-      );
     }
 
-    console.log(`Seeding completed. Unique records synced: ${totalSynced}`);
+    console.log(`[Catalog] Price refresh complete. ${totalSynced} products updated.`);
     return totalSynced;
   }
 }
