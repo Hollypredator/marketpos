@@ -164,11 +164,10 @@ export function SalesPage({
           </div>
           {salesPagination.totalPages > 1 && (
             <PaginationControls
-              currentPage={salesPagination.page}
-              totalPages={salesPagination.totalPages}
-              onNext={() => onSalesPageChange(salesPagination.page + 1)}
-              onPrev={() => onSalesPageChange(salesPagination.page - 1)}
-              totalItems={salesPagination.total}
+              page={salesPagination.page}
+              pageSize={Math.max(1, Math.ceil(salesPagination.total / salesPagination.totalPages))}
+              onPageChange={onSalesPageChange}
+              total={salesPagination.total}
             />
           )}
         </article>

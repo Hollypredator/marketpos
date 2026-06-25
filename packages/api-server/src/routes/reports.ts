@@ -9,6 +9,8 @@ interface DailyQuery {
   branchId?: string;
   companyId?: string;
   date?: string;
+  from?: string;
+  to?: string;
 }
 
 interface TopProductsQuery {
@@ -350,16 +352,28 @@ export async function reportRoutes(server: FastifyInstance): Promise<void> {
         });
       }
 
-      const date = request.query.date ? new Date(request.query.date) : new Date();
-      const dayStart = new Date(date);
-      dayStart.setHours(0, 0, 0, 0);
-      const dayEnd = new Date(date);
-      dayEnd.setHours(23, 59, 59, 999);
+      let start: Date;
+      let end: Date;
+      let dateLabel: string;
+
+      if (request.query.from && request.query.to) {
+        const range = resolveDateRange(request.query.from, request.query.to);
+        start = range.from;
+        end = range.to;
+        dateLabel = `${request.query.from} - ${request.query.to}`;
+      } else {
+        const date = request.query.date ? new Date(request.query.date) : new Date();
+        start = new Date(date);
+        start.setHours(0, 0, 0, 0);
+        end = new Date(date);
+        end.setHours(23, 59, 59, 999);
+        dateLabel = date.toISOString().slice(0, 10);
+      }
 
       const saleWhere: Prisma.SaleWhereInput = {
         branchId: scopedBranchId,
         companyId,
-        createdAt: { gte: dayStart, lte: dayEnd },
+        createdAt: { gte: start, lte: end },
         deletedAt: null,
       };
 
@@ -375,7 +389,7 @@ export async function reportRoutes(server: FastifyInstance): Promise<void> {
           where: {
             branchId: scopedBranchId,
             companyId,
-            createdAt: { gte: dayStart, lte: dayEnd },
+            createdAt: { gte: start, lte: end },
           },
         }),
         prisma.payment.groupBy({
@@ -390,7 +404,7 @@ export async function reportRoutes(server: FastifyInstance): Promise<void> {
 
       return {
         data: {
-          date: date.toISOString().slice(0, 10),
+          date: dateLabel,
           netSales: totalSales - totalRefunds,
           paymentBreakdown: byPayment.map((item) => ({
             method: item.method,

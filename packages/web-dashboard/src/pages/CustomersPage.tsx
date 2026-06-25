@@ -123,14 +123,14 @@ export function CustomersPage({
                 </tr>
               </thead>
               <tbody>
-                {customersPagination.pageItems.length === 0 ? (
+                {customersPagination.visibleRows.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="muted" style={{ textAlign: 'center', padding: '2rem' }}>
                       Müşteri bulunamadı
                     </td>
                   </tr>
                 ) : (
-                  customersPagination.pageItems.map((customer) => (
+                  customersPagination.visibleRows.map((customer: Customer) => (
                     <tr
                       key={customer.id}
                       className={customer.id === selectedCustomerId ? 'row-selected' : ''}
@@ -161,11 +161,10 @@ export function CustomersPage({
             </table>
           </div>
           <PaginationControls
-            currentPage={customersPagination.page}
-            totalPages={customersPagination.totalPages}
-            onNext={customersPagination.nextPage}
-            onPrev={customersPagination.prevPage}
-            totalItems={customers.length}
+            page={customersPagination.page}
+            pageSize={customersPagination.pageSize}
+            onPageChange={customersPagination.setPage}
+            total={customers.length}
           />
         </article>
       </div>
@@ -357,14 +356,14 @@ export function CustomersPage({
                     </tr>
                   </thead>
                   <tbody>
-                    {transactionsPagination.pageItems.length === 0 ? (
+                    {transactionsPagination.visibleRows.length === 0 ? (
                       <tr>
                         <td colSpan={4} className="muted" style={{ textAlign: 'center', padding: '1rem' }}>
                           İşlem geçmişi boş
                         </td>
                       </tr>
                     ) : (
-                      transactionsPagination.pageItems.map((tx) => (
+                      transactionsPagination.visibleRows.map((tx: CustomerTransaction) => (
                         <tr key={tx.id}>
                           <td>{toDateTime(tx.createdAt)}</td>
                           <td>
@@ -381,11 +380,10 @@ export function CustomersPage({
                 </table>
               </div>
               <PaginationControls
-                currentPage={transactionsPagination.page}
-                totalPages={transactionsPagination.totalPages}
-                onNext={transactionsPagination.nextPage}
-                onPrev={transactionsPagination.prevPage}
-                totalItems={transactions.length}
+                page={transactionsPagination.page}
+                pageSize={transactionsPagination.pageSize}
+                onPageChange={transactionsPagination.setPage}
+                total={transactions.length}
               />
             </article>
           </>

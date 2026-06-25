@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import React, { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { AppShell } from './components/AppShell';
 import { LoginView } from './components/LoginView';
@@ -70,6 +70,9 @@ import { StockPage } from './pages/StockPage';
 import { SubscriptionPage } from './pages/SubscriptionPage';
 import { UsersPage } from './pages/UsersPage';
 import { SuppliersPage } from './pages/suppliers/SuppliersPage';
+import { LandingPage } from './pages/LandingPage';
+import { PaymentSuccessPage } from './pages/PaymentSuccessPage';
+import { YonetimPage } from './pages/YonetimPage';
 
 interface BannerState {
   text: string;
@@ -87,6 +90,8 @@ function setOrDelete(params: URLSearchParams, key: string, value: string, fallba
 export default function App(): React.ReactElement {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const auth = useAuth();
 
   const [banner, setBanner] = useState<BannerState | null>(null);
@@ -1572,18 +1577,29 @@ export default function App(): React.ReactElement {
   };
 
   if (!auth.isAuthenticated) {
+    if (location.pathname === '/payment-success') {
+      return <PaymentSuccessPage />;
+    }
+    if (location.pathname === '/login') {
+      return (
+        <LoginView
+          accessBlockedMessage={auth.accessBlockedMessage}
+          banner={banner}
+          login={loginForm}
+          onChangeEmail={(value) => setLoginForm((current) => ({ ...current, email: value }))}
+          onChangeCompanyId={(value) => setLoginForm((current) => ({ ...current, companyId: value }))}
+          onChangeMode={(mode) => setLoginForm((current) => ({ ...current, mode }))}
+          onChangePassword={(value) => setLoginForm((current) => ({ ...current, password: value }))}
+          onChangeUsername={(value) => setLoginForm((current) => ({ ...current, username: value }))}
+          onSubmit={onLogin}
+          saving={isAuthenticating}
+        />
+      );
+    }
     return (
-      <LoginView
-        accessBlockedMessage={auth.accessBlockedMessage}
-        banner={banner}
-        login={loginForm}
-        onChangeEmail={(value) => setLoginForm((current) => ({ ...current, email: value }))}
-        onChangeCompanyId={(value) => setLoginForm((current) => ({ ...current, companyId: value }))}
-        onChangeMode={(mode) => setLoginForm((current) => ({ ...current, mode }))}
-        onChangePassword={(value) => setLoginForm((current) => ({ ...current, password: value }))}
-        onChangeUsername={(value) => setLoginForm((current) => ({ ...current, username: value }))}
-        onSubmit={onLogin}
-        saving={isAuthenticating}
+      <LandingPage
+        onNavigateToLogin={() => navigate('/login')}
+        onNavigateToSuccess={(companyId) => navigate(`/payment-success?companyId=${companyId}`)}
       />
     );
   }
@@ -1865,6 +1881,13 @@ export default function App(): React.ReactElement {
           summary={subscriptionSummary}
           toDateTime={toDateTime}
           upcomingRenewals={upcomingRenewals}
+        />
+      )}
+
+      {activeTab === 'yonetim' && auth.isSuperAdmin && (
+        <YonetimPage
+          saving={saving}
+          onSetBanner={(b) => setBanner(b)}
         />
       )}
     </AppShell>

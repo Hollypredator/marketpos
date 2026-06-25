@@ -46,6 +46,7 @@ const TAB_LABELS: Record<DashboardTab, string> = {
   reports:      'Raporlar',
   suppliers:    'Cari & Tedarik',
   subscription: 'Paket Takip',
+  yonetim:      'Fiyat Yönetimi',
 };
 
 const TAB_HINTS: Record<DashboardTab, string> = {
@@ -61,6 +62,7 @@ const TAB_HINTS: Record<DashboardTab, string> = {
   reports:      'Satış ve operasyon raporları',
   suppliers:    'Tedarikçi, Cari ve Fatura yönetimi',
   subscription: 'Abonelik ve lisans operasyonları',
+  yonetim:      'Açılış sayfası fiyatlandırma paketlerini güncelleyin',
 };
 
 // SVG icons for each tab
@@ -140,11 +142,18 @@ const TAB_ICONS: Record<DashboardTab, React.ReactElement> = {
       <path d="M3 13V8M7 13V5M11 13V9M15 13V3" strokeLinecap="round"/>
     </svg>
   ),
+  yonetim: (
+    <svg className="nav-item-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M1.5 5.5v5A1.5 1.5 0 0 0 3 12h10a1.5 1.5 0 0 0 1.5-1.5v-5A1.5 1.5 0 0 0 13 4H3a1.5 1.5 0 0 0-1.5 1.5Z" />
+      <circle cx="8" cy="8" r="2" />
+      <path d="M5.5 12v1.5a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5V12" strokeLinecap="round" />
+    </svg>
+  ),
 };
 
 // Section groupings
 const OVERVIEW_TABS: DashboardTab[]  = ['dashboard'];
-const PLATFORM_TABS: DashboardTab[] = ['setup', 'organization', 'subscription', 'users'];
+const PLATFORM_TABS: DashboardTab[] = ['setup', 'organization', 'subscription', 'users', 'yonetim'];
 const STORE_TABS: DashboardTab[]    = ['catalog', 'stock', 'transfers', 'customers', 'suppliers'];
 const ANALYTICS_TABS: DashboardTab[] = ['sales', 'reports'];
 

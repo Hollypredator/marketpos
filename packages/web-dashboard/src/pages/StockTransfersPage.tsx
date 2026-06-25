@@ -143,14 +143,14 @@ export function StockTransfersPage({
                 </tr>
               </thead>
               <tbody>
-                {transfersPag.pageItems.length === 0 ? (
+                {transfersPag.visibleRows.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="muted" style={{ textAlign: 'center', padding: '2rem' }}>
                       Transfer bulunamadı
                     </td>
                   </tr>
                 ) : (
-                  transfersPag.pageItems.map((transfer) => {
+                  transfersPag.visibleRows.map((transfer: StockTransfer) => {
                     const si = statusInfo(transfer.status);
                     return (
                       <tr
@@ -173,11 +173,10 @@ export function StockTransfersPage({
           </div>
           {transfersPag.totalPages > 1 && (
             <PaginationControls
-              currentPage={transfersPag.page}
-              totalPages={transfersPag.totalPages}
-              onNext={transfersPag.nextPage}
-              onPrev={transfersPag.prevPage}
-              totalItems={transfers.length}
+              page={transfersPag.page}
+              pageSize={transfersPag.pageSize}
+              onPageChange={transfersPag.setPage}
+              total={transfers.length}
             />
           )}
         </article>

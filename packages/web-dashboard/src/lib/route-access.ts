@@ -10,7 +10,8 @@ export type DashboardTab =
   | 'sales'
   | 'reports'
   | 'suppliers'
-  | 'subscription';
+  | 'subscription'
+  | 'yonetim';
 
 export const TAB_PATHS: Record<DashboardTab, string> = {
   dashboard: '/dashboard',
@@ -25,6 +26,7 @@ export const TAB_PATHS: Record<DashboardTab, string> = {
   reports: '/reports',
   suppliers: '/suppliers',
   subscription: '/subscription',
+  yonetim: '/yonetim',
 };
 
 const PATH_TO_TAB = new Map<string, DashboardTab>(
@@ -33,7 +35,7 @@ const PATH_TO_TAB = new Map<string, DashboardTab>(
 
 export function resolveAllowedTabs(role?: string): DashboardTab[] {
   if (role === 'SUPER_ADMIN') {
-    return ['dashboard', 'setup', 'organization', 'catalog', 'stock', 'transfers', 'users', 'customers', 'sales', 'reports', 'suppliers', 'subscription'];
+    return ['dashboard', 'setup', 'organization', 'catalog', 'stock', 'transfers', 'users', 'customers', 'sales', 'reports', 'suppliers', 'subscription', 'yonetim'];
   }
   return [];
 }

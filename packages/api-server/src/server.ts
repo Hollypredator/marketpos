@@ -3,6 +3,7 @@ import Fastify from 'fastify';
 import { dirname, resolve } from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { Readable } from 'node:stream';
 import { ZodError } from 'zod';
 
 import { startSubscriptionAuditJob } from './jobs/subscription-audit-job';
@@ -26,6 +27,7 @@ import { supplierRoutes } from './routes/suppliers';
 import { syncRoutes } from './routes/sync';
 import { userRoutes } from './routes/users';
 import { licenseRoutes } from './routes/license';
+import { paymentsRoutes } from './routes/payments';
 
 function loadEnvironment(): void {
   const currentDir = dirname(fileURLToPath(import.meta.url));
@@ -87,6 +89,24 @@ const server = Fastify({
   },
 });
 
+// Hook to capture raw body for payments webhook (signature verification)
+server.addHook('preParsing', async (request, reply, payload) => {
+  if (request.url === '/api/payments/webhook' || request.url.startsWith('/api/payments/webhook')) {
+    const buffer: Buffer[] = [];
+    for await (const chunk of payload) {
+      buffer.push(chunk as Buffer);
+    }
+    const totalBuffer = Buffer.concat(buffer);
+    (request as any).rawBody = totalBuffer.toString('utf8');
+
+    const newStream = new Readable();
+    newStream.push(totalBuffer);
+    newStream.push(null);
+    return newStream;
+  }
+  return payload;
+});
+
 async function start(): Promise<void> {
   await server.register(cors, {
     credentials: true,
@@ -119,6 +139,7 @@ async function start(): Promise<void> {
   await server.register(subscriptionRoutes, { prefix: '/api/subscription' });
   await server.register(licenseRoutes, { prefix: '/api/license' });
   await server.register(financeRoutes, { prefix: '/api/finance' });
+  await server.register(paymentsRoutes, { prefix: '/api/payments' });
 
   const stopSubscriptionAuditJob = startSubscriptionAuditJob(server);
   server.addHook('onClose', async () => {
