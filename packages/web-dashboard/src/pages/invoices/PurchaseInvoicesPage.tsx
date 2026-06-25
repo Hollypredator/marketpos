@@ -35,7 +35,7 @@ export function PurchaseInvoicesPage({ branchId, companyId, products, toMoney }:
   const handleViewClick = (invoiceId: string): void => {
     const invoice = invoiceRows.find((row) => row.id === invoiceId);
     if (!invoice) {
-      setErrorText('Secilen fatura bulunamadi.');
+      setErrorText('Seçilen fatura bulunamadı.');
       return;
     }
     setInfoText(`Fatura: ${invoice.invoiceNumber} | Toplam: ${toMoney(invoice.grandTotal)}`);
@@ -47,9 +47,9 @@ export function PurchaseInvoicesPage({ branchId, companyId, products, toMoney }:
       setInfoText(null);
       await createInvoice({ branchId, payload: form });
       setIsFormOpen(false);
-      setInfoText('Alis faturasi basariyla kaydedildi.');
+      setInfoText('Alış faturası başarıyla kaydedildi.');
     } catch {
-      setErrorText('Fatura kaydedilirken hata olustu.');
+      setErrorText('Fatura kaydedilirken hata oluştu.');
     }
   };
 
@@ -67,9 +67,9 @@ export function PurchaseInvoicesPage({ branchId, companyId, products, toMoney }:
           invoiceNumber: `INV-${Date.now()}`,
         },
       });
-      setInfoText(`Irsaliye faturaya donusturuldu: ${converted.invoiceNumber}`);
+      setInfoText(`İrsaliye faturaya dönüştürüldü: ${converted.invoiceNumber}`);
     } catch {
-      setErrorText('Irsaliye faturaya donusturulemedi.');
+      setErrorText('İrsaliye faturaya dönüştürülemedi.');
     } finally {
       setConvertingInvoiceId(null);
     }
@@ -89,13 +89,10 @@ export function PurchaseInvoicesPage({ branchId, companyId, products, toMoney }:
   }
 
   return (
-    <div className="flex h-full flex-col">
-      {(errorText || infoText) && (
-        <div className="px-6 pt-4">
-          {errorText && <div className="banner error">{errorText}</div>}
-          {infoText && <div className="banner success">{infoText}</div>}
-        </div>
-      )}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      {errorText && <div className="banner error">{errorText}</div>}
+      {infoText && <div className="banner success">{infoText}</div>}
+      
       <PurchaseInvoiceListPage
         convertingInvoiceId={isConverting ? convertingInvoiceId : null}
         invoices={invoiceRows}

@@ -34,22 +34,30 @@ interface AppShellProps {
 }
 
 const TAB_LABELS: Record<DashboardTab, string> = {
+  dashboard:    'Genel Bakış',
   setup:        'Firma Kurulum',
   organization: 'Firma / Şube',
   catalog:      'Ürün / Kategori',
   stock:        'Stok',
+  transfers:    'Stok Transfer',
   users:        'Kullanıcılar',
+  customers:    'Müşteriler',
+  sales:        'Satış Geçmişi',
   reports:      'Raporlar',
   suppliers:    'Cari & Tedarik',
   subscription: 'Paket Takip',
 };
 
 const TAB_HINTS: Record<DashboardTab, string> = {
+  dashboard:    'Günlük KPI özeti ve hızlı erişim',
   setup:        'Yeni firma açılışı ve provisioning adımları',
   organization: 'Firma ve şube yapısını yönetin',
   catalog:      'Ürün, kategori ve temel tanımlar',
   stock:        'Stok seviyeleri ve hareket kayıtları',
+  transfers:    'Şubeler arası stok transfer yönetimi',
   users:        'Kullanıcı rolleri ve erişim yetkileri',
+  customers:    'Müşteri kartları ve cari hesaplar',
+  sales:        'Satış geçmişi ve fiş detayları',
   reports:      'Satış ve operasyon raporları',
   suppliers:    'Tedarikçi, Cari ve Fatura yönetimi',
   subscription: 'Abonelik ve lisans operasyonları',
@@ -57,6 +65,14 @@ const TAB_HINTS: Record<DashboardTab, string> = {
 
 // SVG icons for each tab
 const TAB_ICONS: Record<DashboardTab, React.ReactElement> = {
+  dashboard: (
+    <svg className="nav-item-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <rect x="2" y="2" width="5" height="5" rx="1"/>
+      <rect x="9" y="2" width="5" height="5" rx="1"/>
+      <rect x="2" y="9" width="5" height="5" rx="1"/>
+      <rect x="9" y="9" width="5" height="5" rx="1"/>
+    </svg>
+  ),
   setup: (
     <svg className="nav-item-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
       <rect x="2" y="2" width="12" height="12" rx="2"/>
@@ -83,6 +99,12 @@ const TAB_ICONS: Record<DashboardTab, React.ReactElement> = {
       <circle cx="13" cy="4" r="1.5"/>
     </svg>
   ),
+  customers: (
+    <svg className="nav-item-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <circle cx="8" cy="5" r="3"/>
+      <path d="M2 14c0-3 2.5-5 6-5s6 2 6 5" strokeLinecap="round"/>
+    </svg>
+  ),
   catalog: (
     <svg className="nav-item-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
       <path d="M2 3h12v2H2zM2 7h12v2H2zM2 11h8v2H2z" strokeLinecap="round" strokeLinejoin="round"/>
@@ -93,6 +115,18 @@ const TAB_ICONS: Record<DashboardTab, React.ReactElement> = {
       <rect x="2" y="9" width="4" height="5" rx="1"/>
       <rect x="6" y="6" width="4" height="8" rx="1"/>
       <rect x="10" y="3" width="4" height="11" rx="1"/>
+    </svg>
+  ),
+  transfers: (
+    <svg className="nav-item-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M3 6h10M10 3l3 3-3 3" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M13 10H3M6 7l-3 3 3 3" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  ),
+  sales: (
+    <svg className="nav-item-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <rect x="2" y="2" width="12" height="12" rx="2"/>
+      <path d="M5 6h6M5 8.5h4M5 11h2" strokeLinecap="round"/>
     </svg>
   ),
   suppliers: (
@@ -109,9 +143,10 @@ const TAB_ICONS: Record<DashboardTab, React.ReactElement> = {
 };
 
 // Section groupings
+const OVERVIEW_TABS: DashboardTab[]  = ['dashboard'];
 const PLATFORM_TABS: DashboardTab[] = ['setup', 'organization', 'subscription', 'users'];
-const STORE_TABS: DashboardTab[]    = ['catalog', 'stock', 'suppliers'];
-const ANALYTICS_TABS: DashboardTab[] = ['reports'];
+const STORE_TABS: DashboardTab[]    = ['catalog', 'stock', 'transfers', 'customers', 'suppliers'];
+const ANALYTICS_TABS: DashboardTab[] = ['sales', 'reports'];
 
 function getInitials(name: string): string {
   return name
@@ -142,6 +177,7 @@ export function AppShell({
   userFullName,
   userRole,
 }: AppShellProps): React.ReactElement {
+  const hasOverview  = OVERVIEW_TABS.some((t)  => allowedTabs.includes(t));
   const hasPlatform  = PLATFORM_TABS.some((t)  => allowedTabs.includes(t));
   const hasStore     = STORE_TABS.some((t)     => allowedTabs.includes(t));
   const hasAnalytics = ANALYTICS_TABS.some((t) => allowedTabs.includes(t));
@@ -178,6 +214,12 @@ export function AppShell({
         </div>
 
         {/* Nav */}
+        {hasOverview && (
+          <div className="nav-section">
+            {OVERVIEW_TABS.map(renderNavItem)}
+          </div>
+        )}
+
         {hasPlatform && (
           <div className="nav-section">
             <span className="nav-section-label">Platform</span>

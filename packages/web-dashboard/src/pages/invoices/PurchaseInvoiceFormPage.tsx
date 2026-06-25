@@ -98,15 +98,15 @@ export function PurchaseInvoiceFormPage({
   const handleSubmit = (event: React.FormEvent): void => {
     event.preventDefault();
     if (form.items.length === 0) {
-      setErrorText('Lutfen en az bir urun ekleyin.');
+      setErrorText('Lütfen en az bir ürün ekleyin.');
       return;
     }
     if (form.supplierId.trim().length === 0) {
-      setErrorText('Lutfen bir tedarikci secin.');
+      setErrorText('Lütfen bir tedarikçi seçin.');
       return;
     }
     if (form.documentType === 'DISPATCH' && (form.dispatchNo ?? '').trim().length === 0) {
-      setErrorText('Irsaliye tipinde irsaliye numarasi zorunludur.');
+      setErrorText('İrsaliye tipinde irsaliye numarası zorunludur.');
       return;
     }
     if (
@@ -121,7 +121,7 @@ export function PurchaseInvoiceFormPage({
       return;
     }
     if (form.invoiceDate && form.dueDate && form.dueDate < form.invoiceDate) {
-      setErrorText('Vade tarihi belge tarihinden once olamaz.');
+      setErrorText('Vade tarihi belge tarihinden önce olamaz.');
       return;
     }
     setErrorText(null);
@@ -129,27 +129,23 @@ export function PurchaseInvoiceFormPage({
   };
 
   return (
-    <div className="flex h-full flex-col bg-gray-900">
-      <div className="flex items-center border-b border-gray-800 px-6 py-4">
-        <button className="mr-4 text-gray-400 hover:text-white" onClick={onCancel} type="button">
-          <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path d="M10 19l-7-7m0 0l7-7m-7 7h18" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} />
-          </svg>
+    <section className="panel-grid">
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <button className="btn" onClick={onCancel} type="button">
+          ← Geri
         </button>
-        <div>
-          <h2 className="text-xl font-semibold text-white">Yeni Alis Faturasi</h2>
-        </div>
+        <h2>Yeni Alış Faturası</h2>
       </div>
 
-      <div className="flex-1 overflow-auto p-6">
-        <form className="mx-auto max-w-5xl space-y-6" onSubmit={handleSubmit}>
-          {errorText && <div className="banner error">{errorText}</div>}
+      <form className="form-grid" onSubmit={handleSubmit}>
+        {errorText && <div className="banner error">{errorText}</div>}
 
-          <div className="grid grid-cols-3 gap-6 rounded-lg border border-gray-800 bg-gray-900/50 p-6">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-300">Belge Tipi *</label>
+        <article className="card">
+          <h3 style={{ marginBottom: '14px' }}>Fatura Detayları</h3>
+          <div className="inline-row three">
+            <label>
+              Belge Tipi *
               <select
-                className="w-full rounded border border-gray-700 bg-gray-800 px-3 py-2 text-white outline-none focus:border-teal-500"
                 onChange={(event) =>
                   setForm({
                     ...form,
@@ -158,190 +154,187 @@ export function PurchaseInvoiceFormPage({
                 }
                 value={form.documentType}
               >
-                <option value="INVOICE">Alis Faturasi</option>
-                <option value="DISPATCH">Irsaliye</option>
-                <option value="ORDER">Siparis</option>
+                <option value="INVOICE">Alış Faturası</option>
+                <option value="DISPATCH">İrsaliye</option>
+                <option value="ORDER">Sipariş</option>
               </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-300">Tedarikci *</label>
+            </label>
+            <label>
+              Tedarikçi *
               <select
-                className="w-full rounded border border-gray-700 bg-gray-800 px-3 py-2 text-white outline-none focus:border-teal-500"
                 onChange={(event) => setForm({ ...form, supplierId: event.target.value })}
                 required
                 value={form.supplierId}
               >
-                <option value="">Seciniz...</option>
+                <option value="">Seçiniz...</option>
                 {suppliers.map((supplier) => (
                   <option key={supplier.id} value={supplier.id}>
                     {supplier.name}
                   </option>
                 ))}
               </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-300">
-                {form.documentType === 'ORDER' ? 'Siparis No' : 'Fatura No'}
-              </label>
+            </label>
+            <label>
+              {form.documentType === 'ORDER' ? 'Sipariş No' : 'Fatura No'}
               <input
-                className="w-full rounded border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 focus:border-teal-500 focus:outline-none"
                 onChange={(event) => setForm({ ...form, invoiceNo: event.target.value })}
                 type="text"
                 value={form.invoiceNo}
               />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-300">Belge Tarihi</label>
+            </label>
+          </div>
+
+          <div className="inline-row three" style={{ marginTop: '10px' }}>
+            <label>
+              Belge Tarihi
               <input
-                className="w-full rounded border border-gray-700 bg-gray-800 px-3 py-2 text-white outline-none focus:border-teal-500"
                 onChange={(event) => setForm({ ...form, invoiceDate: event.target.value })}
                 type="date"
                 value={(form.invoiceDate || '').slice(0, 10)}
               />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-300">Vade Tarihi</label>
+            </label>
+            <label>
+              Vade Tarihi
               <input
-                className="w-full rounded border border-gray-700 bg-gray-800 px-3 py-2 text-white outline-none focus:border-teal-500"
                 onChange={(event) => setForm({ ...form, dueDate: event.target.value })}
                 required={form.documentType === 'INVOICE'}
                 type="date"
                 value={(form.dueDate || '').slice(0, 10)}
               />
-            </div>
-            {form.documentType === 'DISPATCH' && (
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-300">Irsaliye No</label>
+            </label>
+            {form.documentType === 'DISPATCH' ? (
+              <label>
+                İrsaliye No
                 <input
-                  className="w-full rounded border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 focus:border-teal-500 focus:outline-none"
                   onChange={(event) => setForm({ ...form, dispatchNo: event.target.value })}
                   type="text"
                   value={form.dispatchNo || ''}
                 />
-              </div>
+              </label>
+            ) : (
+              <div />
             )}
           </div>
+        </article>
 
-          <h3 className="pt-4 text-lg font-medium text-white">Fatura Kalemleri</h3>
-
-          <div className="rounded-lg border border-gray-800 bg-gray-900/50 p-6">
-            <div className="relative mb-6">
-              <label className="mb-1 block text-sm font-medium text-gray-300">Urun ekle</label>
+        <article className="card">
+          <h3 style={{ marginBottom: '10px' }}>Fatura Kalemleri</h3>
+          <div className="form-grid compact" style={{ position: 'relative', marginBottom: '14px' }}>
+            <label>
+              Ürün Ekle
               <input
-                className="w-full rounded border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 focus:border-teal-500 focus:outline-none"
                 onChange={(event) => setProductSearch(event.target.value)}
-                placeholder="Urun adi veya barkod girin..."
+                placeholder="Ürün adı veya barkod girin..."
                 type="text"
                 value={productSearch}
               />
-              {productSearch.length > 0 && (
-                <ul className="absolute z-10 mt-1 w-full rounded border border-gray-700 bg-gray-800 shadow-lg">
-                  {filteredProducts.map((product) => (
-                    <li key={product.id}>
-                      <button
-                        className="flex w-full justify-between px-4 py-2 text-left text-sm text-gray-300 hover:bg-gray-700 hover:text-white"
-                        onClick={() => handleAddItem(product)}
-                        type="button"
-                      >
-                        <span>
-                          {product.name} <span className="text-gray-500">({product.barcode})</span>
-                        </span>
-                        <span>Stok: {product.quantity || 0}</span>
-                      </button>
-                    </li>
-                  ))}
-                  {filteredProducts.length === 0 && (
-                    <li className="px-4 py-2 text-sm text-gray-500">Urun bulunamadi.</li>
-                  )}
-                </ul>
-              )}
-            </div>
-
-            {form.items.length > 0 && (
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-left text-sm text-gray-300">
-                  <thead>
-                    <tr className="border-b border-gray-700">
-                      <th className="pb-2 font-medium">Urun</th>
-                      <th className="w-24 pb-2 font-medium">Adet</th>
-                      <th className="w-32 pb-2 font-medium">Birim Fiyat</th>
-                      <th className="w-32 pb-2 text-right font-medium">Toplam</th>
-                      <th className="w-16 pb-2 text-right font-medium" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {form.items.map((item, index) => {
-                      const product = products.find((candidate) => candidate.id === item.productId);
-                      return (
-                        <tr className="border-b border-gray-800 last:border-0 hover:bg-gray-800/30" key={item.productId}>
-                          <td className="py-3">{product?.name || item.productId}</td>
-                          <td className="py-2">
-                            <input
-                              className="w-full rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white outline-none focus:border-teal-500"
-                              min="0.01"
-                              onChange={(event) => handleUpdateItem(index, 'quantity', Number.parseFloat(event.target.value) || 0)}
-                              step="any"
-                              type="number"
-                              value={item.quantity}
-                            />
-                          </td>
-                          <td className="py-2">
-                            <input
-                              className="w-full rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white outline-none focus:border-teal-500"
-                              min="0"
-                              onChange={(event) => handleUpdateItem(index, 'unitPrice', Number.parseFloat(event.target.value) || 0)}
-                              step="any"
-                              type="number"
-                              value={item.unitPrice}
-                            />
-                          </td>
-                          <td className="py-2 text-right font-medium text-teal-400">{toMoney(item.quantity * item.unitPrice)}</td>
-                          <td className="py-2 text-right">
-                            <button
-                              className="text-red-500 hover:text-red-400"
-                              onClick={() => handleRemoveItem(index)}
-                              title="Kaldir"
-                              type="button"
-                            >
-                              <svg className="mx-auto h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path
-                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                />
-                              </svg>
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+            </label>
+            {productSearch.length > 0 && (
+              <ul className="list" style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, background: 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)' }}>
+                {filteredProducts.map((product) => (
+                  <li key={product.id} style={{ border: 'none', borderRadius: 0, borderBottom: '1px solid var(--border-s)' }}>
+                    <button
+                      className="btn ghost"
+                      style={{ width: '100%', justifyContent: 'space-between', display: 'flex', color: 'var(--fg-2)' }}
+                      onClick={() => handleAddItem(product)}
+                      type="button"
+                    >
+                      <span>
+                        {product.name} <span className="muted">({product.barcode})</span>
+                      </span>
+                      <span>Stok: {product.quantity || 0}</span>
+                    </button>
+                  </li>
+                ))}
+                {filteredProducts.length === 0 && (
+                  <li style={{ padding: '10px', color: 'var(--fg-4)', textAlign: 'center' }}>Ürün bulunamadı.</li>
+                )}
+              </ul>
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-6 rounded-lg border border-gray-800 bg-gray-900/50 p-6">
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-gray-300">Notlar</label>
+          {form.items.length > 0 ? (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Ürün</th>
+                    <th style={{ width: '120px' }}>Adet</th>
+                    <th style={{ width: '150px' }}>Birim Fiyat</th>
+                    <th style={{ width: '150px', textAlign: 'right' }}>Toplam</th>
+                    <th style={{ width: '50px' }} />
+                  </tr>
+                </thead>
+                <tbody>
+                  {form.items.map((item, index) => {
+                    const product = products.find((candidate) => candidate.id === item.productId);
+                    return (
+                      <tr key={item.productId}>
+                        <td style={{ fontWeight: 500, color: 'var(--fg-1)' }}>{product?.name || item.productId}</td>
+                        <td>
+                          <input
+                            min="0.01"
+                            onChange={(event) => handleUpdateItem(index, 'quantity', Number.parseFloat(event.target.value) || 0)}
+                            step="any"
+                            type="number"
+                            value={item.quantity}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            min="0"
+                            onChange={(event) => handleUpdateItem(index, 'unitPrice', Number.parseFloat(event.target.value) || 0)}
+                            step="any"
+                            type="number"
+                            value={item.unitPrice}
+                          />
+                        </td>
+                        <td style={{ textAlign: 'right', fontWeight: 500, color: 'var(--accent-v)' }}>{toMoney(item.quantity * item.unitPrice)}</td>
+                        <td style={{ textAlign: 'center' }}>
+                          <button
+                            className="btn ghost"
+                            style={{ color: 'var(--red)' }}
+                            onClick={() => handleRemoveItem(index)}
+                            title="Kaldır"
+                            type="button"
+                          >
+                            Kaldır
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="empty-state">
+              <span className="empty-state-title">Kalem eklenmedi</span>
+              <span className="empty-state-sub">Faturaya dahil etmek için yukarıdaki arama alanından ürün ekleyin.</span>
+            </div>
+          )}
+        </article>
+
+        <article className="card">
+          <div className="inline-row two">
+            <label>
+              Notlar
               <textarea
-                className="w-full rounded border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 focus:border-teal-500 focus:outline-none"
                 onChange={(event) => setForm({ ...form, note: event.target.value })}
                 rows={3}
                 value={form.note}
               />
-            </div>
+            </label>
 
-            <div className="flex flex-col items-end gap-3">
-              <div className="flex w-64 justify-between text-gray-300">
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '10px', justifyContent: 'center' }}>
+              <div style={{ display: 'flex', width: '260px', justifyContent: 'space-between', color: 'var(--fg-3)' }}>
                 <span>Ara Toplam:</span>
-                <span>{toMoney(calculateSubTotal())}</span>
+                <span style={{ color: 'var(--fg-1)' }}>{toMoney(calculateSubTotal())}</span>
               </div>
-              <div className="flex w-64 items-center justify-between text-gray-300">
+              <div style={{ display: 'flex', width: '260px', alignItems: 'center', justifyContent: 'space-between', color: 'var(--fg-3)' }}>
                 <span>Toplam KDV:</span>
                 <input
-                  className="w-24 rounded border border-gray-700 bg-gray-800 px-2 py-1 text-right text-white outline-none focus:border-teal-500"
+                  style={{ width: '100px', textAlign: 'right' }}
                   onChange={(event) => setForm({ ...form, taxTotal: Number.parseFloat(event.target.value) || 0 })}
                   placeholder="KDV"
                   step="any"
@@ -349,31 +342,32 @@ export function PurchaseInvoiceFormPage({
                   value={form.taxTotal}
                 />
               </div>
-              <div className="flex w-64 justify-between border-t border-gray-700 pt-3 text-lg font-bold text-teal-400">
+              <div className="divider" style={{ width: '260px', margin: '4px 0' }} />
+              <div style={{ display: 'flex', width: '260px', justifyContent: 'space-between', fontSize: '16px', fontWeight: 'bold', color: 'var(--accent-h)' }}>
                 <span>Genel Toplam:</span>
                 <span>{toMoney(calculateSubTotal() + form.taxTotal)}</span>
               </div>
             </div>
           </div>
+        </article>
 
-          <div className="flex justify-end gap-3 pt-4">
-            <button
-              className="rounded border border-gray-700 bg-transparent px-4 py-2 font-medium text-gray-300 hover:bg-gray-800"
-              onClick={onCancel}
-              type="button"
-            >
-              Iptal
-            </button>
-            <button
-              className="rounded bg-teal-600 px-6 py-2 font-medium text-white hover:bg-teal-500 disabled:opacity-50"
-              disabled={saving}
-              type="submit"
-            >
-              {saving ? 'Kaydediliyor...' : 'Belgeyi Kaydet'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+          <button
+            className="btn"
+            onClick={onCancel}
+            type="button"
+          >
+            İptal
+          </button>
+          <button
+            className="btn primary"
+            disabled={saving}
+            type="submit"
+          >
+            {saving ? 'Kaydediliyor...' : 'Belgeyi Kaydet'}
+          </button>
+        </div>
+      </form>
+    </section>
   );
 }

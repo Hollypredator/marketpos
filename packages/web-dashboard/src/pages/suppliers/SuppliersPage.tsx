@@ -106,7 +106,7 @@ export function SuppliersPage({ branchId, companyId, products, toMoney }: Suppli
       setErrorText(null);
       await deleteSupplier(supplier.id);
     } catch {
-      setErrorText('Tedarikci silinirken hata olustu.');
+      setErrorText('Tedarikçi silinirken hata oluştu.');
     }
   };
 
@@ -120,7 +120,7 @@ export function SuppliersPage({ branchId, companyId, products, toMoney }: Suppli
       }
       setIsFormOpen(false);
     } catch {
-      setErrorText('Tedarikci kaydedilirken hata olustu.');
+      setErrorText('Tedarikçi kaydedilirken hata oluştu.');
     }
   };
 
@@ -139,7 +139,7 @@ export function SuppliersPage({ branchId, companyId, products, toMoney }: Suppli
         supplierId: ledgerSupplier.id,
       });
     } catch {
-      setErrorText('Tedarikci hareketi kaydedilemedi.');
+      setErrorText('Tedarikçi hareketi kaydedilemedi.');
     }
   };
 
@@ -176,7 +176,7 @@ export function SuppliersPage({ branchId, companyId, products, toMoney }: Suppli
           setLedgerPage(1);
         }}
         onCreateTransaction={handleCreateTransaction}
-        onPageChange={setLedgerPage}
+        onPageChange={setPage}
         pagination={
           transactions?.pagination ?? {
             limit: 50,
@@ -193,36 +193,28 @@ export function SuppliersPage({ branchId, companyId, products, toMoney }: Suppli
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="border-b border-gray-800 bg-gray-900 px-6 py-3">
+    <section className="panel-grid">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         {errorText && <div className="banner error">{errorText}</div>}
-        <nav className="-mb-3 flex space-x-8" aria-label="Tabs">
+        <div className="tabs-row" style={{ alignSelf: 'flex-start' }}>
           <button
-            className={`whitespace-nowrap border-b-2 px-1 py-2 text-sm font-medium ${
-              activeSubTab === 'suppliers'
-                ? 'border-teal-500 text-teal-400'
-                : 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'
-            }`}
+            className={`tab-btn ${activeSubTab === 'suppliers' ? 'active' : ''}`}
             onClick={() => setActiveSubTab('suppliers')}
             type="button"
           >
-            Tedarikciler
+            Tedarikçiler
           </button>
           <button
-            className={`whitespace-nowrap border-b-2 px-1 py-2 text-sm font-medium ${
-              activeSubTab === 'invoices'
-                ? 'border-teal-500 text-teal-400'
-                : 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'
-            }`}
+            className={`tab-btn ${activeSubTab === 'invoices' ? 'active' : ''}`}
             onClick={() => setActiveSubTab('invoices')}
             type="button"
           >
-            Alis Faturalari
+            Alış Faturaları
           </button>
-        </nav>
+        </div>
       </div>
 
-      <div className="flex-1 overflow-hidden">
+      <div>
         {activeSubTab === 'suppliers' ? (
           <SupplierListPage
             isLoading={isLoading}
@@ -240,6 +232,6 @@ export function SuppliersPage({ branchId, companyId, products, toMoney }: Suppli
           <PurchaseInvoicesPage branchId={branchId} companyId={companyId} products={products} toMoney={toMoney} />
         )}
       </div>
-    </div>
+    </section>
   );
 }

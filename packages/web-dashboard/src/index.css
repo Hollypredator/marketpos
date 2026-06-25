@@ -477,6 +477,7 @@ label {
   letter-spacing: 0.01em;
 }
 
+input:not([type]),
 input[type=text],
 input[type=email],
 input[type=password],
@@ -688,6 +689,20 @@ input[type=checkbox] {
   font-size: 12px;
   font-weight: 510;
   color: var(--fg-4);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.15s ease;
+}
+
+.step:hover:not(.active):not(.done) {
+  color: var(--fg-2);
+}
+
+.step:hover .step-num {
+  border-color: var(--fg-3);
 }
 .step-num {
   width: 22px;

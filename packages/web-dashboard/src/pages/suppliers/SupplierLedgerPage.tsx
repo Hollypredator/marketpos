@@ -53,7 +53,7 @@ export function SupplierLedgerPage({
     event.preventDefault();
     const parsedAmount = Number(amount);
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
-      setErrorText('Tutar 0 dan buyuk olmali.');
+      setErrorText('Tutar 0 dan büyük olmalı.');
       return;
     }
     setErrorText(null);
@@ -67,62 +67,60 @@ export function SupplierLedgerPage({
   };
 
   return (
-    <div className="flex h-full flex-col bg-gray-900">
-      <div className="flex items-center border-b border-gray-800 px-6 py-4">
-        <button className="mr-4 text-gray-400 hover:text-white" onClick={onBack} type="button">
-          <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path d="M10 19l-7-7m0 0l7-7m-7 7h18" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} />
-          </svg>
+    <section className="panel-grid">
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <button className="btn" onClick={onBack} type="button">
+          ← Geri
         </button>
         <div>
-          <h2 className="text-xl font-semibold text-white">Tedarikci Hareketleri</h2>
-          <p className="text-sm text-gray-400">
-            {supplier.name} | Guncel Bakiye: {toMoney(supplier.balance)}
+          <h2>Tedarikçi Hareketleri</h2>
+          <p className="muted">
+            {supplier.name} | Güncel Bakiye: {toMoney(supplier.balance)}
           </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 p-6 lg:grid-cols-3">
-        <form className="space-y-3 rounded-lg border border-gray-800 bg-gray-900/50 p-4" onSubmit={handleSubmit}>
-          <h3 className="text-sm font-semibold text-white">Yeni Hareket</h3>
-          {errorText && <div className="banner error">{errorText}</div>}
-          <select
-            className="w-full rounded border border-gray-700 bg-gray-800 px-3 py-2 text-white outline-none focus:border-teal-500"
-            onChange={(event) => setType(event.target.value as 'DEBT' | 'PAYMENT')}
-            value={type}
-          >
-            <option value="PAYMENT">Odeme (Borc Azalt)</option>
-            <option value="DEBT">Ek Borc (Verecek Artir)</option>
-          </select>
-          <input
-            className="w-full rounded border border-gray-700 bg-gray-800 px-3 py-2 text-white outline-none focus:border-teal-500"
-            min="0.01"
-            onChange={(event) => setAmount(event.target.value)}
-            placeholder="Tutar"
-            step="0.01"
-            type="number"
-            value={amount}
-          />
-          <textarea
-            className="w-full rounded border border-gray-700 bg-gray-800 px-3 py-2 text-white outline-none focus:border-teal-500"
-            onChange={(event) => setDescription(event.target.value)}
-            placeholder="Aciklama"
-            rows={3}
-            value={description}
-          />
-          <button
-            className="w-full rounded bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-500 disabled:opacity-50"
-            disabled={creating}
-            type="submit"
-          >
-            {creating ? 'Kaydediliyor...' : 'Hareket Kaydet'}
-          </button>
-        </form>
-
-        <div className="overflow-x-auto rounded-lg border border-gray-800 bg-gray-900/50 lg:col-span-2">
-          <div className="grid grid-cols-1 gap-3 border-b border-gray-800 px-4 py-3 lg:grid-cols-3">
+      <div className="panel-grid two-col">
+        <article className="card" style={{ alignSelf: 'flex-start' }}>
+          <h3>Yeni Hareket</h3>
+          <p className="muted" style={{ marginBottom: '10px' }}>Tedarikçi hesabı için manuel borç/ödeme fişi girin.</p>
+          <form className="form-grid compact" onSubmit={handleSubmit}>
+            {errorText && <div className="banner error">{errorText}</div>}
             <select
-              className="rounded border border-gray-700 bg-gray-800 px-3 py-2 text-white outline-none focus:border-teal-500"
+              onChange={(event) => setType(event.target.value as 'DEBT' | 'PAYMENT')}
+              value={type}
+            >
+              <option value="PAYMENT">Ödeme (Borç Azalt)</option>
+              <option value="DEBT">Ek Borç (Verecek Artır)</option>
+            </select>
+            <input
+              min="0.01"
+              onChange={(event) => setAmount(event.target.value)}
+              placeholder="Tutar"
+              step="0.01"
+              type="number"
+              value={amount}
+            />
+            <textarea
+              onChange={(event) => setDescription(event.target.value)}
+              placeholder="Açıklama"
+              rows={3}
+              value={description}
+            />
+            <button
+              className="btn primary"
+              style={{ width: '100%' }}
+              disabled={creating}
+              type="submit"
+            >
+              {creating ? 'Kaydediliyor...' : 'Hareket Kaydet'}
+            </button>
+          </form>
+        </article>
+
+        <article className="card">
+          <div className="inline-row three" style={{ marginBottom: '14px' }}>
+            <select
               onChange={(event) =>
                 onChangeLedgerFilters({
                   ...ledgerFilters,
@@ -131,12 +129,11 @@ export function SupplierLedgerPage({
               }
               value={ledgerFilters.type}
             >
-              <option value="">Tum Tipler</option>
-              <option value="DEBT">Borc</option>
-              <option value="PAYMENT">Odeme</option>
+              <option value="">Tüm Tipler</option>
+              <option value="DEBT">Borç</option>
+              <option value="PAYMENT">Ödeme</option>
             </select>
             <input
-              className="rounded border border-gray-700 bg-gray-800 px-3 py-2 text-white outline-none focus:border-teal-500"
               onChange={(event) =>
                 onChangeLedgerFilters({
                   ...ledgerFilters,
@@ -147,7 +144,6 @@ export function SupplierLedgerPage({
               value={ledgerFilters.dateFrom}
             />
             <input
-              className="rounded border border-gray-700 bg-gray-800 px-3 py-2 text-white outline-none focus:border-teal-500"
               onChange={(event) =>
                 onChangeLedgerFilters({
                   ...ledgerFilters,
@@ -158,56 +154,64 @@ export function SupplierLedgerPage({
               value={ledgerFilters.dateTo}
             />
           </div>
-          <table className="w-full text-left text-sm text-gray-300">
-            <thead className="border-b border-gray-800 bg-gray-950 text-xs uppercase text-gray-500">
-              <tr>
-                <th className="px-4 py-3">Tarih</th>
-                <th className="px-4 py-3">Tip</th>
-                <th className="px-4 py-3">Belge</th>
-                <th className="px-4 py-3">Aciklama</th>
-                <th className="px-4 py-3 text-right">Tutar</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-800">
-              {isLoading ? (
+
+          <div className="table-wrap">
+            <table>
+              <thead>
                 <tr>
-                  <td className="px-4 py-8 text-center text-gray-500" colSpan={5}>
-                    Yukleniyor...
-                  </td>
+                  <th>Tarih</th>
+                  <th>Tip</th>
+                  <th>Belge</th>
+                  <th>Açıklama</th>
+                  <th style={{ textAlign: 'right' }}>Tutar</th>
                 </tr>
-              ) : transactions.length === 0 ? (
-                <tr>
-                  <td className="px-4 py-8 text-center text-gray-500" colSpan={5}>
-                    Henuz hareket yok.
-                  </td>
-                </tr>
-              ) : (
-                transactions.map((transaction) => (
-                  <tr key={transaction.id}>
-                    <td className="px-4 py-3">{toDateTime(transaction.createdAt)}</td>
-                    <td className="px-4 py-3">
-                      {transaction.type === 'PAYMENT' ? 'Odeme' : 'Borc'}
-                    </td>
-                    <td className="px-4 py-3 text-gray-400">
-                      {transaction.invoice
-                        ? `${transaction.invoice.invoiceNumber} (${transaction.invoice.documentType})`
-                        : '-'}
-                    </td>
-                    <td className="px-4 py-3">{transaction.description || '-'}</td>
-                    <td
-                      className={`px-4 py-3 text-right font-medium ${
-                        transaction.type === 'PAYMENT' ? 'text-red-400' : 'text-teal-400'
-                      }`}
-                    >
-                      {transaction.type === 'PAYMENT' ? '-' : '+'}
-                      {toMoney(transaction.amount)}
+              </thead>
+              <tbody>
+                {isLoading ? (
+                  <tr>
+                    <td className="muted" style={{ textAlign: 'center', padding: '20px' }} colSpan={5}>
+                      Yükleniyor...
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-          <div className="border-t border-gray-800 p-4">
+                ) : transactions.length === 0 ? (
+                  <tr>
+                    <td className="muted" style={{ textAlign: 'center', padding: '20px' }} colSpan={5}>
+                      Henüz hareket yok.
+                    </td>
+                  </tr>
+                ) : (
+                  transactions.map((transaction) => (
+                    <tr key={transaction.id}>
+                      <td>{toDateTime(transaction.createdAt)}</td>
+                      <td>
+                        <span className={`pill ${transaction.type === 'PAYMENT' ? 'red' : 'green'}`}>
+                          {transaction.type === 'PAYMENT' ? 'Ödeme' : 'Borç'}
+                        </span>
+                      </td>
+                      <td className="muted">
+                        {transaction.invoice
+                          ? `${transaction.invoice.invoiceNumber} (${transaction.invoice.documentType})`
+                          : '-'}
+                      </td>
+                      <td>{transaction.description || '-'}</td>
+                      <td
+                        style={{
+                          textAlign: 'right',
+                          fontWeight: 500,
+                          color: transaction.type === 'PAYMENT' ? 'var(--red)' : 'var(--emerald)'
+                        }}
+                      >
+                        {transaction.type === 'PAYMENT' ? '-' : '+'}
+                        {toMoney(transaction.amount)}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ marginTop: '14px' }}>
             <PaginationControls
               onPageChange={onPageChange}
               page={pagination.page}
@@ -215,8 +219,8 @@ export function SupplierLedgerPage({
               total={pagination.total}
             />
           </div>
-        </div>
+        </article>
       </div>
-    </div>
+    </section>
   );
 }

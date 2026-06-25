@@ -36,105 +36,111 @@ export function SupplierListPage({
   );
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-gray-800 bg-gray-900 px-6 py-4">
+    <article className="card">
+      <div className="card-header">
         <div>
-          <h2 className="text-xl font-semibold text-white">Tedarikciler</h2>
-          <p className="text-sm text-gray-400">Urun alimi yaptiginiz toptanci ve firmalar</p>
+          <h2 className="card-title">Tedarikçiler</h2>
+          <p className="card-sub">Ürün alımı yaptığınız toptancı ve firmalar</p>
         </div>
         <button
-          className="rounded bg-teal-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-teal-500"
+          className="btn primary"
           onClick={onAddClick}
           type="button"
         >
-          Yeni Tedarikci
+          Yeni Tedarikçi
         </button>
       </div>
 
-      <div className="flex-1 overflow-auto p-6 text-sm">
-        <div className="mb-4">
+      <div className="form-grid compact" style={{ marginBottom: '14px' }}>
+        <div style={{ maxWidth: '320px' }}>
           <input
-            className="w-full max-w-sm rounded border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-400 focus:border-teal-500 focus:outline-none"
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Isim veya Vergi No ara..."
+            placeholder="İsim veya Vergi No ara..."
             type="text"
             value={search}
           />
         </div>
-
-        {isLoading ? (
-          <div className="py-10 text-center text-gray-500">Yukleniyor...</div>
-        ) : filteredSuppliers.length === 0 ? (
-          <div className="py-10 text-center text-gray-500">Tedarikci bulunamadi.</div>
-        ) : (
-          <div className="overflow-x-auto rounded border border-gray-800 bg-gray-900 shadow">
-            <table className="w-full text-left text-gray-300">
-              <thead className="border-b border-gray-800 bg-gray-950 text-xs uppercase text-gray-500">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Tedarikci Adi</th>
-                  <th className="px-4 py-3 font-medium">Vergi No</th>
-                  <th className="px-4 py-3 font-medium">Telefon</th>
-                  <th className="px-4 py-3 text-right font-medium">Guncel Bakiye</th>
-                  <th className="px-4 py-3 text-right font-medium">Islemler</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-800">
-                {filteredSuppliers.map((supplier) => (
-                  <tr className="hover:bg-gray-800/50" key={supplier.id}>
-                    <td className="whitespace-nowrap px-4 py-3 font-medium text-white">{supplier.name}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-gray-400">{supplier.taxNumber || '-'}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-gray-400">{supplier.phone || '-'}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right">
-                      <span
-                        className={
-                          supplier.balance < 0
-                            ? 'font-medium text-red-400'
-                            : supplier.balance > 0
-                              ? 'font-medium text-teal-400'
-                              : 'text-gray-400'
-                        }
-                      >
-                        {toMoney(supplier.balance)}
-                      </span>
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right">
-                      <button
-                        className="mr-3 text-indigo-400 hover:text-indigo-300"
-                        onClick={() => onLedgerClick(supplier)}
-                        type="button"
-                      >
-                        Hareket
-                      </button>
-                      <button
-                        className="mr-3 text-teal-500 hover:text-teal-400"
-                        onClick={() => onEditClick(supplier)}
-                        type="button"
-                      >
-                        Duzenle
-                      </button>
-                      <button
-                        className="text-red-500 hover:text-red-400"
-                        onClick={() => {
-                          if (window.confirm('Tedarikci silinsin mi?')) {
-                            onDeleteClick(supplier);
-                          }
-                        }}
-                        type="button"
-                      >
-                        Sil
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
       </div>
 
-      <div className="border-t border-gray-800 bg-gray-900 p-4">
+      {isLoading ? (
+        <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--fg-4)' }}>Yükleniyor...</div>
+      ) : filteredSuppliers.length === 0 ? (
+        <div className="empty-state">
+          <span className="empty-state-icon">👤</span>
+          <span className="empty-state-title">Tedarikçi bulunamadı</span>
+          <span className="empty-state-sub">Arama kriterlerine uyan tedarikçi kaydı bulunmuyor.</span>
+        </div>
+      ) : (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Tedarikçi Adı</th>
+                <th>Vergi No</th>
+                <th>Telefon</th>
+                <th style={{ textAlign: 'right' }}>Güncel Bakiye</th>
+                <th style={{ textAlign: 'right' }}>İşlemler</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredSuppliers.map((supplier) => (
+                <tr key={supplier.id}>
+                  <td style={{ fontWeight: 500, color: 'var(--fg-1)' }}>{supplier.name}</td>
+                  <td>{supplier.taxNumber || '-'}</td>
+                  <td>{supplier.phone || '-'}</td>
+                  <td style={{ textAlign: 'right' }}>
+                    <span
+                      className={`pill ${
+                        supplier.balance < 0
+                          ? 'red'
+                          : supplier.balance > 0
+                            ? 'green'
+                            : 'gray'
+                      }`}
+                    >
+                      {toMoney(supplier.balance)}
+                    </span>
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    <button
+                      className="btn ghost"
+                      style={{ marginRight: '6px' }}
+                      onClick={() => onLedgerClick(supplier)}
+                      type="button"
+                    >
+                      Hareket
+                    </button>
+                    <button
+                      className="btn ghost"
+                      style={{ marginRight: '6px', color: 'var(--accent-v)' }}
+                      onClick={() => onEditClick(supplier)}
+                      type="button"
+                    >
+                      Düzenle
+                    </button>
+                    <button
+                      className="btn ghost"
+                      style={{ color: 'var(--red)' }}
+                      onClick={() => {
+                        if (window.confirm('Tedarikçi silinsin mi?')) {
+                          onDeleteClick(supplier);
+                        }
+                      }}
+                      type="button"
+                    >
+                      Sil
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div style={{ marginTop: '14px' }}>
         <PaginationControls onPageChange={onPageChange} page={page} pageSize={50} total={totalItems} />
       </div>
-    </div>
+    </article>
   );
 }
