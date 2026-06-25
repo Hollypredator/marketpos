@@ -596,6 +596,9 @@ export default function App(): React.ReactElement {
     subscriptionMutations.savePlan.isPending;
 
   useEffect(() => {
+    if (!auth.isAuthenticated) {
+      return;
+    }
     setSearchParams(
       (current) => {
         const next = new URLSearchParams(current);
@@ -1580,7 +1583,7 @@ export default function App(): React.ReactElement {
     if (location.pathname === '/payment-success') {
       return <PaymentSuccessPage />;
     }
-    if (location.pathname === '/login') {
+    if (location.pathname === '/login' || location.pathname === '/yonetim') {
       return (
         <LoginView
           accessBlockedMessage={auth.accessBlockedMessage}
