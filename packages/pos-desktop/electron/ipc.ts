@@ -123,6 +123,10 @@ export const IPC_CHANNELS = {
   EINVOICE_GET_STATUS: 'einvoice:get-status',
   YNOKC_PROCESS_PAYMENT: 'ynokc:process-payment',
   YNOKC_CONFIGURE: 'ynokc:configure',
+  APP_SELECT_DIRECTORY: 'app:select-directory',
+  BACKUP_EXPORT_TO_PATH: 'backup:export-to-path',
+  DB_RETRY_QUEUE_RECORD: 'db:retry-queue-record',
+  DB_DELETE_QUEUE_RECORD: 'db:delete-queue-record',
 } as const;
 
 export interface RuntimeInfo {
@@ -184,6 +188,8 @@ export interface LocalDailyReportQuery {
   limit?: number;
   referenceAt?: string;
   registerId: string;
+  from?: string;
+  to?: string;
 }
 
 export interface SetupStepUpdatePayload {
@@ -312,6 +318,11 @@ export interface ElectronApi {
 
   processYNOKCPayment(payload: import('./services/yn-okc').YNOKCPaymentPayload): Promise<import('./services/yn-okc').YNOKCResult>;
   configureYNOKC(config: { brand: import('./services/yn-okc').YNOKCBrand; ip: string; port: number }): Promise<void>;
+
+  selectDirectory(): Promise<string | null>;
+  copyBackupToPath(fileName: string, targetPath: string): Promise<boolean>;
+  retryQueueRecord(entity: string, id: string): Promise<boolean>;
+  deleteQueueRecord(entity: string, id: string): Promise<boolean>;
 }
 
 export type {

@@ -182,13 +182,13 @@ describe('StockPage', () => {
     render(<StockPage />);
 
     const toggle = await screen.findByTestId('stock-ui-variant-toggle');
-    expect(toggle.textContent).toContain('Klasik Gorunum');
+    expect(toggle.textContent).toContain('Klasik Görünüm');
     expect(window.localStorage.getItem('stock_ui_variant')).toBe('neo');
 
     await user.click(toggle);
 
     expect(window.localStorage.getItem('stock_ui_variant')).toBe('classic');
-    expect(toggle.textContent).toContain('Yeni Gorunum');
+    expect(toggle.textContent).toContain('Yeni Görünüm');
   });
 
   it('opens and closes product drawer from product list row', async () => {
@@ -217,7 +217,7 @@ describe('StockPage', () => {
     const searchInputs = screen.getAllByPlaceholderText(/ara/i);
     await user.type(searchInputs[0] as HTMLInputElement, 'XYZ');
     const productListSection = screen
-      .getByRole('heading', { name: 'Urun Listesi' })
+      .getByRole('heading', { name: 'Ürün Listesi' })
       .closest('.stock-section') as HTMLElement | null;
     if (!productListSection) {
       throw new Error('product list section not found');
@@ -226,7 +226,7 @@ describe('StockPage', () => {
     expect(within(productListSection).getByText('XYZ Sabun')).not.toBeNull();
     expect(within(productListSection).getByText(/Sayfa 1\/1/i)).not.toBeNull();
 
-    await user.selectOptions(screen.getByDisplayValue('Tum kayitlar'), 'OUT');
+    await user.selectOptions(screen.getByDisplayValue('Tüm kayıtlar'), 'OUT');
     expect(screen.getByText('ABC Deterjan')).not.toBeNull();
   });
 });

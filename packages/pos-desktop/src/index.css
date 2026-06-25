@@ -3768,3 +3768,9 @@ textarea,
 .accent-gradient-banner span {
   color: white !important;
 }
+
+.input-barcode-scanner:focus {
+  border-color: var(--success) !important;
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.25) !important;
+}
+

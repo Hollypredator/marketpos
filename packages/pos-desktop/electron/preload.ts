@@ -144,6 +144,14 @@ const electronApi: ElectronApi = {
     ipcRenderer.invoke(IPC_CHANNELS.YNOKC_PROCESS_PAYMENT, payload),
   configureYNOKC: async (config) =>
     ipcRenderer.invoke(IPC_CHANNELS.YNOKC_CONFIGURE, config),
+  selectDirectory: async () =>
+    ipcRenderer.invoke(IPC_CHANNELS.APP_SELECT_DIRECTORY),
+  copyBackupToPath: async (fileName, targetPath) =>
+    ipcRenderer.invoke(IPC_CHANNELS.BACKUP_EXPORT_TO_PATH, { fileName, targetPath }),
+  retryQueueRecord: async (entity, id) =>
+    ipcRenderer.invoke(IPC_CHANNELS.DB_RETRY_QUEUE_RECORD, { entity, id }),
+  deleteQueueRecord: async (entity, id) =>
+    ipcRenderer.invoke(IPC_CHANNELS.DB_DELETE_QUEUE_RECORD, { entity, id }),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronApi);

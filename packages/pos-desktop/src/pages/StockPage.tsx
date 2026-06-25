@@ -108,6 +108,29 @@ function parseInteger(value: string, fallback: number): number {
   return fallback;
 }
 
+function playBeep(frequency: number, duration: number): void {
+  try {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const audioCtx = new AudioContextClass();
+    const oscillator = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+
+    oscillator.type = 'sine';
+    oscillator.frequency.value = frequency;
+    gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + duration);
+
+    oscillator.start(audioCtx.currentTime);
+    oscillator.stop(audioCtx.currentTime + duration);
+  } catch (e) {
+    console.error('Audio feedback failed:', e);
+  }
+}
+
 export default function StockPage() {
   const toast = useToast();
   const { dispatch, state } = useApp();
@@ -538,9 +561,11 @@ export default function StockPage() {
     }
     const target = rows.find((row) => row.product.barcode === barcode);
     if (!target) {
+      playBeep(150, 0.35);
       toast.error('Sayim icin barkod bulunamadi.');
       return;
     }
+    playBeep(440, 0.1);
     setCountMap((current) => ({
       ...current,
       [target.product.id]: (current[target.product.id] ?? 0) + 1,
@@ -738,16 +763,16 @@ export default function StockPage() {
             </div>
           </div>
           <div className="stock-ops-actions">
-            <button className="btn btn-ghost btn-sm" onClick={() => void loadStock()} type="button">
+            <button className="btn btn-ghost btn-sm tactile-press" onClick={() => void loadStock()} type="button">
               <svg style={{ width: '18px', height: '18px', marginRight: '6px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
               Yenile
             </button>
-            <button className="btn btn-ghost btn-sm" onClick={clearAllFilters} type="button">
+            <button className="btn btn-ghost btn-sm tactile-press" onClick={clearAllFilters} type="button">
               <svg style={{ width: '18px', height: '18px', marginRight: '6px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
               Filtreleri Temizle
             </button>
             <button
-              className="btn btn-success btn-sm"
+              className="btn btn-success btn-sm tactile-press"
               onClick={() => setIsCreateDrawerOpen(true)}
               type="button"
             >
@@ -755,20 +780,20 @@ export default function StockPage() {
               Yeni Ürün Ekle
             </button>
             <button
-              className="btn btn-primary btn-sm"
+              className="btn btn-primary btn-sm tactile-press"
               data-testid="stock-ui-variant-toggle"
               onClick={toggleStockUiVariant}
               type="button"
             >
               <svg style={{ width: '18px', height: '18px', marginRight: '6px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
-              {stockUiVariant === 'neo' ? 'Klasik Gorunum' : 'Yeni Gorunum'}
+              {stockUiVariant === 'neo' ? 'Klasik Görünüm' : 'Yeni Görünüm'}
             </button>
           </div>
         </div>
 
         <div className="stock-main-grid">
-          <div className="card stock-section">
-            <h3 className="card-title stock-section-title">Urun Listesi</h3>
+          <div className="card glass-card stock-section">
+            <h3 className="card-title stock-section-title">Ürün Listesi</h3>
             <div className="stock-filter-grid">
               <div className="login-field">
                 <label>Arama</label>
@@ -903,7 +928,7 @@ export default function StockPage() {
                 </select>
               </div>
               <button
-                className="btn btn-primary"
+                className="btn btn-primary tactile-press"
                 disabled={isApplyingBulkUpdate || (bulkTarget === 'SELECTED' && selectedProductIds.length === 0)}
                 onClick={() => void applyBulkPriceUpdate()}
                 type="button"
@@ -973,7 +998,7 @@ export default function StockPage() {
                         </td>
                         <td style={{ textAlign: 'right', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                           <button
-                            className="btn btn-secondary btn-sm"
+                            className="btn btn-secondary btn-sm tactile-press"
                             onClick={() => {
                               if (window.electronAPI) {
                                 void window.electronAPI.printBarcode({
@@ -991,7 +1016,7 @@ export default function StockPage() {
                             <svg style={{ width: '16px', height: '16px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
                           </button>
                           <button
-                            className="btn btn-ghost btn-sm"
+                            className="btn btn-ghost btn-sm tactile-press"
                             data-testid={`edit-product-${product.id}`}
                             onClick={() => startEditProduct(product.id)}
                             type="button"
@@ -1015,7 +1040,7 @@ export default function StockPage() {
             </div>
             <div className="stock-inline-actions">
               <button
-                className="btn btn-ghost btn-sm"
+                className="btn btn-ghost btn-sm tactile-press"
                 disabled={productPage <= 1}
                 onClick={() => setProductPage((current) => Math.max(1, current - 1))}
                 type="button"
@@ -1023,7 +1048,7 @@ export default function StockPage() {
                 Onceki
               </button>
               <button
-                className="btn btn-ghost btn-sm"
+                className="btn btn-ghost btn-sm tactile-press"
                 disabled={productPage >= productTotalPages}
                 onClick={() =>
                   setProductPage((current) => Math.min(productTotalPages, current + 1))
@@ -1035,7 +1060,7 @@ export default function StockPage() {
             </div>
           </div>
 
-          <div className="card stock-section">
+          <div className="card glass-card stock-section">
             <h3 className="card-title stock-section-title">Stok Durumu</h3>
             <div className="stock-filter-grid">
               <div className="login-field">
@@ -1043,7 +1068,7 @@ export default function StockPage() {
                 <input
                   className="input"
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Urun adi veya barkod ara"
+                  placeholder="Ürün adı veya barkod ara"
                   type="text"
                   value={query}
                 />
@@ -1055,7 +1080,7 @@ export default function StockPage() {
                   onChange={(event) => setStockScope(event.target.value as 'ALL' | 'CRITICAL' | 'OUT')}
                   value={stockScope}
                 >
-                  <option value="ALL">Tum kayitlar</option>
+                  <option value="ALL">Tüm kayıtlar</option>
                   <option value="CRITICAL">Kritik + Stok Yok</option>
                   <option value="OUT">Sadece Stok Yok</option>
                 </select>
@@ -1063,13 +1088,13 @@ export default function StockPage() {
             </div>
           </div>
 
-          <div className="card stock-section">
+          <div className="card glass-card stock-section">
             <h3 className="card-title stock-section-title">
-              Hizli Sayim Modu
+              Hızlı Sayım Modu
             </h3>
             <div className="stock-inline-actions">
               <input
-                className="input"
+                className="input input-barcode-scanner"
                 placeholder="Barkod okutun"
                 value={countScanInput}
                 onChange={(event) => setCountScanInput(event.target.value)}
@@ -1080,9 +1105,9 @@ export default function StockPage() {
                   }
                 }}
               />
-              <button className="btn btn-primary" type="button" onClick={addCountByBarcode}>
+              <button className="btn btn-primary tactile-press" type="button" onClick={addCountByBarcode}>
                 <svg style={{ width: '18px', height: '18px', marginRight: '6px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
-                Sayima Ekle
+                Sayıma Ekle
               </button>
             </div>
 
@@ -1135,31 +1160,31 @@ export default function StockPage() {
 
             <div className="stock-inline-actions">
               <button
-                className="btn btn-success"
+                className="btn btn-success tactile-press"
                 type="button"
                 disabled={isApplyingCount || countRows.length === 0}
                 onClick={() => void applyCountAdjustments()}
               >
                 <svg style={{ width: '20px', height: '20px', marginRight: '6px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
-                {isApplyingCount ? 'Uygulaniyor...' : 'Sayim Farkini Uygula'}
+                {isApplyingCount ? 'Uygulanıyor...' : 'Sayım Farkını Uygula'}
               </button>
               <button
-                className="btn btn-ghost"
+                className="btn btn-ghost tactile-press"
                 type="button"
                 disabled={isApplyingCount || countRows.length === 0}
                 onClick={() => setCountMap({})}
               >
                 <svg style={{ width: '18px', height: '18px', margin: '0' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                Sayimi Temizle
+                Sayımı Temizle
               </button>
             </div>
           </div>
 
-          {isLoading && <div className="card stock-section stock-banner">Stok verisi yukleniyor...</div>}
-          {!isLoading && error.length > 0 && <div className="card stock-section stock-banner stock-banner-error">{error}</div>}
+          {isLoading && <div className="card glass-card stock-section stock-banner">Stok verisi yükleniyor...</div>}
+          {!isLoading && error.length > 0 && <div className="card glass-card stock-section stock-banner stock-banner-error">{error}</div>}
 
           {!isLoading && error.length === 0 && (
-            <div className="card stock-section">
+            <div className="card glass-card stock-section">
               <div className="table-wrapper stock-table-wrapper">
                 <table className="table stock-table">
                   <thead>
@@ -1205,7 +1230,7 @@ export default function StockPage() {
                   Toplam {filteredStockRows.length} kayit | Sayfa {stockPage}/{stockTotalPages}
                 </span>
                 <button
-                  className="btn btn-ghost btn-sm"
+                  className="btn btn-ghost btn-sm tactile-press"
                   disabled={stockPage <= 1}
                   onClick={() => setStockPage((current) => Math.max(1, current - 1))}
                   type="button"
@@ -1213,7 +1238,7 @@ export default function StockPage() {
                   Onceki
                 </button>
                 <button
-                  className="btn btn-ghost btn-sm"
+                  className="btn btn-ghost btn-sm tactile-press"
                   disabled={stockPage >= stockTotalPages}
                   onClick={() => setStockPage((current) => Math.min(stockTotalPages, current + 1))}
                   type="button"
@@ -1227,11 +1252,11 @@ export default function StockPage() {
 
         {selectedProduct && (
           <div className="stock-drawer-overlay" role="dialog" aria-modal="true" aria-label="Urun Duzenleme">
-            <aside className="stock-drawer" data-testid="stock-product-drawer">
+            <aside className="stock-drawer glass-panel" data-testid="stock-product-drawer">
               <div className="stock-drawer-head">
                 <h3>Urun Duzenleme</h3>
                 <button
-                  className="btn btn-ghost btn-sm"
+                  className="btn btn-ghost btn-sm tactile-press"
                   disabled={isSavingProduct}
                   onClick={() => {
                     setSelectedProductId(null);
@@ -1482,7 +1507,7 @@ export default function StockPage() {
 
                 <div className="stock-inline-actions">
                   <button
-                    className="btn btn-success"
+                    className="btn btn-success tactile-press"
                     disabled={isSavingProduct || !activeSession}
                     onClick={() => void submitProductUpdate()}
                     type="button"
@@ -1490,7 +1515,7 @@ export default function StockPage() {
                     {isSavingProduct ? 'Guncelleniyor...' : 'Urunu Guncelle'}
                   </button>
                   <button
-                    className="btn btn-ghost"
+                    className="btn btn-ghost tactile-press"
                     disabled={isSavingProduct}
                     onClick={() => {
                       setSelectedProductId(null);
@@ -1508,11 +1533,11 @@ export default function StockPage() {
 
         {isCreateDrawerOpen && (
           <div className="stock-drawer-overlay" role="dialog" aria-modal="true" aria-label="Yeni Urun Ekle">
-            <aside className="stock-drawer" data-testid="stock-create-drawer">
+            <aside className="stock-drawer glass-panel" data-testid="stock-create-drawer">
               <div className="stock-drawer-head">
                 <h3>Yeni Urun Ekle</h3>
                 <button
-                  className="btn btn-ghost btn-sm"
+                  className="btn btn-ghost btn-sm tactile-press"
                   disabled={isSavingProduct}
                   onClick={() => {
                     setIsCreateDrawerOpen(false);
@@ -1685,7 +1710,7 @@ export default function StockPage() {
 
               <div className="stock-drawer-footer">
                 <button
-                  className="btn btn-success btn-block"
+                  className="btn btn-success btn-block tactile-press"
                   disabled={isSavingProduct || !activeSession}
                   onClick={async () => {
                     await submitProductCreate();

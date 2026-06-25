@@ -2817,6 +2817,36 @@ export class LocalDatabaseService {
     return this.markQueueFailed('local_customer_ops', id, errorMessage);
   }
 
+  public retryQueueRecord(entity: string, id: string): boolean {
+    const table = this.resolveTableFromEntity(entity);
+    const now = new Date().toISOString();
+    const result = this.db.prepare(
+      `UPDATE ${table} SET sync_status = 'PENDING', sync_error = NULL, failure_count = 0, updated_at = ? WHERE id = ?`
+    ).run(now, id);
+    return Number(result.changes ?? 0) > 0;
+  }
+
+  public deleteQueueRecord(entity: string, id: string): boolean {
+    const table = this.resolveTableFromEntity(entity);
+    const result = this.db.prepare(
+      `DELETE FROM ${table} WHERE id = ?`
+    ).run(id);
+    return Number(result.changes ?? 0) > 0;
+  }
+
+  private resolveTableFromEntity(entity: string): string {
+    switch (entity) {
+      case 'sales': return 'local_sales';
+      case 'refunds': return 'local_refunds';
+      case 'customerOps': return 'local_customer_ops';
+      case 'productOps': return 'local_product_ops';
+      case 'supplierOps': return 'local_supplier_ops';
+      case 'purchaseOps': return 'local_purchase_ops';
+      case 'stockOps': return 'local_stock_ops';
+      default: throw new Error(`Gecersiz entity tipi: ${entity}`);
+    }
+  }
+
   public getQueueCounts(): {
     customerOps: number;
     productOps: number;
@@ -3275,9 +3305,32 @@ export class LocalDatabaseService {
     limit?: number;
     referenceAt?: string;
     registerId: string;
+    from?: string;
+    to?: string;
   }): LocalDailyReportSnapshot {
     const safeLimit = Math.max(1, Math.min(100, Math.round(params.limit ?? 10)));
-    const { dayLabel, endIso, startIso } = toLocalDayWindow(params.referenceAt);
+    let startIso: string;
+    let endIso: string;
+    let dayLabel: string;
+
+    if (params.from && params.to) {
+      const baseFrom = new Date(params.from);
+      const safeFrom = Number.isFinite(baseFrom.getTime()) ? baseFrom : new Date();
+      safeFrom.setHours(0, 0, 0, 0);
+
+      const baseTo = new Date(params.to);
+      const safeTo = Number.isFinite(baseTo.getTime()) ? baseTo : new Date();
+      safeTo.setHours(23, 59, 59, 999);
+
+      startIso = safeFrom.toISOString();
+      endIso = safeTo.toISOString();
+      dayLabel = `${params.from} - ${params.to}`;
+    } else {
+      const window = toLocalDayWindow(params.referenceAt);
+      startIso = window.startIso;
+      endIso = window.endIso;
+      dayLabel = window.dayLabel;
+    }
 
     const cachedProductRows = this.db.prepare(
       `

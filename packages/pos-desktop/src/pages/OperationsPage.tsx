@@ -390,6 +390,65 @@ export default function OperationsPage(): React.ReactElement {
     }
   };
 
+  const runCreateExternalBackup = async (): Promise<void> => {
+    if (!canMutateOperations) {
+      toast.error('Bu islem icin yazma yetkiniz yok.');
+      return;
+    }
+    if (!window.electronAPI) {
+      toast.error('Electron API bulunamadi.');
+      return;
+    }
+    try {
+      toast.info('Yedek dosyası oluşturuluyor...');
+      const backup = await createBackup();
+      toast.info('Yedek kopyalanacak harici klasörü seçin...');
+      const targetPath = await window.electronAPI.selectDirectory();
+      if (!targetPath) {
+        toast.warn('Klasör seçilmedi, yedek sadece lokal olarak kaydedildi.');
+        await loadData();
+        return;
+      }
+      const success = await window.electronAPI.copyBackupToPath(backup.fileName, targetPath);
+      if (success) {
+        toast.success(`Yedek harici klasöre kopyalandı:\n${targetPath}`);
+      } else {
+        toast.error('Yedek kopyalanamadı.');
+      }
+      await loadData();
+    } catch (caughtError: unknown) {
+      toast.error(caughtError instanceof Error ? caughtError.message : 'Yedek oluşturulamadı.');
+    }
+  };
+
+  const handleTestPrint = async () => {
+    try {
+      toast.info('Yazici testi gonderiliyor...');
+      const res = await window.electronAPI.testHardwarePrint();
+      if (res.success) {
+        toast.success('Yazici test fisi basariyla gonderildi.');
+      } else {
+        toast.error(`Yazici test hatasi: ${res.message}`);
+      }
+    } catch {
+      toast.error('Yazici testi sirasinda hata olustu.');
+    }
+  };
+
+  const handleTestDrawer = async () => {
+    try {
+      toast.info('Cekmece tetikleniyor...');
+      const res = await window.electronAPI.testHardwareDrawer();
+      if (res.success) {
+        toast.success('Cekmece basariyla acildi.');
+      } else {
+        toast.error(`Cekmece hatasi: ${res.message}`);
+      }
+    } catch {
+      toast.error('Cekmece tetikleme sirasinda hata olustu.');
+    }
+  };
+
   const submitBackupPolicy = async (): Promise<void> => {
     if (!canMutateOperations) {
       toast.error('Bu islem icin yazma yetkiniz yok.');
@@ -840,7 +899,7 @@ export default function OperationsPage(): React.ReactElement {
 
   if (!activeSession) {
     return (
-      <div className="card" style={{ margin: '1rem' }}>
+      <div className="card glass-card" style={{ margin: '1rem' }}>
         Operasyon paneli icin aktif oturum gerekli.
       </div>
     );
@@ -852,16 +911,16 @@ export default function OperationsPage(): React.ReactElement {
         <span className="header-title">Operasyon Merkezi</span>
         <div className="header-info">
           <span>Register: {activeSession.registerId}</span>
-          <button className="btn btn-ghost btn-sm" onClick={() => void loadData()} type="button">
+          <button className="btn btn-ghost btn-sm tactile-press" onClick={() => void loadData()} type="button">
             {isLoading ? 'Yukleniyor...' : 'Yenile'}
           </button>
         </div>
       </div>
 
       <div style={{ height: 'calc(100vh - 98px)', overflow: 'auto', padding: '1rem' }}>
-        <div className="card" style={{ marginBottom: '1rem' }}>
+        <div className="card glass-card" style={{ marginBottom: '1rem' }}>
           <h3 className="card-title" style={{ marginBottom: '0.65rem' }}>
-            Operasyon Ozet KPI
+            Operasyon Özet KPI
           </h3>
           <div className="modal-grid-two">
             <p>
@@ -885,14 +944,14 @@ export default function OperationsPage(): React.ReactElement {
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem', marginTop: '0.75rem' }}>
             <button
-              className="btn btn-primary"
+              className="btn btn-primary tactile-press"
               type="button"
               onClick={() => void generateDailyCloseReport()}
             >
               Tek Tik Gunluk Kapanis Raporu (CSV + Ozet)
             </button>
             <button
-              className="btn btn-ghost"
+              className="btn btn-ghost tactile-press"
               type="button"
               onClick={() => void runOfflineReadinessAudit()}
               disabled={isRunningOfflineAudit}
@@ -900,7 +959,7 @@ export default function OperationsPage(): React.ReactElement {
               {isRunningOfflineAudit ? 'Offline Denetim Calisiyor...' : 'Offline Hazirlik Denetimi'}
             </button>
             <button
-              className="btn btn-ghost"
+              className="btn btn-ghost tactile-press"
               type="button"
               onClick={() => void runManualSyncNow()}
               disabled={isManualSyncRunning}
@@ -908,7 +967,7 @@ export default function OperationsPage(): React.ReactElement {
               {isManualSyncRunning ? 'Sync Calisiyor...' : 'Manuel Sync Dene'}
             </button>
             <button
-              className="btn btn-ghost"
+              className="btn btn-ghost tactile-press"
               type="button"
               onClick={() => void exportDiagnosticsBundle()}
             >
@@ -1023,7 +1082,7 @@ export default function OperationsPage(): React.ReactElement {
           )}
         </div>
 
-        <div className="card" style={{ marginBottom: '1rem' }}>
+        <div className="card glass-card" style={{ marginBottom: '1rem' }}>
           <h3 className="card-title" style={{ marginBottom: '0.65rem' }}>
             Cihaz ve Yedekleme
           </h3>
@@ -1097,19 +1156,30 @@ export default function OperationsPage(): React.ReactElement {
               </div>
 
               <button
-                className="btn btn-ghost"
+                className="btn btn-ghost tactile-press"
                 disabled={isSavingBackupPolicy || !canMutateOperations}
                 onClick={() => void submitBackupPolicy()}
                 type="button"
               >
                 {isSavingBackupPolicy ? 'Kaydediliyor...' : 'Yedekleme Politikasini Kaydet'}
               </button>
-              <button className="btn btn-success" type="button" onClick={() => void runCreateBackup()} disabled={!canMutateOperations}>
+              <button className="btn btn-success tactile-press" type="button" onClick={() => void runCreateBackup()} disabled={!canMutateOperations}>
                 Lokal Yedek Olustur
               </button>
-              <button className="btn btn-ghost" type="button" onClick={exportBackupsCsv} disabled={backups.length === 0}>
+              <button className="btn btn-primary tactile-press" type="button" onClick={() => void runCreateExternalBackup()} disabled={!canMutateOperations}>
+                Harici Klasöre Yedekle
+              </button>
+              <button className="btn btn-ghost tactile-press" type="button" onClick={exportBackupsCsv} disabled={backups.length === 0}>
                 Yedek CSV Disa Aktar
               </button>
+              <div style={{ borderTop: '1px solid var(--border)', marginTop: '0.65rem', paddingTop: '0.65rem', display: 'flex', gap: '0.6rem' }}>
+                <button className="btn btn-ghost tactile-press" style={{ flex: 1 }} type="button" onClick={handleTestPrint}>
+                  Yazıcı Test Fişi Yazdır
+                </button>
+                <button className="btn btn-ghost tactile-press" style={{ flex: 1 }} type="button" onClick={handleTestDrawer}>
+                  Kasa Çekmecesini Aç
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1130,7 +1200,7 @@ export default function OperationsPage(): React.ReactElement {
                     <td>{new Date(row.createdAt).toLocaleString('tr-TR')}</td>
                     <td style={{ textAlign: 'right' }}>{(row.sizeBytes / 1024).toFixed(1)} KB</td>
                     <td style={{ textAlign: 'right' }}>
-                      <button className="btn btn-warning btn-sm" type="button" onClick={() => startRestoreBackup(row.fileName)}>
+                      <button className="btn btn-warning btn-sm tactile-press" type="button" onClick={() => startRestoreBackup(row.fileName)}>
                         Geri Yukle
                       </button>
                     </td>
@@ -1148,7 +1218,7 @@ export default function OperationsPage(): React.ReactElement {
           </div>
         </div>
 
-        <div className="card" style={{ marginBottom: '1rem' }}>
+        <div className="card glass-card" style={{ marginBottom: '1rem' }}>
           <h3 className="card-title" style={{ marginBottom: '0.65rem' }}>
             Nakit Hareketleri
           </h3>
@@ -1172,11 +1242,11 @@ export default function OperationsPage(): React.ReactElement {
             <label>Not</label>
             <input className="input" type="text" value={cashNote} onChange={(event) => setCashNote(event.target.value)} />
           </div>
-          <button className="btn btn-primary" type="button" onClick={() => void submitCashMovement()} disabled={!canMutateOperations}>
+          <button className="btn btn-primary tactile-press" type="button" onClick={() => void submitCashMovement()} disabled={!canMutateOperations}>
             Hareketi Kaydet
           </button>
           <button
-            className="btn btn-ghost"
+            className="btn btn-ghost tactile-press"
             style={{ marginLeft: '0.5rem' }}
             type="button"
             onClick={exportCashMovementsCsv}
@@ -1216,9 +1286,9 @@ export default function OperationsPage(): React.ReactElement {
           </div>
         </div>
 
-        <div className="card" style={{ marginBottom: '1rem' }}>
+        <div className="card glass-card" style={{ marginBottom: '1rem' }}>
           <h3 className="card-title" style={{ marginBottom: '0.65rem' }}>
-            Vardiya Devir Kaydi (Z-Raporu Katılımı)
+            Vardiya Devir Kaydı (Z-Raporu Katılımı)
           </h3>
           <div className="modal-grid-two">
             <div className="login-field">
@@ -1243,11 +1313,11 @@ export default function OperationsPage(): React.ReactElement {
             <label>Mutabakat Notu</label>
             <input className="input" type="text" value={handoverNote} onChange={(event) => setHandoverNote(event.target.value)} placeholder="Zorunlu devir veya sayım açıklaması..." />
           </div>
-          <button className="btn btn-primary w-full py-3" style={{ fontSize: '1.2rem', marginTop: '0.5rem' }} type="button" onClick={() => void submitShiftHandover()} disabled={!canMutateOperations}>
+          <button className="btn btn-primary tactile-press w-full py-3" style={{ fontSize: '1.2rem', marginTop: '0.5rem' }} type="button" onClick={() => void submitShiftHandover()} disabled={!canMutateOperations}>
             Kasayı Mutabık Kapat ve Devret
           </button>
           <button
-            className="btn btn-ghost mt-2 w-full"
+            className="btn btn-ghost tactile-press mt-2 w-full"
             type="button"
             onClick={exportHandoversCsv}
             disabled={handovers.length === 0}
@@ -1288,9 +1358,9 @@ export default function OperationsPage(): React.ReactElement {
           </div>
         </div>
 
-        <div className="card" style={{ marginBottom: '1rem' }}>
+        <div className="card glass-card" style={{ marginBottom: '1rem' }}>
           <h3 className="card-title" style={{ marginBottom: '0.65rem' }}>
-            Guvenlik Audit Akisi
+            Güvenlik Audit Akışı
           </h3>
           <div className="modal-grid-two" style={{ marginBottom: '0.65rem' }}>
             <div className="login-field">
@@ -1320,7 +1390,7 @@ export default function OperationsPage(): React.ReactElement {
             </div>
           </div>
           <button
-            className="btn btn-ghost"
+            className="btn btn-ghost tactile-press"
             type="button"
             style={{ marginBottom: '0.65rem' }}
             onClick={exportSecurityEventsCsv}

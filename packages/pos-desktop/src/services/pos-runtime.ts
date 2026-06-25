@@ -1969,11 +1969,14 @@ async function readLocalSales(session: AuthSession, limit: number): Promise<{ da
 async function getOfflineDailyReportSnapshot(
   session: AuthSession,
   limit = 10,
+  date?: string,
+  rangeTo?: string,
 ): Promise<LocalDailyReportSnapshot> {
   return ensureElectronApi().getLocalDailyReport({
     companyId: session.user.companyId,
     limit,
     registerId: session.registerId,
+    ...(rangeTo && date ? { from: date, to: rangeTo } : { referenceAt: date }),
   });
 }
 
@@ -2008,33 +2011,42 @@ async function hasPendingQueueItems(): Promise<boolean> {
   }
 }
 
-export async function fetchDailyReport(session: AuthSession, date?: string): Promise<DailyReport> {
+export async function fetchDailyReport(
+  session: AuthSession,
+  date?: string,
+  rangeTo?: string,
+): Promise<DailyReport> {
   try {
     session.companyAccess = await ensureCompanyAccess(session);
   } catch {
-    const offline = await getOfflineDailyReportSnapshot(session);
+    const offline = await getOfflineDailyReportSnapshot(session, 10, date, rangeTo);
     return offline.report as unknown as DailyReport;
   }
   if (!session.accessToken || !session.isOnline) {
-    const offline = await getOfflineDailyReportSnapshot(session);
+    const offline = await getOfflineDailyReportSnapshot(session, 10, date, rangeTo);
     return offline.report as unknown as DailyReport;
   }
 
   if (await hasPendingQueueItems()) {
-    const offline = await getOfflineDailyReportSnapshot(session);
+    const offline = await getOfflineDailyReportSnapshot(session, 10, date, rangeTo);
     return offline.report as unknown as DailyReport;
   }
 
   const branchId = await resolveSessionBranchId(session);
   if (!branchId) {
-    const offline = await getOfflineDailyReportSnapshot(session);
+    const offline = await getOfflineDailyReportSnapshot(session, 10, date, rangeTo);
     return offline.report as unknown as DailyReport;
   }
 
   try {
-    const queryDate = date ? `&date=${encodeURIComponent(date)}` : '';
+    let query = `?branchId=${encodeURIComponent(branchId)}`;
+    if (rangeTo && date) {
+      query += `&from=${encodeURIComponent(date)}&to=${encodeURIComponent(rangeTo)}`;
+    } else if (date) {
+      query += `&date=${encodeURIComponent(date)}`;
+    }
     return await requestApi<DailyReport>(
-      `/api/reports/daily?branchId=${encodeURIComponent(branchId)}${queryDate}`,
+      `/api/reports/daily${query}`,
       {
         token: ensureOnlineSession(session),
       },
@@ -2044,7 +2056,7 @@ export async function fetchDailyReport(session: AuthSession, date?: string): Pro
       throw error;
     }
     session.isOnline = false;
-    const offline = await getOfflineDailyReportSnapshot(session);
+    const offline = await getOfflineDailyReportSnapshot(session, 10, date, rangeTo);
     return offline.report as unknown as DailyReport;
   }
 }
@@ -2053,31 +2065,37 @@ export async function fetchTopProducts(
   session: AuthSession,
   limit = 10,
   date?: string,
+  rangeTo?: string,
 ): Promise<TopProductReportRow[]> {
   try {
     session.companyAccess = await ensureCompanyAccess(session);
   } catch {
-    const offline = await getOfflineDailyReportSnapshot(session, limit);
+    const offline = await getOfflineDailyReportSnapshot(session, limit, date, rangeTo);
     return offline.topProducts;
   }
   if (!session.accessToken || !session.isOnline) {
-    const offline = await getOfflineDailyReportSnapshot(session, limit);
+    const offline = await getOfflineDailyReportSnapshot(session, limit, date, rangeTo);
     return offline.topProducts;
   }
 
   if (await hasPendingQueueItems()) {
-    const offline = await getOfflineDailyReportSnapshot(session, limit);
+    const offline = await getOfflineDailyReportSnapshot(session, limit, date, rangeTo);
     return offline.topProducts;
   }
 
   const branchId = await resolveSessionBranchId(session);
   if (!branchId) {
-    const offline = await getOfflineDailyReportSnapshot(session, limit);
+    const offline = await getOfflineDailyReportSnapshot(session, limit, date, rangeTo);
     return offline.topProducts;
   }
 
   try {
-    const queryDate = date ? `&from=${encodeURIComponent(date)}&to=${encodeURIComponent(date)}` : '';
+    let queryDate = '';
+    if (rangeTo && date) {
+      queryDate = `&from=${encodeURIComponent(date)}&to=${encodeURIComponent(rangeTo)}`;
+    } else if (date) {
+      queryDate = `&from=${encodeURIComponent(date)}&to=${encodeURIComponent(date)}`;
+    }
     return await requestApi<TopProductReportRow[]>(
       `/api/reports/top-products?branchId=${encodeURIComponent(branchId)}&limit=${limit}${queryDate}`,
       { token: ensureOnlineSession(session) },
@@ -2087,7 +2105,7 @@ export async function fetchTopProducts(
       throw error;
     }
     session.isOnline = false;
-    const offline = await getOfflineDailyReportSnapshot(session, limit);
+    const offline = await getOfflineDailyReportSnapshot(session, limit, date, rangeTo);
     return offline.topProducts;
   }
 }

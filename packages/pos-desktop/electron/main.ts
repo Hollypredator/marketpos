@@ -954,6 +954,49 @@ function registerIpcHandlers(): void {
     },
   );
 
+  ipcMain.handle(IPC_CHANNELS.APP_SELECT_DIRECTORY, async () => {
+    const window = BrowserWindow.getFocusedWindow() ?? mainWindow;
+    if (!window || window.isDestroyed()) {
+      return null;
+    }
+    const result = await dialog.showOpenDialog(window, {
+      properties: ['openDirectory'],
+    });
+    if (result.canceled || result.filePaths.length === 0) {
+      return null;
+    }
+    return result.filePaths[0];
+  });
+
+  ipcMain.handle(
+    IPC_CHANNELS.BACKUP_EXPORT_TO_PATH,
+    async (_event, payload: { fileName: string; targetPath: string }): Promise<boolean> => {
+      const backupDir = getBackupDirectoryPath();
+      const sourcePath = join(backupDir, payload.fileName);
+      if (payload.fileName.includes('..') || payload.fileName.includes('/') || payload.fileName.includes('\\')) {
+        throw new Error('Gecersiz yedek dosyasi.');
+      }
+      if (!existsSync(sourcePath)) {
+        throw new Error('Yedek dosyasi bulunamadi.');
+      }
+      const targetFilePath = join(payload.targetPath, payload.fileName);
+      copyFileSync(sourcePath, targetFilePath);
+      return true;
+    }
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.DB_RETRY_QUEUE_RECORD,
+    async (_event, payload: { entity: string; id: string }) =>
+      getDatabaseService().retryQueueRecord(payload.entity, payload.id),
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.DB_DELETE_QUEUE_RECORD,
+    async (_event, payload: { entity: string; id: string }) =>
+      getDatabaseService().deleteQueueRecord(payload.entity, payload.id),
+  );
+
   ipcMain.handle(IPC_CHANNELS.HARDWARE_GET_CONFIG, async () =>
     getDatabaseService().getHardwareConfig(),
   );

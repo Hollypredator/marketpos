@@ -731,6 +731,10 @@ export interface ElectronApi {
   getEInvoiceStatus(externalId: string): Promise<any>;
   processYNOKCPayment(payload: any): Promise<any>;
   configureYNOKC(config: { brand: unknown; ip: string; port: number }): Promise<void>;
+  selectDirectory(): Promise<string | null>;
+  copyBackupToPath(fileName: string, targetPath: string): Promise<boolean>;
+  retryQueueRecord(entity: string, id: string): Promise<boolean>;
+  deleteQueueRecord(entity: string, id: string): Promise<boolean>;
 }
 
 declare global {
