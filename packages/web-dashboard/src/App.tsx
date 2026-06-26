@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import React, { useEffect, useMemo, useState } from 'react';
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { AppShell } from './components/AppShell';
 import { LoginView } from './components/LoginView';
@@ -1916,36 +1916,34 @@ function AuthenticatedAppShell() {
 }
 
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route
-          path="/"
-          element={!auth.isAuthenticated ? (
-            <LandingPage
-              onNavigateToLogin={() => navigate('/login')}
-              onNavigateToSuccess={(companyId) => navigate(`/payment-success?companyId=${companyId}`)}
-            />
-          ) : (
-            <Navigate to="/dashboard" replace />
-          )}
-        />
-        <Route
-          path="/login"
-          element={!auth.isAuthenticated ? <RouteLoginView /> : <Navigate to="/dashboard" replace />}
-        />
-        <Route
-          path="/yonetim"
-          element={!auth.isAuthenticated ? <RouteLoginView /> : <Navigate to="/dashboard" replace />}
-        />
-        <Route
-          path="/payment-success"
-          element={!auth.isAuthenticated ? <PaymentSuccessPage /> : <Navigate to="/dashboard" replace />}
-        />
-        <Route
-          path="*"
-          element={auth.isAuthenticated ? <AuthenticatedAppShell /> : <Navigate to="/login" replace />}
-        />
-      </Routes>
-    </BrowserRouter>
+    <Routes>
+      <Route
+        path="/"
+        element={!auth.isAuthenticated ? (
+          <LandingPage
+            onNavigateToLogin={() => navigate('/login')}
+            onNavigateToSuccess={(companyId) => navigate(`/payment-success?companyId=${companyId}`)}
+          />
+        ) : (
+          <Navigate to="/dashboard" replace />
+        )}
+      />
+      <Route
+        path="/login"
+        element={!auth.isAuthenticated ? <RouteLoginView /> : <Navigate to="/dashboard" replace />}
+      />
+      <Route
+        path="/yonetim"
+        element={!auth.isAuthenticated ? <RouteLoginView /> : <Navigate to="/dashboard" replace />}
+      />
+      <Route
+        path="/payment-success"
+        element={!auth.isAuthenticated ? <PaymentSuccessPage /> : <Navigate to="/dashboard" replace />}
+      />
+      <Route
+        path="*"
+        element={auth.isAuthenticated ? <AuthenticatedAppShell /> : <Navigate to="/login" replace />}
+      />
+    </Routes>
   );
 }

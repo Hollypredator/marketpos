@@ -80,7 +80,6 @@ input, select, textarea { font-family: inherit; font-feature-settings: "cv01", "
 #root {
   display: flex;
   height: 100vh;
-  overflow: hidden;
 }
 
 /* ── Admin Shell (sidebar + main) ────────────────────────────────── */
