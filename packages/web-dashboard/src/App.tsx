@@ -1,11 +1,13 @@
 import { useQueryClient } from '@tanstack/react-query';
 import React, { useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { AppShell } from './components/AppShell';
 import { LoginView } from './components/LoginView';
+import { PaymentSuccessPage } from './pages/PaymentSuccessPage';
 import { useAuth } from './domain/auth/hooks';
 import type { LoginFormState } from './domain/auth/types';
+import { TAB_PATHS } from './lib/route-access';
 import { useCategoriesQuery, useCatalogMutations, useProductsQuery } from './domain/catalog/hooks';
 import type {
   BulkProductUpdateForm,
@@ -71,7 +73,6 @@ import { SubscriptionPage } from './pages/SubscriptionPage';
 import { UsersPage } from './pages/UsersPage';
 import { SuppliersPage } from './pages/suppliers/SuppliersPage';
 import { LandingPage } from './pages/LandingPage';
-import { PaymentSuccessPage } from './pages/PaymentSuccessPage';
 import { YonetimPage } from './pages/YonetimPage';
 
 interface BannerState {
@@ -105,6 +106,22 @@ export default function App(): React.ReactElement {
     password: 'admin123',
     username: 'admin',
   });
+
+  // LoginView wrapper for routes (provides required props)
+  const RouteLoginView = React.useCallback(() => (
+    <LoginView
+      accessBlockedMessage={null}
+      banner={null}
+      login={loginForm}
+      onChangeEmail={(value) => setLoginForm((current) => ({ ...current, email: value }))}
+      onChangeCompanyId={(value) => setLoginForm((current) => ({ ...current, companyId: value }))}
+      onChangeMode={(mode) => setLoginForm((current) => ({ ...current, mode }))}
+      onChangePassword={(value) => setLoginForm((current) => ({ ...current, password: value }))}
+      onChangeUsername={(value) => setLoginForm((current) => ({ ...current, username: value }))}
+      onSubmit={async () => {}}
+      saving={false}
+    />
+  ), [loginForm]);
 
   const [companyId, setCompanyId] = useState('');
   const [branchId, setBranchId] = useState('');
@@ -1607,28 +1624,29 @@ export default function App(): React.ReactElement {
     );
   }
 
+const appShellProps = {
+  activeTab,
+  allowedTabs,
+  banner,
+  branchId,
+  branches,
+  canSelectCompany: auth.isSuperAdmin,
+  companies,
+  companyId,
+  onBranchChange,
+  onCompanyChange,
+  onLogout,
+  onRefresh: () => { void refreshDashboard(); },
+  onTabChange: moveToTab,
+  refreshDisabled: saving,
+  refreshLabel: isRefreshing ? 'Yenileniyor...' : 'Veriyi Yenile',
+  userFullName: auth.session?.user.fullName ?? auth.session?.user.username ?? '-',
+  userRole: auth.role ?? '-',
+};
+
+function AuthenticatedAppShell() {
   return (
-    <AppShell
-      activeTab={activeTab}
-      allowedTabs={allowedTabs}
-      banner={banner}
-      branchId={branchId}
-      branches={branches}
-      canSelectCompany={auth.isSuperAdmin}
-      companies={companies}
-      companyId={companyId}
-      onBranchChange={onBranchChange}
-      onCompanyChange={onCompanyChange}
-      onLogout={onLogout}
-      onRefresh={() => {
-        void refreshDashboard();
-      }}
-      onTabChange={moveToTab}
-      refreshDisabled={saving}
-      refreshLabel={isRefreshing ? 'Yenileniyor...' : 'Veriyi Yenile'}
-      userFullName={auth.session?.user.fullName ?? auth.session?.user.username ?? '-'}
-      userRole={auth.role ?? '-'}
-    >
+    <AppShell {...appShellProps}>
       {!auth.isSuperAdmin && (
         <section className="card">
           <h2>Web Panel Yetkisi Kapali</h2>
@@ -1894,5 +1912,40 @@ export default function App(): React.ReactElement {
         />
       )}
     </AppShell>
+  );
+}
+
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route
+          path="/"
+          element={!auth.isAuthenticated ? (
+            <LandingPage
+              onNavigateToLogin={() => navigate('/login')}
+              onNavigateToSuccess={(companyId) => navigate(`/payment-success?companyId=${companyId}`)}
+            />
+          ) : (
+            <Navigate to="/dashboard" replace />
+          )}
+        />
+        <Route
+          path="/login"
+          element={!auth.isAuthenticated ? <RouteLoginView /> : <Navigate to="/dashboard" replace />}
+        />
+        <Route
+          path="/yonetim"
+          element={!auth.isAuthenticated ? <RouteLoginView /> : <Navigate to="/dashboard" replace />}
+        />
+        <Route
+          path="/payment-success"
+          element={!auth.isAuthenticated ? <PaymentSuccessPage /> : <Navigate to="/dashboard" replace />}
+        />
+        <Route
+          path="*"
+          element={auth.isAuthenticated ? <AuthenticatedAppShell /> : <Navigate to="/login" replace />}
+        />
+      </Routes>
+    </BrowserRouter>
   );
 }

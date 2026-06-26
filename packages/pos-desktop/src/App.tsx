@@ -472,7 +472,12 @@ function AppContent() {
           onLoginSuccess={async (session) => {
             setAccessLock(null);
             await hydrateSession(session);
-            void synchronizeRuntime(session, { silent: true });
+            try {
+              await synchronizeRuntime(session, { silent: true });
+            } catch {
+              // API ulaşılamıyor (uyuyor/kapalı) — offline modda devam et, session'ı BOZMA
+              toast.error('Sunucuya ulaşılamıyor — offline modda çalışıyorsunuz');
+            }
           }}
         />
         <ToastContainer />

@@ -444,5 +444,5 @@ export async function provisionCompanyFromTemplate(
         displayName: template.displayName,
       },
     };
-  });
+  }, { timeout: 30000 });
 }
