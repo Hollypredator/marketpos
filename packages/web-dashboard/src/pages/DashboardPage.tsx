@@ -304,15 +304,3 @@ export function DashboardPage({ companyId, branchId, toMoney, toDateTime }: Dash
   );
 }
 
-function statusInfo(status: string) {
-  switch (status) {
-    case 'COMPLETED':
-      return { label: 'Tamamlandı', cls: 'green' };
-    case 'PARTIALLY_REFUNDED':
-      return { label: 'Kısmi İade', cls: 'amber' };
-    case 'REFUNDED':
-      return { label: 'İade Edildi', cls: 'red' };
-    default:
-      return { label: status, cls: '' };
-  }
-}
