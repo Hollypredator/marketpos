@@ -1116,9 +1116,11 @@ small  { color: var(--fg-4); font-size: 12px; }
 
 /* ── Landing Page ──────────────────────────────────────────────── */
 .landing {
+  width: 100%;
   min-height: 100vh;
   background: var(--bg-0);
   overflow-x: hidden;
+  overflow-y: auto;
 }
 
 /* Nav */

@@ -39,16 +39,16 @@ export async function authPlugin(server: FastifyInstance): Promise<void> {
   });
 
   server.decorate('ensureCompanyAccess', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (request.user.role === 'SUPER_ADMIN') {
+      return;
+    }
+
     if (!request.user?.companyId) {
       return reply.status(403).send({
         error: 'Firma bilgisi bulunamadi',
         errorCode: 'COMPANY_NOT_FOUND',
         success: false,
       });
-    }
-
-    if (request.user.role === 'SUPER_ADMIN') {
-      return;
     }
 
     const company = await prisma.company.findFirst({
