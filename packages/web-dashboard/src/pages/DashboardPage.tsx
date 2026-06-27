@@ -7,22 +7,6 @@ import type { SalesListFilters } from '../domain/sales/api';
 import type { StockLevel } from '../domain/shared/types';
 import { money, toDateTime } from '../lib/format';
 
-interface DashboardPageProps {
-  companyId: string;
-  branchId: string;
-  toMoney: (value: number) => string;
-  toDateTime: (value?: string | null) => string;
-}
-
-interface Sale {
-  id: string;
-  receiptNumber: string;
-  grandTotal: number;
-  status?: string;
-  createdAt: string;
-  payments: Array<{ method: string; amount: number }>;
-}
-
 interface Company {
   id: string;
   name: string;
@@ -34,20 +18,21 @@ interface Branch {
   name: string;
 }
 
-export function DashboardPage({ companyId, branchId, toMoney, toDateTime }: DashboardPageProps): React.ReactElement {
-  const [dailyDate, setDailyDate] = useState(() => {
-    const today = new Date();
-    return today.toISOString().split('T')[0];
-  });
-  const [selectedCompanyId, setSelectedCompanyId] = useState(companyId);
-  const [selectedBranchId, setSelectedBranchId] = useState(branchId);
+interface Sale {
+  id: string;
+  receiptNumber: string;
+  grandTotal: number;
+  status?: string;
+  createdAt: string;
+  payments: Array<{ method: string; amount: number }>;
+}
 
-  const salesQuery = useSalesQuery({
-    branchId: selectedBranchId,
-    from: dailyDate,
-    to: dailyDate,
-  } as SalesListFilters);
+export function DashboardPage({ companyId: _companyId }: { companyId: string; branchId: string; toMoney: (v: number) => string; toDateTime: (v?: string | null) => string }): React.ReactElement {
+  const [dailyDate, setDailyDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState(_companyId);
+  const [selectedBranchId, setSelectedBranchId] = useState('');
 
+  const salesQuery = useSalesQuery({ branchId: selectedBranchId, from: dailyDate, to: dailyDate } as SalesListFilters);
   const stockLevelsQuery = useStockLevelsQuery(selectedBranchId, true);
   const companiesQuery = useCompaniesQuery(true);
   const branchesQuery = useBranchesQuery(selectedCompanyId, true);
@@ -73,12 +58,16 @@ export function DashboardPage({ companyId, branchId, toMoney, toDateTime }: Dash
   const todaySales = (salesQuery.data?.data ?? []) as Sale[];
   const totalSales = todaySales.reduce((sum, s) => sum + s.grandTotal, 0);
   const salesCount = todaySales.length;
+  const averageTicket = salesCount > 0 ? totalSales / salesCount : 0;
   const refunds = todaySales.filter((s) => s.status === 'REFUNDED' || s.status === 'PARTIALLY_REFUNDED');
   const netSales = totalSales - refunds.reduce((sum, r) => sum + r.grandTotal, 0);
 
   const stockLevels = (stockLevelsQuery.data ?? []) as StockLevel[];
   const criticalStock = stockLevels.filter((sl) => sl.quantity !== null && sl.quantity <= (sl.product?.minStock ?? 0) && (sl.product?.minStock ?? 0) > 0);
   const outOfStock = stockLevels.filter((sl) => sl.quantity !== null && sl.quantity <= 0);
+
+  const activeBranches = branchesQuery.data?.filter((b) => b.isActive !== false).length ?? 0;
+  const totalBranches = branchesQuery.data?.length ?? 0;
 
   const paymentBreakdown = useMemo(() => {
     const breakdown: Record<string, number> = {};
@@ -90,217 +79,225 @@ export function DashboardPage({ companyId, branchId, toMoney, toDateTime }: Dash
     return Object.entries(breakdown).map(([method, amount]) => ({ method, amount }));
   }, [todaySales]);
 
-  const recentSales = [...todaySales].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 10);
-
-  const PAYMENT_LABELS: Record<string, string> = {
-    CASH: 'Nakit',
-    CREDIT_CARD: 'Kredi Kartı',
-    DEBIT_CARD: 'Banka Kartı',
-    ON_ACCOUNT: 'Cari Hesap',
-    MULTI: 'Çoklu',
-  };
-
-  const statusInfo = (status: string) => {
-    switch (status) {
-      case 'COMPLETED':
-        return { label: 'Tamamlandı', cls: 'green' };
-      case 'PARTIALLY_REFUNDED':
-        return { label: 'Kısmi İade', cls: 'amber' };
-      case 'REFUNDED':
-        return { label: 'İade Edildi', cls: 'red' };
-      default:
-        return { label: status, cls: '' };
-    }
-  };
+  const recentSales = [...todaySales].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 8);
 
   return (
-    <section className="sub-layout-grid">
-      <div className="metric-grid" style={{ gridColumn: '1 / -1', marginBottom: '16px' }}>
-        <div className="metric-card primary">
-          <span>Bugünkü Satış</span>
-          <strong>{toMoney(totalSales)}</strong>
-        </div>
-        <div className="metric-card success">
-          <span>Net Satış</span>
-          <strong>{toMoney(netSales)}</strong>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {/* ── Bento KPI Grid (Stitch-style 4-col) ── */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4, 1fr)',
+        gap: '16px',
+      }}>
+        <div className="metric-card primary" style={{ borderColor: 'rgba(210,187,255,0.15)' }}>
+          <span>Günlük Satış</span>
+          <strong>{money(totalSales)}</strong>
+          <span className="metric-delta up">Net: {money(netSales)}</span>
         </div>
         <div className="metric-card">
-          <span>İşlem Sayısı</span>
+          <span>Fiş Sayısı</span>
           <strong>{salesCount}</strong>
+          <span className="metric-delta">Bugünkü işlem</span>
         </div>
-        <div className="metric-card highlight">
-          <span>Kritik Stok</span>
-          <strong>{criticalStock.length}</strong>
-        </div>
-        <div className="metric-card">
-          <span>Stokta Yok</span>
-          <strong>{outOfStock.length}</strong>
+        <div className="metric-card success" style={{ borderColor: 'rgba(78,222,163,0.15)' }}>
+          <span>Ortalama Sepet</span>
+          <strong>{money(averageTicket)}</strong>
+          <span className="metric-delta">İşlem başı</span>
         </div>
         <div className="metric-card">
-          <span>Toplam Ürün</span>
-          <strong>{stockLevels.length}</strong>
+          <span>Aktif Şube</span>
+          <strong>{activeBranches}/{totalBranches}</strong>
+          <span className="metric-delta">Kritik Stok: {criticalStock.length}</span>
         </div>
       </div>
 
-      <div className="card" style={{ gridColumn: '1 / -1', marginBottom: '16px', padding: '12px 16px' }}>
-        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          <div>
-            <label style={{ display: 'block', fontSize: '12px', color: 'var(--fg-2)', marginBottom: '4px' }}>Firma</label>
-            <select
-              value={selectedCompanyId}
-              onChange={(e) => setSelectedCompanyId(e.target.value)}
-              style={{ minWidth: '220px' }}
-            >
+      {/* ── Filter Toolbar ── */}
+      <div className="toolbar">
+        <div className="scope-row">
+          <label>
+            Firma
+            <select value={selectedCompanyId} onChange={(e) => setSelectedCompanyId(e.target.value)} style={{ minWidth: '220px' }}>
               {companiesQuery.data?.map((c: Company) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} {c.licenseKey && `(${c.licenseKey.slice(0, 8)}...)`}
-                </option>
+                <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
-          </div>
-          <div>
-            <label style={{ display: 'block', fontSize: '12px', color: 'var(--fg-2)', marginBottom: '4px' }}>Şube</label>
-            <select
-              value={selectedBranchId}
-              onChange={(e) => setSelectedBranchId(e.target.value)}
-              style={{ minWidth: '220px' }}
-            >
+          </label>
+          <label>
+            Şube
+            <select value={selectedBranchId} onChange={(e) => setSelectedBranchId(e.target.value)} style={{ minWidth: '220px' }}>
               {branchesQuery.data?.map((b: Branch) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
+                <option key={b.id} value={b.id}>{b.name}</option>
               ))}
             </select>
-          </div>
-          <div>
-            <label style={{ display: 'block', fontSize: '12px', color: 'var(--fg-2)', marginBottom: '4px' }}>Tarih</label>
-            <input
-              type="date"
-              value={dailyDate}
-              onChange={(e) => setDailyDate(e.target.value)}
-            />
-          </div>
+          </label>
+          <label>
+            Tarih
+            <input type="date" value={dailyDate} onChange={(e) => setDailyDate(e.target.value)} />
+          </label>
         </div>
       </div>
 
-      <div>
-        <article className="card">
-          <h2>Ödeme Dağılımı</h2>
-          {paymentBreakdown.length === 0 ? (
-            <p className="muted">Bugün için ödeme verisi yok</p>
-          ) : (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Yöntem</th>
-                    <th style={{ textAlign: 'right' }}>Tutar</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paymentBreakdown.map(({ method, amount }) => (
-                    <tr key={method}>
-                      <td>{PAYMENT_LABELS[method] ?? method}</td>
-                      <td style={{ textAlign: 'right' }}>{toMoney(amount)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+      {/* ── 2-Column Grid ── */}
+      <div className="sub-layout-grid">
+        {/* Left column */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Payment breakdown card */}
+          <article className="card">
+            <div className="card-header">
+              <div>
+                <h3 className="card-title">Ödeme Dağılımı</h3>
+                <p className="card-sub">Bugünkü satışların ödeme yöntemine göre dağılımı</p>
+              </div>
             </div>
-          )}
-        </article>
-
-        <article className="card" style={{ marginTop: '16px' }}>
-          <h2>Son 10 İşlem</h2>
-          {recentSales.length === 0 ? (
-            <p className="muted">Kayıt yok</p>
-          ) : (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Saat</th>
-                    <th>Fiş No</th>
-                    <th>Tutar</th>
-                    <th>Ödeme</th>
-                    <th>Durum</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentSales.map((sale) => {
-                    const si = statusInfo(sale.status ?? 'COMPLETED');
-                    const paymentMethods = sale.payments?.map((p) => PAYMENT_LABELS[p.method] ?? p.method).join(', ') ?? '—';
-                    return (
-                      <tr key={sale.id}>
-                        <td>{toDateTime(sale.createdAt).split(' ')[1] ?? '—'}</td>
-                        <td style={{ fontFamily: 'var(--font-mono)' }}>{sale.receiptNumber}</td>
-                        <td>{toMoney(sale.grandTotal)}</td>
-                        <td>{paymentMethods}</td>
-                        <td><span className={`pill ${si.cls}`}>{si.label}</span></td>
+            {paymentBreakdown.length === 0 ? (
+              <p className="empty-state" style={{ padding: '24px' }}>
+                <span className="empty-state-title">Ödeme verisi yok</span>
+                <span className="empty-state-sub">Bugün için kayıtlı işlem bulunamadı</span>
+              </p>
+            ) : (
+              <div className="table-wrap tall">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Yöntem</th>
+                      <th style={{ textAlign: 'right' }}>Tutar</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paymentBreakdown.map(({ method, amount }) => (
+                      <tr key={method}>
+                        <td>{method === 'CASH' ? 'Nakit' : method === 'CREDIT_CARD' ? 'Kredi Kartı' : method === 'DEBIT_CARD' ? 'Banka Kartı' : method === 'ON_ACCOUNT' ? 'Cari Hesap' : method}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{money(amount)}</td>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </article>
-      </div>
-
-      <div>
-        <article className="card">
-          <h2>Kritik Stok ({criticalStock.length})</h2>
-          {criticalStock.length === 0 ? (
-            <p className="muted">Kritik seviyede stok yok</p>
-          ) : (
-            <div className="table-wrap" style={{ maxHeight: '300px' }}>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Ürün</th>
-                    <th style={{ textAlign: 'right' }}>Mevcut</th>
-                    <th style={{ textAlign: 'right' }}>Min</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {criticalStock.slice(0, 15).map((sl) => (
-                    <tr key={sl.id}>
-                      <td>{sl.product?.name ?? '—'}</td>
-                      <td style={{ textAlign: 'right' }}>{sl.quantity}</td>
-                      <td style={{ textAlign: 'right' }}>{sl.product?.minStock ?? 0}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </article>
-
-        {outOfStock.length > 0 && (
-          <article className="card" style={{ marginTop: '16px' }}>
-            <h2>Stokta Yok ({outOfStock.length})</h2>
-            <div className="table-wrap" style={{ maxHeight: '200px' }}>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Ürün</th>
-                    <th style={{ textAlign: 'right' }}>Mevcut</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {outOfStock.slice(0, 10).map((sl) => (
-                    <tr key={sl.id}>
-                      <td>{sl.product?.name ?? '—'}</td>
-                      <td style={{ textAlign: 'right', color: 'var(--red)' }}>{sl.quantity}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </article>
-        )}
+
+          {/* Critical stock */}
+          <article className="card">
+            <div className="card-header">
+              <div>
+                <h3 className="card-title">Kritik Stok ({criticalStock.length})</h3>
+                <p className="card-sub">Minimum seviyenin altındaki ürünler</p>
+              </div>
+            </div>
+            {criticalStock.length === 0 ? (
+              <p className="empty-state" style={{ padding: '24px' }}>
+                <span className="empty-state-title">Kritik stok yok</span>
+                <span className="empty-state-sub">Tüm ürünler yeterli seviyede</span>
+              </p>
+            ) : (
+              <div className="table-wrap tall" style={{ maxHeight: '280px' }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Ürün</th>
+                      <th style={{ textAlign: 'right' }}>Mevcut</th>
+                      <th style={{ textAlign: 'right' }}>Min Stok</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {criticalStock.slice(0, 10).map((sl) => (
+                      <tr key={sl.id}>
+                        <td>{sl.product?.name ?? '—'}</td>
+                        <td style={{ textAlign: 'right', color: 'var(--red)' }}>{sl.quantity}</td>
+                        <td style={{ textAlign: 'right', color: 'var(--fg-3)' }}>{sl.product?.minStock ?? 0}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </article>
+        </div>
+
+        {/* Right column */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Recent sales */}
+          <article className="card">
+            <div className="card-header">
+              <div>
+                <h3 className="card-title">Son İşlemler</h3>
+                <p className="card-sub">Bugünkü son 8 fiş</p>
+              </div>
+            </div>
+            {recentSales.length === 0 ? (
+              <p className="empty-state" style={{ padding: '24px' }}>
+                <span className="empty-state-title">İşlem yok</span>
+                <span className="empty-state-sub">Bugün henüz satış kaydedilmemiş</span>
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {recentSales.map((sale) => {
+                  const isRefunded = sale.status === 'REFUNDED' || sale.status === 'PARTIALLY_REFUNDED';
+                  return (
+                    <div key={sale.id} style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '10px 12px',
+                      background: 'var(--bg-2)',
+                      borderRadius: 'var(--r-md)',
+                      border: '1px solid var(--border-s)',
+                      fontSize: '13px',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+                        <span style={{
+                          width: '6px',
+                          height: '6px',
+                          borderRadius: '50%',
+                          background: isRefunded ? 'var(--red)' : 'var(--emerald)',
+                          flexShrink: 0,
+                        }} />
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--fg-2)' }}>#{sale.receiptNumber}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <span style={{ fontWeight: 600, color: 'var(--fg-1)' }}>{money(sale.grandTotal)}</span>
+                        <span style={{ color: 'var(--fg-4)', fontSize: '12px' }}>
+                          {toDateTime(sale.createdAt).split(' ')[1] ?? ''}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </article>
+
+          {/* Out of stock */}
+          {outOfStock.length > 0 && (
+            <article className="card">
+              <div className="card-header">
+                <div>
+                  <h3 className="card-title">Stokta Yok ({outOfStock.length})</h3>
+                  <p className="card-sub">Tükenen ürünler</p>
+                </div>
+              </div>
+              <div className="table-wrap tall" style={{ maxHeight: '200px' }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Ürün</th>
+                      <th style={{ textAlign: 'right' }}>Adet</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {outOfStock.slice(0, 8).map((sl) => (
+                      <tr key={sl.id}>
+                        <td>{sl.product?.name ?? '—'}</td>
+                        <td style={{ textAlign: 'right', color: 'var(--red)' }}>{sl.quantity}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </article>
+          )}
+        </div>
       </div>
-    </section>
+    </div>
   );
 }
-
