@@ -27,14 +27,36 @@ describe('route access matrix', () => {
     expect(resolveFallbackTab('SUPER_ADMIN')).toBe('dashboard');
   });
 
-  it('returns no tabs for ADMIN', () => {
-    expect(resolveAllowedTabs('ADMIN')).toEqual([]);
+  it('returns restricted tabs for ADMIN', () => {
+    expect(resolveAllowedTabs('ADMIN')).toEqual([
+      'dashboard',
+      'catalog',
+      'stock',
+      'transfers',
+      'users',
+      'customers',
+      'sales',
+      'reports',
+      'organization',
+    ]);
     expect(resolveFallbackTab('ADMIN')).toBe('dashboard');
   });
 
-  it('returns no tabs for cashier/accountant roles', () => {
-    expect(resolveAllowedTabs('CASHIER')).toEqual([]);
-    expect(resolveAllowedTabs('ACCOUNTANT')).toEqual([]);
+  it('returns restricted tabs for ACCOUNTANT', () => {
+    expect(resolveAllowedTabs('ACCOUNTANT')).toEqual([
+      'dashboard',
+      'catalog',
+      'reports',
+      'sales',
+    ]);
+    expect(resolveFallbackTab('ACCOUNTANT')).toBe('dashboard');
+  });
+
+  it('returns minimal tabs for CASHIER', () => {
+    expect(resolveAllowedTabs('CASHIER')).toEqual([
+      'dashboard',
+      'catalog',
+    ]);
     expect(resolveFallbackTab('CASHIER')).toBe('dashboard');
   });
 

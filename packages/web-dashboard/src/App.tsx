@@ -74,6 +74,28 @@ import { UsersPage } from './pages/UsersPage';
 import { SuppliersPage } from './pages/suppliers/SuppliersPage';
 import { LandingPage } from './pages/LandingPage';
 import { YonetimPage } from './pages/YonetimPage';
+import { StockTransfersPage } from './pages/StockTransfersPage';
+import { CustomersPage } from './pages/CustomersPage';
+import { SalesPage } from './pages/SalesPage';
+import { DashboardPage } from './pages/DashboardPage';
+import {
+  useStockTransfersQuery,
+  useStockTransferDetailQuery,
+  useStockTransferMutations,
+} from './domain/stock-transfers/hooks';
+import {
+  useCustomersQuery,
+  useCustomerTransactionsQuery,
+  useCustomerMutations,
+} from './domain/customers/hooks';
+import {
+  useSalesQuery,
+  useSaleDetailQuery,
+  useRefundsQuery,
+} from './domain/sales/hooks';
+import type { PaginatedResponse } from './domain/shared/types';
+import type { StockTransfer } from './domain/stock-transfers/api';
+import type { Sale } from './domain/sales/api';
 
 interface BannerState {
   text: string;
@@ -147,6 +169,23 @@ export default function App(): React.ReactElement {
   const [subscriptionSort, setSubscriptionSort] = useState<SubscriptionSort>(
     () => (searchParams.get('subSort') as SubscriptionSort) ?? 'DUE_ASC',
   );
+
+  const [transferStatusFilter, setTransferStatusFilter] = useState('');
+  const [selectedTransferId, setSelectedTransferId] = useState('');
+  const [transferPage, setTransferPage] = useState(1);
+
+  const [selectedCustomerId, setSelectedCustomerId] = useState('');
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [customerForm, setCustomerForm] = useState({ name: '', phone: '', email: '', address: '', taxNumber: '' });
+  const [customerEditForm, setCustomerEditForm] = useState({ name: '', phone: '', email: '', address: '', taxNumber: '' });
+  const [transactionForm, setTransactionForm] = useState<{ type: 'DEBT' | 'PAYMENT'; amount: string; description: string }>({ type: 'DEBT', amount: '', description: '' });
+
+  const [selectedSaleId, setSelectedSaleId] = useState('');
+  const [salesFrom, setSalesFrom] = useState(() => searchParams.get('salesFrom') ?? toLocalDateIso(new Date()));
+  const [salesTo, setSalesTo] = useState(() => searchParams.get('salesTo') ?? toLocalDateIso(new Date()));
+  const [receiptSearch, setReceiptSearch] = useState('');
+  const [appliedReceiptSearch, setAppliedReceiptSearch] = useState('');
+  const [salesPage, setSalesPage] = useState(1);
 
   const [dailyReport, setDailyReport] = useState<DailyReport | null>(null);
   const [topProducts, setTopProducts] = useState<TopProduct[]>([]);
@@ -408,6 +447,21 @@ export default function App(): React.ReactElement {
   const subscriptionTemplatesQuery = useProvisionTemplatesQuery(auth.isAuthenticated && auth.isSuperAdmin);
   const subscriptionTemplates = subscriptionTemplatesQuery.data ?? [];
   const reportsMutation = useReportsMutation();
+
+  const stockTransfersQuery = useStockTransfersQuery({ companyId, status: transferStatusFilter || undefined });
+  const transferDetailQuery = useStockTransferDetailQuery(selectedTransferId);
+  const stockTransferMutations = useStockTransferMutations();
+
+  const customersQuery = useCustomersQuery(companyId, 1, customerSearch);
+  const customerTransactionsQuery = useCustomerTransactionsQuery(selectedCustomerId);
+  const customerMutations = useCustomerMutations();
+
+  const salesQuery = useSalesQuery({ branchId, from: salesFrom, to: salesTo, page: salesPage });
+  const saleDetailQuery = useSaleDetailQuery(selectedSaleId);
+  const refundsQuery = useRefundsQuery(selectedSaleId);
+
+  const stockTransfersData = stockTransfersQuery.data as PaginatedResponse<StockTransfer> | undefined;
+  const salesData = salesQuery.data as PaginatedResponse<Sale> | undefined;
 
   const companiesErrorText = companiesQuery.isError ? readError(companiesQuery.error, 'Firma listesi yuklenemedi') : null;
   const branchesErrorText = branchesQuery.isError ? readError(branchesQuery.error, 'Sube listesi yuklenemedi') : null;
@@ -1667,6 +1721,10 @@ function AuthenticatedAppShell() {
         </section>
       )}
 
+      {activeTab === 'dashboard' && auth.isSuperAdmin && (
+        <DashboardPage companyId={companyId} branchId={branchId} toMoney={money} toDateTime={toDateTime} />
+      )}
+
       {activeTab === 'setup' && auth.isSuperAdmin && (
         <SetupWizardPage
           existingCompanies={companies}
@@ -1784,6 +1842,29 @@ function AuthenticatedAppShell() {
         />
       )}
 
+      {!requiresCompanySelection && activeTab === 'transfers' && (
+        <StockTransfersPage
+          branches={branches}
+          products={products}
+          transfers={stockTransfersData?.data ?? []}
+          transfersLoading={stockTransfersQuery.isFetching}
+          transfersError={stockTransfersQuery.isError ? readError(stockTransfersQuery.error, 'Transferler yuklenemedi') : null}
+          transfersPagination={{ page: transferPage, totalPages: stockTransfersData?.pagination?.totalPages ?? 1, total: stockTransfersData?.pagination?.total ?? (stockTransfersData?.data?.length ?? 0) }}
+          onTransfersPageChange={setTransferPage}
+          statusFilter={transferStatusFilter}
+          onStatusFilterChange={setTransferStatusFilter}
+          selectedTransferId={selectedTransferId}
+          onSelectTransfer={setSelectedTransferId}
+          transferDetail={transferDetailQuery.data ?? null}
+          transferDetailLoading={transferDetailQuery.isFetching}
+          onCreateTransfer={(payload) => { void stockTransferMutations.create.mutateAsync(payload); }}
+          isCreating={stockTransferMutations.create.isPending}
+          onUpdateTransferStatus={(id, status, note) => { void stockTransferMutations.updateStatus.mutateAsync({ id, status, note }); }}
+          isUpdatingStatus={stockTransferMutations.updateStatus.isPending}
+          toDateTime={toDateTime}
+        />
+      )}
+
       {!requiresCompanySelection && activeTab === 'users' && (
         <UsersPage
           branches={branches}
@@ -1842,6 +1923,63 @@ function AuthenticatedAppShell() {
           profitabilityReport={profitabilityReport}
           expiringProducts={expiringProducts}
           ledgerSummary={ledgerSummary}
+        />
+      )}
+
+      {!requiresCompanySelection && activeTab === 'customers' && (
+        <CustomersPage
+          companyId={companyId}
+          customers={customersQuery.data?.data ?? []}
+          customersLoading={customersQuery.isFetching}
+          customersError={customersQuery.isError ? readError(customersQuery.error, 'Musteriler yuklenemedi') : null}
+          selectedCustomerId={selectedCustomerId}
+          onSelectCustomer={setSelectedCustomerId}
+          customerSearch={customerSearch}
+          onCustomerSearchChange={setCustomerSearch}
+          customerForm={customerForm}
+          onCustomerFormChange={setCustomerForm}
+          onCreateCustomer={() => { void customerMutations.create.mutateAsync({ companyId, payload: customerForm }); setCustomerForm({ name: '', phone: '', email: '', address: '', taxNumber: '' }); }}
+          isCreating={customerMutations.create.isPending}
+          customerEditForm={customerEditForm}
+          onCustomerEditFormChange={setCustomerEditForm}
+          onUpdateCustomer={() => { void customerMutations.update.mutateAsync({ id: selectedCustomerId, payload: customerEditForm }); }}
+          isUpdating={customerMutations.update.isPending}
+          onDeleteCustomer={() => { void customerMutations.remove.mutateAsync(selectedCustomerId); setSelectedCustomerId(''); }}
+          isDeleting={customerMutations.remove.isPending}
+          transactions={customerTransactionsQuery.data ?? []}
+          transactionsLoading={customerTransactionsQuery.isFetching}
+          transactionForm={transactionForm}
+          onTransactionFormChange={setTransactionForm}
+          onCreateTransaction={() => { void customerMutations.createTransaction.mutateAsync({ customerId: selectedCustomerId, payload: { type: transactionForm.type, amount: Number(transactionForm.amount), description: transactionForm.description || undefined } }); setTransactionForm({ type: 'DEBT', amount: '', description: '' }); }}
+          isCreatingTransaction={customerMutations.createTransaction.isPending}
+          toMoney={money}
+          toDateTime={toDateTime}
+        />
+      )}
+
+      {!requiresCompanySelection && activeTab === 'sales' && (
+        <SalesPage
+          sales={salesData?.data ?? []}
+          salesLoading={salesQuery.isFetching}
+          salesError={salesQuery.isError ? readError(salesQuery.error, 'Satislar yuklenemedi') : null}
+          salesPagination={{ page: salesPage, totalPages: salesData?.pagination?.totalPages ?? 1, total: salesData?.pagination?.total ?? (salesData?.data?.length ?? 0) }}
+          onSalesPageChange={setSalesPage}
+          salesFrom={salesFrom}
+          salesTo={salesTo}
+          onSalesFromChange={setSalesFrom}
+          onSalesToChange={setSalesTo}
+          onLoadSales={() => void salesQuery.refetch()}
+          receiptSearch={receiptSearch}
+          onReceiptSearchChange={setReceiptSearch}
+          onSearchReceipt={() => setAppliedReceiptSearch(receiptSearch)}
+          selectedSaleId={selectedSaleId}
+          onSelectSale={setSelectedSaleId}
+          saleDetail={saleDetailQuery.data ?? null}
+          saleDetailLoading={saleDetailQuery.isFetching}
+          refunds={refundsQuery.data ?? []}
+          refundsLoading={refundsQuery.isFetching}
+          toMoney={money}
+          toDateTime={toDateTime}
         />
       )}
 

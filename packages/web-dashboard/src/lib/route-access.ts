@@ -37,7 +37,16 @@ export function resolveAllowedTabs(role?: string): DashboardTab[] {
   if (role === 'SUPER_ADMIN') {
     return ['dashboard', 'setup', 'organization', 'catalog', 'stock', 'transfers', 'users', 'customers', 'sales', 'reports', 'suppliers', 'subscription', 'yonetim'];
   }
-  return [];
+  if (role === 'ADMIN') {
+    return ['dashboard', 'catalog', 'stock', 'transfers', 'users', 'customers', 'sales', 'reports', 'organization'];
+  }
+  if (role === 'ACCOUNTANT') {
+    return ['dashboard', 'catalog', 'reports', 'sales'];
+  }
+  if (role === 'CASHIER') {
+    return ['dashboard', 'catalog'];
+  }
+  return ['dashboard'];
 }
 
 export function resolveFallbackTab(role?: string): DashboardTab {

@@ -6,6 +6,7 @@ import { useClientPagination } from '../hooks/use-client-pagination';
 interface CompanyRow {
   id: string;
   isActive: boolean;
+  licenseKey?: string | null;
   maxCartDiscountPercent: number;
   maxItemDiscountPercent: number;
   name: string;
@@ -260,6 +261,11 @@ export function OrganizationPage({
               <button className="list-button" type="button" onClick={() => onCompanySelect(company.id)}>
                 <span>{company.name}</span>
                 <small>{company.taxNumber ?? 'Vergi no yok'}</small>
+                {company.licenseKey && (
+                  <small style={{ color: 'var(--fg-2)', marginLeft: '8px', fontFamily: 'var(--font-mono)', fontSize: '11px' }}>
+                    LISANS: {company.licenseKey.slice(0, 12)}...
+                  </small>
+                )}
               </button>
               <span className={`state-pill ${company.isActive ? 'ok' : 'off'}`}>
                 {company.isActive ? 'Aktif' : 'Pasif'}
