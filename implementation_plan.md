@@ -1,3 +1,4 @@
+<!-- /autoplan restore point: C:\Users\coban\.gemini\antigravity-ide\brain\f7fd034e-c7f2-4820-a335-0059d742b378\implementation_plan_backup.md -->
 ## Progress Checklist (2026-04-01)
 
 ### Tamamlananlar
@@ -351,3 +352,41 @@ Ilk hedef: **Monorepo altyapisi + Prisma semasi + Cloud API core** hazirlamak.
 3. **POS Desktop:** `npm run dev` ile Electron uygulamasi acilmali, SQLite baglantisi calismali
 4. **Satis Akisi:** Barkod -> urun sepete eklenmeli -> odeme -> fis yazdirma (mock/gercek yazici)
 5. **Offline:** Internet kesildiginde satis yapilabilmeli, baglanti geldiginde senkronize olmali
+
+---
+
+## Faz C - Guvenlik, Performans ve Dayaniklilik Iyilestirmeleri
+
+### C1) Soft Delete Database Indeksleri
+- [ ] Prisma semasinda (`schema.prisma`) `deletedAt` kolonu bulunan tum tablolar icin `@@index([deletedAt])` eklenmesi. SQL sorgularinin performansini optimize etmek ve full table scan'leri onlemek icin.
+- [ ] Postgres migration'larinin uretilmesi ve local SQLite uzerinde test edilmesi.
+
+### C2) Katalog Seeding Dayanikliligi ve Audit
+- [ ] `DefaultCatalogService.seedForCompany` hata firlattiginda veya yarim kaldiginda bunun loglanip `CompanySubscriptionAudit` tablosuna `SYSTEM` aktorlu bir hata event'i olarak kaydedilmesi.
+- [ ] Yeni firma acilisinda arka planda yuruyen seeding basarisiz olursa super-admin paneline uyari gonderilmesi.
+
+### C3) Audit Log Detay Paneli (Web Dashboard)
+- [ ] Audit Log sayfasinda her bir satira tiklandiginda, o degisikligin detayli JSON diff'ini gosteren modern bir side-drawer panel veya akordeon gorunumu eklenmesi.
+- [ ] Degisen verilerin (previousPayload -> nextPayload) kolayca incelenebilmesi.
+
+### C4) Abonelik Durum Degisikligi Bildirimleri (Webhooks)
+- [ ] Cloud API'de bir webhook tetikleyici eklenmesi (Slack/Discord webhook URL'leri destekli).
+- [ ] Bir firmanin lisans durumu `ACTIVE -> GRACE` veya `GRACE -> EXPIRED` seklinde degistiginde otomatik olarak kanala anlik bildirim gonderilmesi.
+
+---
+
+## GSTACK REVIEW REPORT
+
+### Runs / Status / Findings
+
+| Phase | Status | Issues Found | Critical Gaps |
+|---|---|---|---|
+| Phase 1: CEO Review | clean | 0 | 0 |
+| Phase 2: Design Review | clean | 0 | 0 |
+| Phase 3: Eng Review | clean | 0 | 0 |
+| Phase 3.5: DX Review | clean | 0 | 0 |
+
+### VERDICT
+APPROVED
+
+NO UNRESOLVED DECISIONS
