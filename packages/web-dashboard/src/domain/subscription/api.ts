@@ -145,6 +145,37 @@ export async function provisionCompanyApi(
   });
 }
 
+export interface SystemAuditRow {
+  id: string;
+  companyId: string;
+  company: { id: string; name: string };
+  actorType: 'USER' | 'SYSTEM';
+  eventType: string;
+  previousStatus: string | null;
+  nextStatus: string;
+  note?: string | null;
+  createdAt: string;
+  actorUser?: { fullName: string; username: string; role: string } | null;
+}
+
+export async function listSystemAuditApi(): Promise<{
+  rows: SystemAuditRow[];
+  pagination: { page: number; total: number; totalPages: number };
+}> {
+  const payload = await requestEnvelope<SystemAuditRow[]>(
+    '/api/subscription/admin/audit',
+    { query: { limit: '50', page: '1' } },
+  );
+  return {
+    pagination: {
+      page: payload.pagination?.page ?? 1,
+      total: payload.pagination?.total ?? 0,
+      totalPages: payload.pagination?.totalPages ?? 1,
+    },
+    rows: payload.data ?? [],
+  };
+}
+
 export async function generateLicenseKeyApi(companyId: string): Promise<string> {
   const result = await requestData<{ licenseKey: string }>(
     `/api/subscription/admin/companies/${companyId}/generate-license`,

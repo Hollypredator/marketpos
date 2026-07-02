@@ -46,6 +46,7 @@ const TAB_LABELS: Record<DashboardTab, string> = {
   reports:      'Raporlar',
   suppliers:    'Cari & Tedarik',
   subscription: 'Paket Takip',
+  audit:        'Denetim Kaydı',
   yonetim:      'Fiyat Yönetimi',
 };
 
@@ -62,6 +63,7 @@ const TAB_HINTS: Record<DashboardTab, string> = {
   reports:      'Satış ve operasyon raporları',
   suppliers:    'Tedarikçi, Cari ve Fatura yönetimi',
   subscription: 'Abonelik ve lisans operasyonları',
+  audit:        'Tüm firmaların denetim kayıtları',
   yonetim:      'Açılış sayfası fiyatlandırma paketlerini güncelleyin',
 };
 
@@ -79,6 +81,13 @@ const TAB_ICONS: Record<DashboardTab, React.ReactElement> = {
     <svg className="nav-item-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
       <rect x="2" y="2" width="12" height="12" rx="2"/>
       <path d="M5 8h6M5 5h6M5 11h4" strokeLinecap="round"/>
+    </svg>
+  ),
+  audit: (
+    <svg className="nav-item-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M3 4h10M3 8h7M3 12h5" strokeLinecap="round"/>
+      <circle cx="12" cy="12" r="2.5"/>
+      <path d="M14 14l1.5 1.5" strokeLinecap="round"/>
     </svg>
   ),
   organization: (

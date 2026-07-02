@@ -262,7 +262,10 @@ export function OrganizationPage({
                 <span>{company.name}</span>
                 <small>{company.taxNumber ?? 'Vergi no yok'}</small>
                 {company.licenseKey && (
-                  <small style={{ color: 'var(--fg-2)', marginLeft: '8px', fontFamily: 'var(--font-mono)', fontSize: '11px' }}>
+                  <small
+                    style={{ color: 'var(--fg-2)', marginLeft: '8px', fontFamily: 'var(--font-mono)', fontSize: '11px' }}
+                    title={`Tam Lisans: ${company.licenseKey}`}
+                  >
                     LISANS: {company.licenseKey.slice(0, 12)}...
                   </small>
                 )}
@@ -359,6 +362,42 @@ export function OrganizationPage({
 
         <form className="form-grid compact" onSubmit={onCompanyUpdate}>
           <h3>Secili Firmayi Guncelle</h3>
+          {selectedCompany?.licenseKey && (
+            <div className="license-info-box" style={{ marginTop: '4px', marginBottom: '12px' }}>
+              <span className="muted" style={{ display: 'block', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', marginBottom: '4px' }}>Lisans Anahtarı</span>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <code style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontWeight: 700,
+                  fontSize: '12px',
+                  background: 'var(--bg-2)',
+                  padding: '6px 10px',
+                  borderRadius: 'var(--r-md)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--primary)',
+                  flex: 1,
+                  letterSpacing: '0.5px'
+                }}>
+                  {selectedCompany.licenseKey}
+                </code>
+                <button
+                  type="button"
+                  className="btn"
+                  style={{ minHeight: '34px', padding: '0 12px', fontSize: '12px' }}
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(selectedCompany.licenseKey || '');
+                      alert('Lisans anahtarı kopyalandı!');
+                    } catch (err) {
+                      console.error(err);
+                    }
+                  }}
+                >
+                  Kopyala
+                </button>
+              </div>
+            </div>
+          )}
           <input
             placeholder="Firma adi"
             value={companyEditForm.name}

@@ -40,6 +40,7 @@ import {
   useSubscriptionAuditQuery,
   useSubscriptionCompaniesQuery,
   useSubscriptionMutations,
+  useSystemAuditQuery,
 } from './domain/subscription/hooks';
 import type {
   SubscriptionFilters,
@@ -62,6 +63,7 @@ import type { UserCreateForm, UserEditForm } from './domain/users/types';
 import { useTabNavigation } from './hooks/use-tab-navigation';
 import { downloadCsv, intNum, money, readError, toDateInput, toDateTime, toLocalDateIso } from './lib/format';
 import { canManageRole, resolveAssignableRoles } from './lib/role-hierarchy';
+import { hasPermission } from './lib/permissions';
 import { queryKeys } from './lib/query-keys';
 import { createFlowTimer } from './lib/telemetry';
 import { CatalogPage } from './pages/CatalogPage';
@@ -69,6 +71,7 @@ import { OrganizationPage } from './pages/OrganizationPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { SetupWizardPage } from './pages/SetupWizardPage';
 import { StockPage } from './pages/StockPage';
+import { AuditLogPage } from './pages/AuditLogPage';
 import { SubscriptionPage } from './pages/SubscriptionPage';
 import { UsersPage } from './pages/UsersPage';
 import { SuppliersPage } from './pages/suppliers/SuppliersPage';
@@ -370,7 +373,7 @@ export default function App(): React.ReactElement {
     () => [...(branchesQuery.data ?? [])].sort((left, right) => left.name.localeCompare(right.name, 'tr')),
     [branchesQuery.data],
   );
-  const categoriesQuery = useCategoriesQuery(companyId, auth.isAuthenticated && auth.isBackofficeWriter);
+  const categoriesQuery = useCategoriesQuery(companyId, auth.isAuthenticated && hasPermission(auth.role ?? undefined, 'access:catalog'));
   const categories = useMemo(
     () =>
       [...(categoriesQuery.data ?? [])].sort((left, right) => {
@@ -384,7 +387,7 @@ export default function App(): React.ReactElement {
   const productsQuery = useProductsQuery(
     companyId,
     productFilters,
-    auth.isAuthenticated && auth.isBackofficeWriter,
+    auth.isAuthenticated && hasPermission(auth.role ?? undefined, 'access:catalog'),
   );
   const suppliersQuery = useSuppliersQuery(companyId, 1);
   const products = useMemo(
@@ -398,7 +401,7 @@ export default function App(): React.ReactElement {
       ),
     [suppliersQuery.data?.data],
   );
-  const usersQuery = useUsersQuery(companyId, auth.isAuthenticated && auth.isBackofficeWriter);
+  const usersQuery = useUsersQuery(companyId, auth.isAuthenticated && hasPermission(auth.role ?? undefined, 'access:users'));
   const users = useMemo(
     () => [...(usersQuery.data ?? [])].sort((left, right) => left.fullName.localeCompare(right.fullName, 'tr')),
     [usersQuery.data],
@@ -456,7 +459,7 @@ export default function App(): React.ReactElement {
   const customerTransactionsQuery = useCustomerTransactionsQuery(selectedCustomerId);
   const customerMutations = useCustomerMutations();
 
-  const salesQuery = useSalesQuery({ branchId, from: salesFrom, to: salesTo, page: salesPage });
+  const salesQuery = useSalesQuery({ companyId, branchId, from: salesFrom, to: salesTo, page: salesPage });
   const saleDetailQuery = useSaleDetailQuery(selectedSaleId);
   const refundsQuery = useRefundsQuery(selectedSaleId);
 
@@ -484,6 +487,11 @@ export default function App(): React.ReactElement {
     : null;
   const subscriptionTemplateErrorText = subscriptionTemplatesQuery.isError
     ? readError(subscriptionTemplatesQuery.error, 'Template listesi yuklenemedi')
+    : null;
+  const systemAuditQuery = useSystemAuditQuery(auth.isAuthenticated && auth.isSuperAdmin);
+  const systemAuditRows = systemAuditQuery.data?.rows ?? [];
+  const systemAuditErrorText = systemAuditQuery.isError
+    ? readError(systemAuditQuery.error, 'Denetim kayitlari yuklenemedi')
     : null;
 
   const selectedCompany = useMemo(() => companies.find((company) => company.id === companyId) ?? null, [companies, companyId]);
@@ -1701,16 +1709,6 @@ const appShellProps = {
 function AuthenticatedAppShell() {
   return (
     <AppShell {...appShellProps}>
-      {!auth.isSuperAdmin && (
-        <section className="card">
-          <h2>Web Panel Yetkisi Kapali</h2>
-          <p className="muted">
-            Bu web paneli sadece merkez operasyon (SUPER_ADMIN) icin aciktir. Firma ici tum
-            yonetim ve operasyon islemleri desktop POS uygulamasi uzerinden yapilmalidir.
-          </p>
-        </section>
-      )}
-
       {requiresCompanySelection && (
         <section className="card">
           <h2>Firma Secimi Gerekli</h2>
@@ -1721,13 +1719,19 @@ function AuthenticatedAppShell() {
         </section>
       )}
 
-      {activeTab === 'dashboard' && auth.isSuperAdmin && (
+      {activeTab === 'dashboard' && (
         <DashboardPage companyId={companyId} branchId={branchId} toMoney={money} toDateTime={toDateTime} />
       )}
 
       {activeTab === 'setup' && auth.isSuperAdmin && (
         <SetupWizardPage
-          existingCompanies={companies}
+          existingCompanies={companies.map((c: any) => ({
+            id: c.id,
+            licenseKey: c.licenseKey,
+            licenseKeyActivatedAt: c.licenseKeyActivatedAt,
+            name: c.name,
+            taxNumber: c.taxNumber,
+          }))}
           onProvisionFormChange={setSubscriptionProvisionForm}
           onSubmitProvision={submitCompanyProvisioning}
           provisionErrorText={
@@ -2014,6 +2018,7 @@ function AuthenticatedAppShell() {
             void reloadAudit();
           }}
           onResetFilters={resetSubscriptionFilters}
+          recentActivityRows={systemAuditRows.slice(0, 10)}
           onSavePlan={(event) => {
             void saveSubscriptionPlan(event);
           }}
@@ -2028,6 +2033,10 @@ function AuthenticatedAppShell() {
           onGenerateLicenseKey={(targetCompanyId) => {
             void generateLicenseKeyForCompany(targetCompanyId);
           }}
+          onNavigateToSetup={(companyId) => {
+            setSubscriptionProvisionForm((current) => ({ ...current, companyId }));
+            moveToTab('setup');
+          }}
           planForm={subscriptionPlanForm}
           rows={sortedSubscriptionRows}
           saving={saving}
@@ -2040,6 +2049,15 @@ function AuthenticatedAppShell() {
           summary={subscriptionSummary}
           toDateTime={toDateTime}
           upcomingRenewals={upcomingRenewals}
+        />
+      )}
+
+      {activeTab === 'audit' && auth.isSuperAdmin && (
+        <AuditLogPage
+          rows={systemAuditRows}
+          loading={systemAuditQuery.isFetching}
+          errorText={systemAuditErrorText}
+          toDateTime={toDateTime}
         />
       )}
 

@@ -1,11 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { PaginationControls } from '../components/PaginationControls';
 import { TableState } from '../components/TableState';
 import { useClientPagination } from '../hooks/use-client-pagination';
 import { useCompanyMutations } from '../domain/organization/hooks';
-import { useSubscriptionMutations } from '../domain/subscription/hooks';
+import { generateLicenseKeyApi } from '../domain/subscription/api';
 import { queryKeys } from '../lib/query-keys';
 
 type SubscriptionStatus = 'ACTIVE' | 'GRACE' | 'EXPIRED' | 'SUSPENDED' | 'UNCONFIGURED';
@@ -91,8 +91,10 @@ interface SubscriptionPageProps {
   onExportUpcoming: () => void;
   onExportWholeList: () => void;
   onFiltersChange: (updater: (current: SubscriptionFilters) => SubscriptionFilters) => void;
+  onNavigateToSetup: (companyId: string) => void;
   onPlanFormChange: (updater: (current: SubscriptionPlanForm) => SubscriptionPlanForm) => void;
   onQuickRenew: (companyId: string) => void;
+  recentActivityRows: Array<{ id: string; company?: { name: string }; eventType: string; createdAt: string; note?: string | null }>;
   onQuickRenewSelected: () => void;
   onReloadAudit: () => void;
   onResetFilters: () => void;
@@ -132,6 +134,7 @@ export function SubscriptionPage({
   onPlanFormChange,
   onQuickRenew,
   onQuickRenewSelected,
+  recentActivityRows,
   onReloadAudit,
   onResetFilters,
   onSavePlan,
@@ -140,6 +143,7 @@ export function SubscriptionPage({
   onSuspend,
   onUnsuspend,
   onGenerateLicenseKey,
+  onNavigateToSetup,
   planForm,
   rows,
   saving,
@@ -165,13 +169,16 @@ export function SubscriptionPage({
   const [newCompanyAddress, setNewCompanyAddress] = useState('');
 
   const [generatedLicenseInfo, setGeneratedLicenseInfo] = useState<{
+    companyId: string;
     companyName: string;
     licenseKey: string;
   } | null>(null);
 
   const queryClient = useQueryClient();
   const { createCompany } = useCompanyMutations('');
-  const { generateLicense } = useSubscriptionMutations(filters, selectedRowId);
+  const createCompanyGenerateLicense = useMutation({
+    mutationFn: generateLicenseKeyApi,
+  });
 
   const handleCopy = async (key: string) => {
     try {
@@ -185,12 +192,15 @@ export function SubscriptionPage({
     }
   };
 
+  const [creatingTenant, setCreatingTenant] = useState(false);
+
   const handleCreateTenant = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!newCompanyName.trim()) return;
 
+    setCreatingTenant(true);
     try {
-      // 1. Create company/tenant
+      // 1. Create company/tenant (licenseKey is null — no auto-generate)
       const createdCompany = await createCompany.mutateAsync({
         name: newCompanyName.trim(),
         taxNumber: newCompanyTaxNumber.trim(),
@@ -201,8 +211,8 @@ export function SubscriptionPage({
         maxItemDiscountPercent: '40',
       });
 
-      // 2. Generate license key for this company
-      const licenseKey = await generateLicense.mutateAsync(createdCompany.id);
+      // 2. Generate license key for this company (single source of truth)
+      const licenseKey = await createCompanyGenerateLicense.mutateAsync(createdCompany.id);
 
       // Invalidate query to show the new company in the table list
       void queryClient.invalidateQueries({
@@ -211,6 +221,7 @@ export function SubscriptionPage({
 
       // 3. Show success info modal
       setGeneratedLicenseInfo({
+        companyId: createdCompany.id,
         companyName: createdCompany.name,
         licenseKey,
       });
@@ -223,6 +234,8 @@ export function SubscriptionPage({
       setNewCompanyAddress('');
     } catch (err: any) {
       alert(err?.message || 'Lisans ve firma oluşturulurken bir hata oluştu.');
+    } finally {
+      setCreatingTenant(false);
     }
   };
 
@@ -414,17 +427,32 @@ export function SubscriptionPage({
               </label>
               <label>
                 Yaklaşan vade (gün)
-                <input
-                  type="number"
-                  min="0"
-                  value={filters.dueInDays}
-                  onChange={(event) =>
-                    onFiltersChange((current) => ({
-                      ...current,
-                      dueInDays: event.target.value,
-                    }))
-                  }
-                />
+                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                  <input
+                    type="number"
+                    min="0"
+                    value={filters.dueInDays}
+                    onChange={(event) =>
+                      onFiltersChange((current) => ({
+                        ...current,
+                        dueInDays: event.target.value,
+                      }))
+                    }
+                    style={{ flex: 1, minWidth: '0' }}
+                  />
+                  <button type="button" className="btn" style={{ padding: '4px 8px', fontSize: '11px', minHeight: 'auto' }} onClick={() => onFiltersChange((c) => ({ ...c, dueInDays: '7' }))}>
+                    7g
+                  </button>
+                  <button type="button" className="btn" style={{ padding: '4px 8px', fontSize: '11px', minHeight: 'auto' }} onClick={() => onFiltersChange((c) => ({ ...c, dueInDays: '14' }))}>
+                    14g
+                  </button>
+                  <button type="button" className="btn" style={{ padding: '4px 8px', fontSize: '11px', minHeight: 'auto' }} onClick={() => onFiltersChange((c) => ({ ...c, dueInDays: '30' }))}>
+                    30g
+                  </button>
+                  <button type="button" className="btn" style={{ padding: '4px 8px', fontSize: '11px', minHeight: 'auto' }} onClick={() => onFiltersChange((c) => ({ ...c, dueInDays: '90' }))}>
+                    90g
+                  </button>
+                </div>
               </label>
             </div>
 
@@ -666,8 +694,8 @@ export function SubscriptionPage({
                   />
                 </label>
 
-                <button className="btn primary" type="submit" disabled={createCompany.isPending || generateLicense.isPending}>
-                  {createCompany.isPending || generateLicense.isPending ? 'Oluşturuluyor...' : 'Lisans ve Firma Oluştur'}
+                <button className="btn primary" type="submit" disabled={creatingTenant}>
+                  {creatingTenant ? 'Oluşturuluyor...' : 'Lisans ve Firma Oluştur'}
                 </button>
               </form>
             )}
@@ -820,6 +848,27 @@ export function SubscriptionPage({
               total={upcomingPagination.total}
             />
           </article>
+
+          {/* Recent Activity Feed */}
+          <article className="card">
+            <h3>Son Islemler</h3>
+            <p className="muted" style={{ fontSize: '0.8rem' }}>Tum firmalardaki son 10 denetim kaydi.</p>
+            {recentActivityRows.length === 0 ? (
+              <p className="muted" style={{ fontSize: '0.85rem', marginTop: '8px' }}>Henuz islem kaydi bulunmuyor.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px', maxHeight: '300px', overflowY: 'auto' }}>
+                {recentActivityRows.map((row) => (
+                  <div key={row.id} style={{ fontSize: '0.78rem', borderBottom: '1px solid var(--border-s)', paddingBottom: '6px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 600 }}>
+                      <span>{row.company?.name ?? '-'}</span>
+                      <span className="muted">{toDateTime(row.createdAt)}</span>
+                    </div>
+                    <div style={{ color: 'var(--fg-3)', marginTop: '2px' }}>{row.eventType}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </article>
         </div>
       </div>
 
@@ -828,7 +877,7 @@ export function SubscriptionPage({
         <div className="modal-overlay">
           <div className="modal-content glassmorphic animate-fade-in">
             <div className="modal-header">
-              <h3>🎉 Yeni Lisans Başarıyla Üretildi!</h3>
+              <h3>Yeni Lisans Başarıyla Üretildi!</h3>
               <button
                 type="button"
                 className="modal-close-btn"
@@ -855,13 +904,24 @@ export function SubscriptionPage({
                 </div>
               </div>
             </div>
-            <div className="modal-footer">
+            <div className="modal-footer" style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
               <button
                 type="button"
                 className="btn"
                 onClick={() => setGeneratedLicenseInfo(null)}
               >
                 Kapat
+              </button>
+              <button
+                type="button"
+                className="btn primary"
+                onClick={() => {
+                  const info = generatedLicenseInfo;
+                  setGeneratedLicenseInfo(null);
+                  onNavigateToSetup(info.companyId);
+                }}
+              >
+                Kuruluma Git
               </button>
             </div>
           </div>

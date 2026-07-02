@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 
 import { useSalesQuery } from '../domain/sales/hooks';
 import { useStockLevelsQuery } from '../domain/stock/hooks';
-import { useCompaniesQuery, useBranchesQuery } from '../domain/organization/hooks';
+import { useBranchesQuery } from '../domain/organization/hooks';
 import type { SalesListFilters } from '../domain/sales/api';
 import type { StockLevel } from '../domain/shared/types';
 import { money, toDateTime } from '../lib/format';
@@ -27,33 +27,22 @@ interface Sale {
   payments: Array<{ method: string; amount: number }>;
 }
 
-export function DashboardPage({ companyId: _companyId }: { companyId: string; branchId: string; toMoney: (v: number) => string; toDateTime: (v?: string | null) => string }): React.ReactElement {
+export function DashboardPage({
+  companyId,
+  branchId,
+  toMoney,
+  toDateTime,
+}: {
+  companyId: string;
+  branchId: string;
+  toMoney: (v: number) => string;
+  toDateTime: (v?: string | null) => string;
+}): React.ReactElement {
   const [dailyDate, setDailyDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [selectedCompanyId, setSelectedCompanyId] = useState(_companyId);
-  const [selectedBranchId, setSelectedBranchId] = useState('');
 
-  const salesQuery = useSalesQuery({ branchId: selectedBranchId, from: dailyDate, to: dailyDate } as SalesListFilters);
-  const stockLevelsQuery = useStockLevelsQuery(selectedBranchId, true);
-  const companiesQuery = useCompaniesQuery(true);
-  const branchesQuery = useBranchesQuery(selectedCompanyId, true);
-
-  useEffect(() => {
-    if (companiesQuery.data?.length) {
-      const found = companiesQuery.data.find((c) => c.id === selectedCompanyId);
-      if (!found && companiesQuery.data[0]) {
-        setSelectedCompanyId(companiesQuery.data[0].id);
-      }
-    }
-  }, [companiesQuery.data, selectedCompanyId]);
-
-  useEffect(() => {
-    if (branchesQuery.data?.length) {
-      const found = branchesQuery.data.find((b) => b.id === selectedBranchId);
-      if (!found && branchesQuery.data[0]) {
-        setSelectedBranchId(branchesQuery.data[0].id);
-      }
-    }
-  }, [branchesQuery.data, selectedBranchId]);
+  const salesQuery = useSalesQuery({ branchId, from: dailyDate, to: dailyDate } as SalesListFilters, Boolean(branchId));
+  const stockLevelsQuery = useStockLevelsQuery(branchId, Boolean(branchId));
+  const branchesQuery = useBranchesQuery(companyId, Boolean(companyId));
 
   const todaySales = (salesQuery.data?.data ?? []) as Sale[];
   const totalSales = todaySales.reduce((sum, s) => sum + s.grandTotal, 0);
@@ -114,22 +103,6 @@ export function DashboardPage({ companyId: _companyId }: { companyId: string; br
       {/* ── Filter Toolbar ── */}
       <div className="toolbar">
         <div className="scope-row">
-          <label>
-            Firma
-            <select value={selectedCompanyId} onChange={(e) => setSelectedCompanyId(e.target.value)} style={{ minWidth: '220px' }}>
-              {companiesQuery.data?.map((c: Company) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Şube
-            <select value={selectedBranchId} onChange={(e) => setSelectedBranchId(e.target.value)} style={{ minWidth: '220px' }}>
-              {branchesQuery.data?.map((b: Branch) => (
-                <option key={b.id} value={b.id}>{b.name}</option>
-              ))}
-            </select>
-          </label>
           <label>
             Tarih
             <input type="date" value={dailyDate} onChange={(e) => setDailyDate(e.target.value)} />

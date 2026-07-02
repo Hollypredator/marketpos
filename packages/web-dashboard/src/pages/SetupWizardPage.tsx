@@ -4,6 +4,8 @@ import type { ProvisionTemplateSummary, SubscriptionProvisionForm } from '../dom
 
 interface ExistingCompanyOption {
   id: string;
+  licenseKey?: string | null;
+  licenseKeyActivatedAt?: string | null;
   name: string;
   taxNumber?: string | null;
 }
@@ -246,6 +248,16 @@ export function SetupWizardPage({
                   ? 'Yeni tenant acilisi modunda calisiyorsunuz.'
                   : `Secili mevcut firma: ${selectedExistingCompany?.name ?? provisionForm.companyId}`}
               </p>
+              {selectedExistingCompany?.licenseKey && !selectedExistingCompany.licenseKeyActivatedAt && (
+                <div className="banner info" style={{ marginTop: '8px' }}>
+                  Bu firmanin kullanilmayi bekleyen bir lisans kodu var: <code>{selectedExistingCompany.licenseKey}</code>
+                </div>
+              )}
+              {selectedExistingCompany && !selectedExistingCompany.licenseKey && (
+                <div className="banner warning" style={{ marginTop: '8px' }}>
+                  Bu firmanin henuz bir lisans kodu bulunmuyor. Lisans once Lisans & Abonelik panelinden olusturulmalidir.
+                </div>
+              )}
             </>
           )}
 

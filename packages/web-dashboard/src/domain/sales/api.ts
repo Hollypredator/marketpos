@@ -62,6 +62,7 @@ export interface Refund {
 }
 
 export interface SalesListFilters {
+  companyId?: string;
   branchId?: string;
   from?: string;
   to?: string;
@@ -76,6 +77,7 @@ export async function fetchSalesApi(
   const limit = filters.limit ?? 20;
   const envelope = await requestEnvelope<Sale[]>('/api/sales', {
     query: {
+      companyId: filters.companyId,
       branchId: filters.branchId,
       from: filters.from,
       to: filters.to,

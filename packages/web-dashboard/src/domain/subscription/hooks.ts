@@ -4,6 +4,7 @@ import {
   listProvisionTemplatesApi,
   listSubscriptionAuditApi,
   listSubscriptionCompaniesApi,
+  listSystemAuditApi,
   provisionCompanyApi,
   quickRenewSubscriptionApi,
   saveSubscriptionPlanApi,
@@ -28,6 +29,15 @@ export function useSubscriptionAuditQuery(companyId: string, enabled: boolean) {
     enabled: enabled && companyId.length > 0,
     queryFn: () => listSubscriptionAuditApi(companyId),
     queryKey: queryKeys.subscriptionAudit(companyId),
+    staleTime: 20_000,
+  });
+}
+
+export function useSystemAuditQuery(enabled: boolean) {
+  return useQuery({
+    enabled,
+    queryFn: listSystemAuditApi,
+    queryKey: queryKeys.subscriptionAudit('__system__'),
     staleTime: 20_000,
   });
 }
