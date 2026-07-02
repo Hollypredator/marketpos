@@ -85,13 +85,13 @@ export function AuthProvider({ children }: AuthProviderProps): React.ReactElemen
         accessBlockedMessage,
         clearAccessBlockedMessage: () => setAccessBlockedMessage(null),
         isAuthenticated: Boolean(session),
-        isBackofficeWriter: role === 'SUPER_ADMIN',
+        isBackofficeWriter: role === 'SUPER_ADMIN' || role === 'ADMIN',
         isSuperAdmin: role === 'SUPER_ADMIN',
         login,
         logout,
-      role,
-      session,
-    };
+        role,
+        session,
+      };
   }, [accessBlockedMessage, login, logout, session]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

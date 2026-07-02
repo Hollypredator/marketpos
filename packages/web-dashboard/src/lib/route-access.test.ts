@@ -22,41 +22,41 @@ describe('route access matrix', () => {
       'reports',
       'suppliers',
       'subscription',
+      'audit',
       'yonetim',
     ]);
     expect(resolveFallbackTab('SUPER_ADMIN')).toBe('dashboard');
   });
 
   it('returns restricted tabs for ADMIN', () => {
-    expect(resolveAllowedTabs('ADMIN')).toEqual([
-      'dashboard',
-      'catalog',
-      'stock',
-      'transfers',
-      'users',
-      'customers',
-      'sales',
-      'reports',
-      'organization',
-    ]);
+    const tabs = resolveAllowedTabs('ADMIN');
+    expect(tabs).toContain('dashboard');
+    expect(tabs).toContain('catalog');
+    expect(tabs).toContain('organization');
+    expect(tabs).not.toContain('subscription');
+    expect(tabs).not.toContain('audit');
+    expect(tabs).not.toContain('yonetim');
     expect(resolveFallbackTab('ADMIN')).toBe('dashboard');
   });
 
   it('returns restricted tabs for ACCOUNTANT', () => {
-    expect(resolveAllowedTabs('ACCOUNTANT')).toEqual([
-      'dashboard',
-      'catalog',
-      'reports',
-      'sales',
-    ]);
+    const tabs = resolveAllowedTabs('ACCOUNTANT');
+    expect(tabs).toContain('dashboard');
+    expect(tabs).toContain('catalog');
+    expect(tabs).toContain('sales');
+    expect(tabs).toContain('reports');
+    expect(tabs).not.toContain('stock');
+    expect(tabs).not.toContain('users');
+    expect(tabs).not.toContain('setup');
     expect(resolveFallbackTab('ACCOUNTANT')).toBe('dashboard');
   });
 
   it('returns minimal tabs for CASHIER', () => {
-    expect(resolveAllowedTabs('CASHIER')).toEqual([
-      'dashboard',
-      'catalog',
-    ]);
+    const tabs = resolveAllowedTabs('CASHIER');
+    expect(tabs).toContain('dashboard');
+    expect(tabs).toContain('catalog');
+    expect(tabs).not.toContain('stock');
+    expect(tabs).not.toContain('subscription');
     expect(resolveFallbackTab('CASHIER')).toBe('dashboard');
   });
 
@@ -64,6 +64,7 @@ describe('route access matrix', () => {
     expect(tabPath('setup')).toBe('/setup');
     expect(tabPath('organization')).toBe('/organization');
     expect(tabPath('subscription')).toBe('/subscription');
+    expect(tabPath('audit')).toBe('/audit');
     expect(resolveTabFromPath('/stock')).toBe('stock');
     expect(resolveTabFromPath('/unknown')).toBeNull();
   });

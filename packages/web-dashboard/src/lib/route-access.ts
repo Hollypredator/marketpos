@@ -1,17 +1,7 @@
-export type DashboardTab =
-  | 'dashboard'
-  | 'setup'
-  | 'organization'
-  | 'catalog'
-  | 'stock'
-  | 'transfers'
-  | 'users'
-  | 'customers'
-  | 'sales'
-  | 'reports'
-  | 'suppliers'
-  | 'subscription'
-  | 'yonetim';
+import { hasPermission, TAB_PERMISSIONS } from './permissions';
+import type { DashboardTab } from './permissions';
+
+export type { DashboardTab };
 
 export const TAB_PATHS: Record<DashboardTab, string> = {
   dashboard: '/dashboard',
@@ -26,6 +16,7 @@ export const TAB_PATHS: Record<DashboardTab, string> = {
   reports: '/reports',
   suppliers: '/suppliers',
   subscription: '/subscription',
+  audit: '/audit',
   yonetim: '/yonetim',
 };
 
@@ -34,23 +25,13 @@ const PATH_TO_TAB = new Map<string, DashboardTab>(
 );
 
 export function resolveAllowedTabs(role?: string): DashboardTab[] {
-  if (role === 'SUPER_ADMIN') {
-    return ['dashboard', 'setup', 'organization', 'catalog', 'stock', 'transfers', 'users', 'customers', 'sales', 'reports', 'suppliers', 'subscription', 'yonetim'];
-  }
-  if (role === 'ADMIN') {
-    return ['dashboard', 'catalog', 'stock', 'transfers', 'users', 'customers', 'sales', 'reports', 'organization'];
-  }
-  if (role === 'ACCOUNTANT') {
-    return ['dashboard', 'catalog', 'reports', 'sales'];
-  }
-  if (role === 'CASHIER') {
-    return ['dashboard', 'catalog'];
-  }
-  return ['dashboard'];
+  return (Object.keys(TAB_PATHS) as DashboardTab[]).filter((tab) =>
+    hasPermission(role, TAB_PERMISSIONS[tab]),
+  );
 }
 
-export function resolveFallbackTab(role?: string): DashboardTab {
-  return role === 'SUPER_ADMIN' ? 'dashboard' : 'dashboard';
+export function resolveFallbackTab(_role?: string): DashboardTab {
+  return 'dashboard';
 }
 
 export function resolveTabFromPath(pathname: string): DashboardTab | null {
