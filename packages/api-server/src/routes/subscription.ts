@@ -463,6 +463,108 @@ export async function subscriptionRoutes(server: FastifyInstance): Promise<void>
     },
   );
 
+  // System-wide dashboard stats
+  server.get(
+    '/admin/stats',
+    { preHandler: server.ensureSuperAdmin },
+    async () => {
+      const [companyCount, userCount, branchCount] = await Promise.all([
+        prisma.company.count({ where: { deletedAt: null } }),
+        prisma.user.count({ where: { deletedAt: null } }),
+        prisma.branch.count({ where: { deletedAt: null } }),
+      ]);
+
+      const companies = await prisma.company.findMany({
+        select: {
+          id: true,
+          isActive: true,
+          packageExpiresAt: true,
+          packageGraceDays: true,
+          packageGraceEndsAt: true,
+          packageStatus: true,
+        },
+        where: { deletedAt: null },
+      });
+
+      const now = new Date();
+      const statusCounts = { ACTIVE: 0, GRACE: 0, EXPIRED: 0, SUSPENDED: 0, UNCONFIGURED: 0 };
+      let activatedCount = 0;
+      let unactivatedCount = 0;
+
+      for (const c of companies) {
+        const access = buildCompanyAccessSnapshot({
+          id: c.id,
+          isActive: c.isActive,
+          packageExpiresAt: c.packageExpiresAt,
+          packageGraceDays: c.packageGraceDays,
+          packageGraceEndsAt: c.packageGraceEndsAt,
+          packageStatus: c.packageStatus,
+        }, now);
+        if (statusCounts[access.status] !== undefined) {
+          statusCounts[access.status]++;
+        }
+      }
+
+      return {
+        data: {
+          companies: { total: companyCount, ...statusCounts },
+          users: { total: userCount },
+          branches: { total: branchCount },
+        },
+        success: true,
+      };
+    },
+  );
+
+  // System-wide audit log (all companies)
+  server.get(
+    '/admin/audit',
+    { preHandler: server.ensureSuperAdmin },
+    async (request: FastifyRequest) => {
+      const query = auditListQuerySchema.parse(request.query);
+      const skip = (query.page - 1) * query.limit;
+
+      const [rows, total] = await Promise.all([
+        prisma.companySubscriptionAudit.findMany({
+          include: {
+            actorUser: {
+              select: {
+                fullName: true,
+                id: true,
+                role: true,
+                username: true,
+              },
+            },
+            company: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+          skip,
+          take: query.limit,
+        }),
+        prisma.companySubscriptionAudit.count(),
+      ]);
+
+      return {
+        data: rows.map((row) => ({
+          ...row,
+          createdAt: row.createdAt.toISOString(),
+        })),
+        pagination: {
+          limit: query.limit,
+          page: query.page,
+          total,
+          totalPages: Math.max(1, Math.ceil(total / query.limit)),
+        },
+        success: true,
+      };
+    },
+  );
+
   server.get(
     '/admin/companies/:id/audit',
     { preHandler: server.ensureSuperAdmin },

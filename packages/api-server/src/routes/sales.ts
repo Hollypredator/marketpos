@@ -10,6 +10,7 @@ import {
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import prisma from '../lib/prisma';
+import { resolveScopedCompanyId } from '../lib/request-scope';
 
 interface IdParams {
   id: string;
@@ -20,6 +21,7 @@ interface ReceiptParams {
 }
 
 interface SaleListQuery {
+  companyId?: string;
   branchId?: string;
   from?: string;
   limit?: string;
@@ -432,13 +434,25 @@ export async function saleRoutes(server: FastifyInstance): Promise<void> {
 
   server.get(
     '/',
-    async (request: FastifyRequest<{ Querystring: SaleListQuery }>) => {
+    async (
+      request: FastifyRequest<{ Querystring: SaleListQuery }>,
+      reply: FastifyReply,
+    ) => {
       const limit = parsePositiveInt(request.query.limit, 20);
       const page = parsePositiveInt(request.query.page, 1);
       const skip = (page - 1) * limit;
 
+      const scopedCompanyId = resolveScopedCompanyId(
+        request,
+        reply,
+        request.query.companyId,
+      );
+      if (reply.sent || !scopedCompanyId) {
+        return;
+      }
+
       const where: Prisma.SaleWhereInput = {
-        companyId: request.user.companyId,
+        companyId: scopedCompanyId,
         deletedAt: null,
       };
 

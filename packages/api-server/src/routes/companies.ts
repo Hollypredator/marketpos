@@ -5,8 +5,6 @@ import prisma from '../lib/prisma';
 import { DefaultCatalogService } from '../lib/catalog/defaultCatalogService';
 import { resolveScopedCompanyId } from '../lib/request-scope';
 import { findRestrictedSubscriptionFields } from '../lib/subscription-admin-helpers';
-import { generateLicenseKey } from '../lib/license-utils';
-
 interface IdParams {
   id: string;
 }
@@ -109,10 +107,7 @@ export async function companyRoutes(server: FastifyInstance): Promise<void> {
     }
 
     const company = await prisma.company.create({
-      data: {
-        ...parsed.data,
-        licenseKey: generateLicenseKey(),
-      },
+      data: parsed.data,
     });
 
     // Automatically seed default catalog for the new company in the background

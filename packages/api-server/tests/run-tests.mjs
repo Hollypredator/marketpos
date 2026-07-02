@@ -89,6 +89,7 @@ function installPrismaMocks(company, auditRows) {
   let auditCounter = auditRows.length;
 
   const mockCompanyDelegate = {
+    count: async () => 1,
     findFirst: async (args = {}) => {
       const id = args?.where?.id;
       const mustBeUndeleted = args?.where?.deletedAt === null;
@@ -110,10 +111,21 @@ function installPrismaMocks(company, auditRows) {
     },
   };
 
+  const mockUserDelegate = {
+    count: async () => 1,
+  };
+
+  const mockBranchDelegate = {
+    count: async () => 1,
+  };
+
   const mockAuditDelegate = {
     count: async (args = {}) => {
       const companyId = args?.where?.companyId;
-      return auditRows.filter((row) => row.companyId === companyId).length;
+      if (companyId) {
+        return auditRows.filter((row) => row.companyId === companyId).length;
+      }
+      return auditRows.length;
     },
     create: async (args = {}) => {
       auditCounter += 1;
@@ -154,9 +166,11 @@ function installPrismaMocks(company, auditRows) {
       const skip = Number.isFinite(args?.skip) ? args.skip : 0;
       const take = Number.isFinite(args?.take) ? args.take : undefined;
 
-      let rows = auditRows
-        .filter((row) => row.companyId === companyId)
-        .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+      let rows = auditRows;
+      if (companyId) {
+        rows = rows.filter((row) => row.companyId === companyId);
+      }
+      rows = [...rows].sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
 
       if (skip > 0) {
         rows = rows.slice(skip);
@@ -185,9 +199,12 @@ function installPrismaMocks(company, auditRows) {
   };
 
   const patches = [
+    [prisma.company, 'count', mockCompanyDelegate.count],
     [prisma.company, 'findFirst', mockCompanyDelegate.findFirst],
     [prisma.company, 'findMany', mockCompanyDelegate.findMany],
     [prisma.company, 'update', mockCompanyDelegate.update],
+    [prisma.user, 'count', mockUserDelegate.count],
+    [prisma.branch, 'count', mockBranchDelegate.count],
     [prisma.companySubscriptionAudit, 'count', mockAuditDelegate.count],
     [prisma.companySubscriptionAudit, 'create', mockAuditDelegate.create],
     [prisma.companySubscriptionAudit, 'findFirst', mockAuditDelegate.findFirst],
@@ -2729,6 +2746,35 @@ const tests = [
           'RENEW_QUICK',
         ]);
         assert.equal(auditRows.length, 3);
+      });
+    },
+  },
+  {
+    name: 'SUPER_ADMIN can query global subscription stats and audit logs',
+    async run() {
+      await withSubscriptionServer(async ({ company, makeToken, server }) => {
+        const superToken = makeToken('SUPER_ADMIN');
+
+        const statsResponse = await server.inject({
+          headers: { authorization: `Bearer ${superToken}` },
+          method: 'GET',
+          url: '/api/subscription/admin/stats',
+        });
+        assert.equal(statsResponse.statusCode, 200);
+        const stats = statsResponse.json();
+        assert.equal(stats.success, true);
+        assert.equal(typeof stats.data.companies.total, 'number');
+        assert.equal(typeof stats.data.users.total, 'number');
+
+        const globalAuditResponse = await server.inject({
+          headers: { authorization: `Bearer ${superToken}` },
+          method: 'GET',
+          url: '/api/subscription/admin/audit?page=1&limit=10',
+        });
+        assert.equal(globalAuditResponse.statusCode, 200);
+        const globalAudit = globalAuditResponse.json();
+        assert.equal(globalAudit.success, true);
+        assert.equal(Array.isArray(globalAudit.data), true);
       });
     },
   },
