@@ -34,6 +34,7 @@ const { syncRoutes } = await import('../dist/routes/sync.js');
 const { subscriptionRoutes } = await import('../dist/routes/subscription.js');
 const { userRoutes } = await import('../dist/routes/users.js');
 const prisma = (await import('../dist/lib/prisma.js')).default;
+const { DefaultCatalogService } = await import('../dist/lib/catalog/defaultCatalogService.js');
 
 function cloneDate(value) {
   return value instanceof Date ? new Date(value) : value;
@@ -2776,6 +2777,37 @@ const tests = [
         assert.equal(globalAudit.success, true);
         assert.equal(Array.isArray(globalAudit.data), true);
       });
+    },
+  },
+  {
+    name: 'DefaultCatalogService.seedForCompany logs seed failure event to audit log on failure',
+    async run() {
+      const companyId = 'company-1';
+      const mockCompany = { id: companyId, packageStatus: 'ACTIVE', deletedAt: null };
+      const auditRows = [];
+      const restorePrisma = installPrismaMocks(mockCompany, auditRows);
+
+      const originalLoad = DefaultCatalogService.loadBundledCatalog;
+      DefaultCatalogService.loadBundledCatalog = () => {
+        throw new Error('Disk read failure simulation');
+      };
+
+      try {
+        await DefaultCatalogService.seedForCompany(companyId);
+        assert.fail('Should have thrown an error');
+      } catch (error) {
+        assert.equal(error.message, 'Disk read failure simulation');
+      } finally {
+        DefaultCatalogService.loadBundledCatalog = originalLoad;
+      }
+
+      assert.equal(auditRows.length, 1);
+      assert.equal(auditRows[0].companyId, companyId);
+      assert.equal(auditRows[0].actorType, 'SYSTEM');
+      assert.equal(auditRows[0].eventType, 'SYSTEM_SEED_FAILURE');
+      assert.equal(auditRows[0].note, 'Catalog seeding failed: Disk read failure simulation');
+
+      restorePrisma();
     },
   },
   {

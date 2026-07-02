@@ -358,8 +358,8 @@ Ilk hedef: **Monorepo altyapisi + Prisma semasi + Cloud API core** hazirlamak.
 ## Faz C - Guvenlik, Performans ve Dayaniklilik Iyilestirmeleri
 
 ### C1) Soft Delete Database Indeksleri
-- [ ] Prisma semasinda (`schema.prisma`) `deletedAt` kolonu bulunan tum tablolar icin `@@index([deletedAt])` eklenmesi. SQL sorgularinin performansini optimize etmek ve full table scan'leri onlemek icin.
-- [ ] Postgres migration'larinin uretilmesi ve local SQLite uzerinde test edilmesi.
+- [x] Prisma semasinda (`schema.prisma`) `deletedAt` kolonu bulunan tum tablolar icin `@@index([deletedAt])` eklenmesi. SQL sorgularinin performansini optimize etmek ve full table scan'leri onlemek icin.
+- [x] Postgres migration'larinin uretilmesi ve local SQLite uzerinde test edilmesi.
 
 ### C2) Katalog Seeding Dayanikliligi ve Audit
 - [ ] `DefaultCatalogService.seedForCompany` hata firlattiginda veya yarim kaldiginda bunun loglanip `CompanySubscriptionAudit` tablosuna `SYSTEM` aktorlu bir hata event'i olarak kaydedilmesi.

@@ -355,9 +355,12 @@ export interface SubscriptionAuditRow {
     | 'UNSUSPEND_MANUAL'
     | 'SYSTEM_ENTER_GRACE'
     | 'SYSTEM_BLOCK_EXPIRED'
-    | 'SYSTEM_RESTORE_ACTIVE';
+    | 'SYSTEM_RESTORE_ACTIVE'
+    | 'SYSTEM_SEED_FAILURE';
   previousStatus: SubscriptionStatus | null;
   nextStatus: SubscriptionStatus;
+  previousPayload?: any;
+  nextPayload?: any;
   note?: string | null;
   createdAt: string;
   actorUser?: {

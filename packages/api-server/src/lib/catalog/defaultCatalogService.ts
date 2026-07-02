@@ -435,81 +435,109 @@ export class DefaultCatalogService {
   static async seedForCompany(companyId: string): Promise<number> {
     console.log(`[Catalog] Starting fast JSON seeding for company: ${companyId}`);
 
-    const catalog = this.loadBundledCatalog();
+    try {
+      const catalog = this.loadBundledCatalog();
 
-    if (!catalog || catalog.categories.length === 0) {
-      console.warn('[Catalog] Bundled catalog.json not found or empty, falling back to live scrape.');
-      return this.refreshPricesForCompany(companyId);
-    }
-
-    console.log(`[Catalog] Loaded ${catalog.totalProducts} products from bundled catalog (exported: ${catalog.exportedAt}).`);
-
-    let totalSynced = 0;
-    const syncedBarcodes = new Set<string>();
-
-    for (const catalogCategory of catalog.categories) {
-      let category = await prisma.category.findFirst({
-        where: { companyId, deletedAt: null, name: catalogCategory.name },
-      });
-
-      if (!category) {
-        category = await prisma.category.create({
-          data: { companyId, name: catalogCategory.name, sortOrder: 0 },
-        });
+      if (!catalog || catalog.categories.length === 0) {
+        console.warn('[Catalog] Bundled catalog.json not found or empty, falling back to live scrape.');
+        return this.refreshPricesForCompany(companyId);
       }
 
-      const productsToUpsert = catalogCategory.products.filter(
-        (p) => !syncedBarcodes.has(p.barcode),
-      );
+      console.log(`[Catalog] Loaded ${catalog.totalProducts} products from bundled catalog (exported: ${catalog.exportedAt}).`);
 
-      for (let i = 0; i < productsToUpsert.length; i += UPSERT_BATCH_SIZE) {
-        const batch = productsToUpsert.slice(i, i + UPSERT_BATCH_SIZE);
-        try {
-          await prisma.$transaction(
-            batch.map((product) => {
-              syncedBarcodes.add(product.barcode);
-              return prisma.product.upsert({
-                create: {
-                  barcode: product.barcode,
-                  categoryId: category.id,
-                  companyId,
-                  minStock: 0,
-                  name: product.name,
-                  purchasePrice: 0,
-                  purchasePriceMinor: 0n,
-                  salePrice: product.salePrice,
-                  salePriceMinor: toMinor(product.salePrice),
-                  unitType: product.unitType as import('@prisma/client').UnitType,
-                  vatRate: product.vatRate,
-                },
-                update: {
-                  categoryId: category.id,
-                  deletedAt: null,
-                  isActive: true,
-                  name: product.name,
-                  salePrice: product.salePrice,
-                  salePriceMinor: toMinor(product.salePrice),
-                  updatedAt: new Date(),
-                },
-                where: { companyId_barcode: { barcode: product.barcode, companyId } },
-              });
-            }),
-          );
-          totalSynced += batch.length;
-        } catch (error) {
-          console.error(`[Catalog] Batch upsert failed (${batch.length} products):`, error);
+      let totalSynced = 0;
+      const syncedBarcodes = new Set<string>();
+
+      for (const catalogCategory of catalog.categories) {
+        let category = await prisma.category.findFirst({
+          where: { companyId, deletedAt: null, name: catalogCategory.name },
+        });
+
+        if (!category) {
+          category = await prisma.category.create({
+            data: { companyId, name: catalogCategory.name, sortOrder: 0 },
+          });
+        }
+
+        const productsToUpsert = catalogCategory.products.filter(
+          (p) => !syncedBarcodes.has(p.barcode),
+        );
+
+        for (let i = 0; i < productsToUpsert.length; i += UPSERT_BATCH_SIZE) {
+          const batch = productsToUpsert.slice(i, i + UPSERT_BATCH_SIZE);
+          try {
+            await prisma.$transaction(
+              batch.map((product) => {
+                syncedBarcodes.add(product.barcode);
+                return prisma.product.upsert({
+                  create: {
+                    barcode: product.barcode,
+                    categoryId: category.id,
+                    companyId,
+                    minStock: 0,
+                    name: product.name,
+                    purchasePrice: 0,
+                    purchasePriceMinor: 0n,
+                    salePrice: product.salePrice,
+                    salePriceMinor: toMinor(product.salePrice),
+                    unitType: product.unitType as import('@prisma/client').UnitType,
+                    vatRate: product.vatRate,
+                  },
+                  update: {
+                    categoryId: category.id,
+                    deletedAt: null,
+                    isActive: true,
+                    name: product.name,
+                    salePrice: product.salePrice,
+                    salePriceMinor: toMinor(product.salePrice),
+                    updatedAt: new Date(),
+                  },
+                  where: { companyId_barcode: { barcode: product.barcode, companyId } },
+                });
+              }),
+            );
+            totalSynced += batch.length;
+          } catch (error) {
+            console.error(`[Catalog] Batch upsert failed (${batch.length} products):`, error);
+            throw error;
+          }
         }
       }
+
+      console.log(`[Catalog] Fast seeding complete. ${totalSynced} products written.`);
+
+      // Trigger background price refresh from ebeymar.com (non-blocking)
+      void this.refreshPricesForCompany(companyId).catch((err) => {
+        console.error(`[Catalog] Background price refresh failed for company ${companyId}:`, err);
+      });
+
+      return totalSynced;
+    } catch (error: any) {
+      console.error(`[Catalog] Seeding failed for company ${companyId}:`, error);
+
+      try {
+        const company = await prisma.company.findFirst({ where: { id: companyId } });
+        if (company) {
+          await prisma.companySubscriptionAudit.create({
+            data: {
+              actorType: 'SYSTEM',
+              companyId,
+              eventType: 'SYSTEM_SEED_FAILURE',
+              nextStatus: company.packageStatus === 'ACTIVE' ? 'ACTIVE' : 'SUSPENDED',
+              nextPayload: {
+                error: error?.message || String(error),
+                stack: error?.stack || null,
+              },
+              note: `Catalog seeding failed: ${error?.message || 'Unknown error'}`,
+            },
+          });
+        }
+      } catch (auditError) {
+        console.error('[Catalog] Failed to write seed failure audit log:', auditError);
+      }
+
+      throw error;
     }
-
-    console.log(`[Catalog] Fast seeding complete. ${totalSynced} products written.`);
-
-    // Trigger background price refresh from ebeymar.com (non-blocking)
-    void this.refreshPricesForCompany(companyId).catch((err) => {
-      console.error(`[Catalog] Background price refresh failed for company ${companyId}:`, err);
-    });
-
-    return totalSynced;
   }
 
   /**

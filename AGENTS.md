@@ -39,9 +39,9 @@ npm run build   # turbo run build
 
 ```bash
 npm run test --workspace @marketpos/shared        # yok (tip-only)
-npm run test --workspace @marketpos/api-server    # custom runner (32 test)
+npm run test --workspace @marketpos/api-server    # custom runner (34 test)
 npm run test --workspace @marketpos/pos-desktop   # vitest (39 test)
-npm run test --workspace @marketpos/web-dashboard # vitest (29 test)
+npm run test --workspace @marketpos/web-dashboard # vitest (30 test)
 ```
 
 ## Typecheck
@@ -72,6 +72,7 @@ npm run dev --workspace @marketpos/web-dashboard  # Vite dev server
 | `MARKETPOS_UPDATE_FEED_URL` | pos-desktop | Auto-update feed URL |
 | `MARKETPOS_OFFLINE_ACCESS_GRACE_DAYS` | api-server | Offline grace period (default 365) |
 | `SYNC_V2_ENABLED` | api-server, pos-desktop | V2 sync motoru (default false) |
+| `SUBSCRIPTION_WEBHOOK_URL` | api-server | Discord/Slack webhook URL (opsiyonel, abonelik degisiklik bildirimleri) |
 
 ## Dosya Konvensiyonlari
 
@@ -95,11 +96,16 @@ npm run dev --workspace @marketpos/web-dashboard  # Vite dev server
 - 365. gunde AccessLockScreen -> online yenileme
 - HMAC imza + clock rollback korumasi
 
-## Mevcut Durum (2026-06-24)
+## Mevcut Durum (2026-07-02)
 
 - Desktop app offline calisiyor (satis, stok, iade, raporlar)
-- api-server SQLite kullaniyor (PostgreSQL'e gecis hazir)
+- api-server PostgreSQL (Neon) kullaniyor
 - 4/4 paket typecheck temiz
-- 100/100 test geciyor
+- 103/103 test geciyor
 - NSIS installer + code signing yapilandirilmis
 - Auto-update (electron-updater) hazir
+- Super admin abonelik yonetim paneli (Phase A+B tamamlandi)
+- Soft-delete DB indeksleri eklendi (Phase C1)
+- Katalog seeding hata denetimi (Phase C2)
+- Audit log detay drawer (Phase C3)
+- Webhook bildirimleri (Phase C4)

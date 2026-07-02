@@ -153,6 +153,8 @@ export interface SystemAuditRow {
   eventType: string;
   previousStatus: string | null;
   nextStatus: string;
+  previousPayload?: any;
+  nextPayload?: any;
   note?: string | null;
   createdAt: string;
   actorUser?: { fullName: string; username: string; role: string } | null;

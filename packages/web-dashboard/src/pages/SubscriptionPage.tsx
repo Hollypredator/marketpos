@@ -62,7 +62,8 @@ interface SubscriptionAuditRow {
     | 'UNSUSPEND_MANUAL'
     | 'SYSTEM_ENTER_GRACE'
     | 'SYSTEM_BLOCK_EXPIRED'
-    | 'SYSTEM_RESTORE_ACTIVE';
+    | 'SYSTEM_RESTORE_ACTIVE'
+    | 'SYSTEM_SEED_FAILURE';
   nextStatus: SubscriptionStatus;
   note?: string | null;
   previousStatus: SubscriptionStatus | null;

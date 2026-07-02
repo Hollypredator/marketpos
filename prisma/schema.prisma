@@ -41,6 +41,7 @@ model Company {
   invoiceTemplates       InvoiceTemplateConfig[]
   users                  User[]
 
+  @@index([deletedAt])
   @@map("companies")
 }
 
@@ -66,6 +67,7 @@ model Branch {
   targetTransfers  StockTransfer[]   @relation("TargetTransfers")
   users            User[]
 
+  @@index([deletedAt])
   @@map("branches")
 }
 
@@ -83,6 +85,7 @@ model Register {
   sales            Sale[]
   syncLogs         SyncLog[]
 
+  @@index([deletedAt])
   @@map("registers")
 }
 
@@ -112,6 +115,7 @@ model User {
   company                 Company                    @relation(fields: [companyId], references: [id])
 
   @@unique([companyId, username])
+  @@index([deletedAt])
   @@map("users")
 }
 
@@ -134,6 +138,7 @@ model Customer {
   sales        Sale[]
 
   @@index([companyId])
+  @@index([deletedAt])
   @@map("customers")
 }
 
@@ -172,6 +177,7 @@ model Supplier {
   company      Company               @relation(fields: [companyId], references: [id])
 
   @@index([companyId])
+  @@index([deletedAt])
   @@map("suppliers")
 }
 
@@ -232,6 +238,7 @@ model PurchaseInvoice {
   @@index([companyId, createdAt])
   @@index([branchId, createdAt])
   @@index([supplierId, createdAt])
+  @@index([deletedAt])
   @@map("purchase_invoices")
 }
 
@@ -294,6 +301,7 @@ model Category {
   children  Category[] @relation("CategoryHierarchy")
   products  Product[]
 
+  @@index([deletedAt])
   @@map("categories")
 }
 
@@ -333,6 +341,7 @@ model Product {
 
   @@unique([companyId, barcode])
   @@index([supplierId])
+  @@index([deletedAt])
   @@map("products")
 }
 
@@ -467,6 +476,7 @@ model Sale {
   @@index([branchId, createdAt])
   @@index([companyId, branchId, createdAt])
   @@index([companyId, status, createdAt])
+  @@index([deletedAt])
   @@map("sales")
 }
 
@@ -669,6 +679,7 @@ enum CompanySubscriptionAuditEventType {
   SYSTEM_ENTER_GRACE
   SYSTEM_BLOCK_EXPIRED
   SYSTEM_RESTORE_ACTIVE
+  SYSTEM_SEED_FAILURE
 }
 
 enum CustomerTransactionType {
