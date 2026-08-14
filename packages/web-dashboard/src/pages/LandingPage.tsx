@@ -128,8 +128,8 @@ export function LandingPage({ onNavigateToLogin }: LandingPageProps): React.Reac
           yazarkasa POS sistemi. Kurulumu 5 dakika, kullanımı çok kolay.
         </p>
         <div className="landing-hero-actions" style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
-          <button className="btn landing-cta" onClick={onNavigateToLogin}>
-            🔑 Yönetim Paneline Giriş Yap
+          <button className="btn landing-cta" onClick={onNavigateToLogin} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+            🌐 Web Kasayı & Paneli Aç (Tarayıcıdan Kullan)
           </button>
           <a
             href={buildUrl('/api/license/download-desktop')}
