@@ -1,6 +1,7 @@
 import React from 'react';
 
 import type { DashboardTab } from '../lib/route-access';
+import { buildUrl } from '../lib/http/api-client';
 
 interface ScopeCompany {
   id: string;
@@ -279,7 +280,7 @@ export function AppShell({
           <span className="admin-header-sub">{TAB_HINTS[activeTab]}</span>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', alignItems: 'center' }}>
             <a
-              href="/api/license/download-desktop"
+              href={buildUrl('/api/license/download-desktop')}
               target="_blank"
               rel="noreferrer"
               className="btn primary"

@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { buildUrl } from '../lib/http/api-client';
 
 interface LandingPageProps {
   onNavigateToLogin: () => void;
@@ -94,7 +95,7 @@ export function LandingPage({ onNavigateToLogin }: LandingPageProps): React.Reac
             <a href="#ozellikler">Özellikler</a>
             <a href="#nasil-calisir">Nasıl Çalışır</a>
             <a
-              href="/api/license/download-desktop"
+              href={buildUrl('/api/license/download-desktop')}
               download="MarketPOS-Setup.exe"
               className="btn"
               style={{
@@ -131,7 +132,7 @@ export function LandingPage({ onNavigateToLogin }: LandingPageProps): React.Reac
             🔑 Yönetim Paneline Giriş Yap
           </button>
           <a
-            href="/api/license/download-desktop"
+            href={buildUrl('/api/license/download-desktop')}
             download="MarketPOS-Setup.exe"
             className="btn landing-cta-secondary"
             style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
