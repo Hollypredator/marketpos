@@ -1107,14 +1107,14 @@ textarea,
 .quick-grid {
   display: grid;
   align-content: start;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-  gap: 0.65rem;
-  padding: 0.5rem 0.2rem;
+  grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+  gap: 0.5rem;
+  padding: 0.4rem 0.1rem;
 }
 
 .quick-btn {
-  aspect-ratio: 1 / 1;
-  min-height: 0;
+  aspect-ratio: auto;
+  min-height: 84px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius);
   font-family: var(--font);

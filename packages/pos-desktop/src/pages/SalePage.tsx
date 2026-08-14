@@ -28,7 +28,7 @@ interface SalePageProps {
   onOpenPayment: () => void;
 }
 
-const PRODUCTS_PER_PAGE = 36;
+const PRODUCTS_PER_PAGE = 48;
 const PAYMENT_QUICK_ACTION_STORAGE_KEY = 'marketpos:payment:quick-action';
 
 export default function SalePage({ onOpenPayment }: SalePageProps) {
