@@ -497,7 +497,7 @@ async function requestApi<TData>(
   }
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000);
+  const timeoutId = setTimeout(() => controller.abort(), 60000);
 
   let response: Response;
   try {
@@ -679,12 +679,17 @@ export async function loginOnline(input: OfflineCredential): Promise<AuthSession
     throw new Error('Kullanici icin sube bulunamadi.');
   }
 
-  const registers = await requestApi<RegisterSummary[]>(
+  let registers = await requestApi<RegisterSummary[]>(
     `/api/registers?branchId=${encodeURIComponent(branchId)}`,
     { token: loginData.accessToken },
   );
   if (registers.length === 0) {
-    throw new Error('Sube icin kasa kaydi bulunamadi.');
+    const newRegister = await requestApi<RegisterSummary>('/api/registers', {
+      body: { branchId, name: 'Kasa 1' },
+      method: 'POST',
+      token: loginData.accessToken,
+    });
+    registers = [newRegister];
   }
 
   const registerId = registers[0].id;
