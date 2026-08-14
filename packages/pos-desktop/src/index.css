@@ -1236,17 +1236,17 @@ textarea,
 .payment-gopos-modal {
   background: #181825;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 18px;
+  border-radius: 16px;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
   display: grid;
-  gap: 0.75rem;
-  grid-template-columns: minmax(220px, 1fr) minmax(320px, 1.25fr) 280px;
-  max-height: calc(100vh - 2rem);
-  max-width: min(1400px, calc(100vw - 2rem));
-  padding: 0.75rem;
+  gap: 0.6rem;
+  grid-template-columns: 240px 1fr 260px;
+  height: min(94vh, 720px);
+  max-width: min(1280px, calc(100vw - 1.5rem));
+  padding: 0.6rem;
   width: 100%;
   color: #ffffff;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .payment-gopos-column {

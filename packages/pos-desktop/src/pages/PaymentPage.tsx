@@ -1268,26 +1268,6 @@ export default function PaymentPage({ onClose }: PaymentPageProps) {
             </div>
           )}
 
-          {isCompactViewport && (
-            <div className="payment-gopos-fast-actions">
-              <button
-                className="btn btn-success btn-block payment-gopos-fast-complete"
-                disabled={!canComplete}
-                onClick={() => void completePayment()}
-                type="button"
-              >
-                {isSubmitting ? 'Isleniyor...' : 'Hizli Odeme Al'}
-              </button>
-              <button
-                className="btn btn-ghost btn-block"
-                disabled={!lastPaymentAction || isActionLocked}
-                onClick={applyLastPaymentPreset}
-                type="button"
-              >
-                Son Odemeyi Uygula
-              </button>
-            </div>
-          )}
         </section>
 
         <aside className="payment-gopos-column payment-gopos-right">
