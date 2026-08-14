@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "build": "turbo run build",
+    "start": "npx prisma db push --schema prisma/schema.prisma && npm run start --workspace @marketpos/api-server",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
