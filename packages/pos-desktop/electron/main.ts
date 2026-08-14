@@ -9,7 +9,7 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, net, shell } from 'electron';
 import { autoUpdater } from 'electron-updater';
 
 import {
@@ -793,7 +793,8 @@ function createMainWindow(): BrowserWindow {
       }
       return;
     }
-    if (!url.startsWith('file://')) {
+    const webOrigin = 'https://marketpos-web-dashboard.vercel.app';
+    if (!url.startsWith('file://') && !url.startsWith(webOrigin)) {
       event.preventDefault();
     }
   });
@@ -806,7 +807,23 @@ function createMainWindow(): BrowserWindow {
     void window.loadURL(DEFAULT_RENDERER_URL);
     window.webContents.openDevTools({ mode: 'detach' });
   } else {
-    void window.loadFile(join(__dirname, '../dist/index.html'));
+    const liveWebUrl = process.env.MARKETPOS_WEB_URL ?? 'https://marketpos-web-dashboard.vercel.app';
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2500);
+
+    net.fetch(liveWebUrl, { method: 'HEAD', signal: controller.signal })
+      .then((res) => {
+        clearTimeout(timeout);
+        if (res.ok) {
+          void window.loadURL(liveWebUrl);
+        } else {
+          void window.loadFile(join(__dirname, '../dist/index.html'));
+        }
+      })
+      .catch(() => {
+        clearTimeout(timeout);
+        void window.loadFile(join(__dirname, '../dist/index.html'));
+      });
   }
   return window;
 }
