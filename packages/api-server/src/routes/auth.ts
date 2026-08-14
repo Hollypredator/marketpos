@@ -116,7 +116,16 @@ export async function authRoutes(server: FastifyInstance): Promise<void> {
     } else if (normalizedUsername) {
       whereClause.username = normalizedUsername;
       if (companyId) {
-        whereClause.companyId = companyId;
+        const targetCompany = await prisma.company.findFirst({
+          where: {
+            OR: [{ id: companyId }, { licenseKey: companyId }],
+          },
+        });
+        if (targetCompany) {
+          whereClause.companyId = targetCompany.id;
+        } else {
+          whereClause.companyId = companyId;
+        }
       }
     }
 
