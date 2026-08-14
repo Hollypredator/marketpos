@@ -31,7 +31,10 @@ export function resolveAllowedTabs(role?: string): DashboardTab[] {
   );
 }
 
-export function resolveFallbackTab(_role?: string): DashboardTab {
+export function resolveFallbackTab(role?: string): DashboardTab {
+  if (role === 'CASHIER') {
+    return 'pos';
+  }
   return 'dashboard';
 }
 

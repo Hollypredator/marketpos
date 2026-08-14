@@ -173,7 +173,7 @@ const TAB_ICONS: Record<DashboardTab, React.ReactElement> = {
 // Section groupings
 const OVERVIEW_TABS: DashboardTab[]  = ['dashboard'];
 const PLATFORM_TABS: DashboardTab[] = ['setup', 'organization', 'subscription', 'users', 'yonetim'];
-const STORE_TABS: DashboardTab[]    = ['catalog', 'stock', 'transfers', 'customers', 'suppliers'];
+const STORE_TABS: DashboardTab[]    = ['pos', 'catalog', 'stock', 'transfers', 'customers', 'suppliers'];
 const ANALYTICS_TABS: DashboardTab[] = ['sales', 'reports'];
 
 function getInitials(name: string): string {
