@@ -145,6 +145,34 @@ async function start(): Promise<void> {
   await server.register(superadminRoutes, { prefix: '/api/superadmin' });
   await server.register(platformAdminRoutes, { prefix: '/api/superadmin' });
 
+  // Serve static web-dashboard single-page application (SPA)
+  const possibleWebPaths = [
+    resolve(process.cwd(), 'packages/web-dashboard/dist'),
+    resolve(process.cwd(), '../web-dashboard/dist'),
+    resolve(__dirname, '../../web-dashboard/dist'),
+    resolve(__dirname, '../../../packages/web-dashboard/dist'),
+  ];
+  const webDist = possibleWebPaths.find((p) => existsSync(p));
+
+  if (webDist) {
+    const fastifyStatic = (await import('@fastify/static')).default;
+    await server.register(fastifyStatic, {
+      root: webDist,
+      wildcard: false,
+    });
+
+    // SPA fallback: render index.html for non-API web page requests
+    server.setNotFoundHandler((request, reply) => {
+      if (request.raw.url && !request.raw.url.startsWith('/api')) {
+        const indexPath = resolve(webDist, 'index.html');
+        if (existsSync(indexPath)) {
+          return reply.type('text/html').send(readFileSync(indexPath));
+        }
+      }
+      return reply.status(404).send({ error: 'Endpoint bulunamadi', success: false });
+    });
+  }
+
   const stopSubscriptionAuditJob = startSubscriptionAuditJob(server);
   server.addHook('onClose', async () => {
     stopSubscriptionAuditJob();

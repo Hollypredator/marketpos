@@ -461,17 +461,26 @@ export async function licenseRoutes(server: FastifyInstance): Promise<void> {
   });
 
   server.get('/download-desktop', async (_request: FastifyRequest, reply: FastifyReply) => {
-    const installerPath = resolve(process.cwd(), 'packages/pos-desktop/release/MarketPOS-1.0.0-setup.exe');
-    if (existsSync(installerPath)) {
+    const possiblePaths = [
+      resolve(process.cwd(), 'packages/pos-desktop/release/MarketPOS-1.0.0-setup.exe'),
+      resolve(process.cwd(), '../pos-desktop/release/MarketPOS-1.0.0-setup.exe'),
+      resolve(__dirname, '../../../../packages/pos-desktop/release/MarketPOS-1.0.0-setup.exe'),
+      resolve(__dirname, '../../../pos-desktop/release/MarketPOS-1.0.0-setup.exe'),
+    ];
+
+    const installerPath = possiblePaths.find((path) => existsSync(path));
+
+    if (installerPath && existsSync(installerPath)) {
       const stream = createReadStream(installerPath);
-      reply.header('Content-Type', 'application/octet-stream');
+      reply.header('Content-Type', 'application/vnd.microsoft.portable-executable');
       reply.header('Content-Disposition', 'attachment; filename="MarketPOS-Setup.exe"');
       return reply.send(stream);
     }
-    return reply.status(200).send({
+
+    return reply.status(404).send({
       downloadUrl: '/api/license/download-desktop',
-      message: 'Masaüstü kurulum paketi hazırlanıyor. Henüz .exe üretilmediyse `npm run electron:build --workspace @marketpos/pos-desktop` komutu ile oluşturabilirsiniz.',
-      success: true,
+      error: 'Masaüstü kurulum paketi henüz üretilmedi. `npm run electron:build --workspace @marketpos/pos-desktop` komutunu çalıştırın.',
+      success: false,
     });
   });
 }
