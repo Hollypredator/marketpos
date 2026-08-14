@@ -424,15 +424,47 @@ export default function SalePage({ onOpenPayment }: SalePageProps) {
       </div>
 
       <div className="sale-layout">
-        <div className="sale-categories">
-          <div className="section-header">
-            <span>Kategoriler</span>
+        <div className="sale-products">
+          {/* Top Unified Search & Scan Bar */}
+          <div className="barcode-area barcode-row" style={{ display: 'flex', gap: '0.6rem', padding: '0.6rem 0.8rem', background: 'var(--bg-card)', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
+            <div style={{ position: 'relative', flex: 1 }}>
+              <input
+                ref={barcodeInputRef}
+                className="input input-barcode"
+                id="barcode-input"
+                onChange={(event) => {
+                  setBarcodeInput(event.target.value);
+                  setProductSearch(event.target.value);
+                }}
+                onKeyDown={handleBarcodeKeyDown}
+                placeholder="🔍 Barkod okutun veya ürün adı arayın..."
+                type="text"
+                value={barcodeInput}
+                style={{ width: '100%', height: '46px', fontSize: '1rem', paddingLeft: '1rem' }}
+              />
+            </div>
+            <button className="btn btn-primary barcode-add-btn" onClick={tryScanBarcode} type="button" style={{ height: '46px', padding: '0 1.25rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
+              <svg style={{ width: '20px', height: '20px', marginRight: '6px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+              Ekle
+            </button>
+            {productSearch.length > 0 && (
+              <button
+                className="btn btn-ghost"
+                onClick={() => { setBarcodeInput(''); setProductSearch(''); }}
+                type="button"
+                style={{ height: '46px', padding: '0 1rem' }}
+              >
+                Temizle
+              </button>
+            )}
           </div>
-          <div className="category-tabs" ref={categoryTabsRef}>
+
+          {/* Horizontal Scrollable Category Pills */}
+          <div className="category-pills-bar" style={{ display: 'flex', gap: '0.5rem', padding: '0.6rem 0.8rem', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)', overflowX: 'auto', whiteSpace: 'nowrap' }}>
             {categoryOptions.map((category) => (
               <button
                 key={category.id}
-                className={`category-tab ${activeCategory === category.id ? 'active' : ''}`}
+                className={`category-pill ${activeCategory === category.id ? 'active' : ''}`}
                 onClick={() => setActiveCategory(category.id)}
                 type="button"
               >
@@ -440,71 +472,33 @@ export default function SalePage({ onOpenPayment }: SalePageProps) {
               </button>
             ))}
           </div>
-        </div>
 
-        <div className="sale-products">
-          <div className="barcode-area barcode-row">
-            <input
-              ref={barcodeInputRef}
-              className="input input-barcode"
-              id="barcode-input"
-              onChange={(event) => setBarcodeInput(event.target.value)}
-              onKeyDown={handleBarcodeKeyDown}
-              placeholder="Barkod okutun veya arayın..."
-              type="text"
-              value={barcodeInput}
-            />
-            <button className="btn btn-primary barcode-add-btn" onClick={tryScanBarcode} type="button">
-              <svg style={{ width: '20px', height: '20px', marginRight: '6px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
-              Ekle
-            </button>
-          </div>
-
-          <div className="sale-product-toolbar">
-            <div className="sale-product-search-row">
-              <input
-                className="input sale-product-search"
-                onChange={(event) => setProductSearch(event.target.value)}
-                placeholder="Ürün adı veya barkod ara..."
-                type="text"
-                value={productSearch}
-              />
+          {/* Pagination & Count Bar */}
+          <div className="sale-product-toolbar-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.4rem 0.8rem', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
+            <span className="sale-product-count" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+              {visibleProducts.length} Ürün Bulundu | Sayfa {safeProductPage + 1}/{totalProductPages}
+            </span>
+            <div className="sale-product-pagination" style={{ display: 'flex', gap: '0.4rem' }}>
               <button
-                className="btn btn-ghost sale-product-search-clear"
-                disabled={productSearch.length === 0}
-                onClick={() => setProductSearch('')}
+                className="btn btn-ghost sale-product-page-btn"
+                disabled={safeProductPage === 0}
+                onClick={() => setProductPage((current) => Math.max(0, current - 1))}
                 type="button"
+                style={{ height: '34px', padding: '0 0.8rem', fontSize: '0.82rem' }}
               >
-                <svg style={{ width: '18px', height: '18px', marginRight: '6px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                Temizle
+                Önceki
               </button>
-            </div>
-            <div className="sale-product-toolbar-row">
-              <span className="sale-product-count">
-                {visibleProducts.length} ürün | Sayfa {safeProductPage + 1}/{totalProductPages}
-              </span>
-              <div className="sale-product-pagination">
-                <button
-                  className="btn btn-ghost sale-product-page-btn"
-                  disabled={safeProductPage === 0}
-                  onClick={() => setProductPage((current) => Math.max(0, current - 1))}
-                  type="button"
-                >
-                  <svg style={{ width: '18px', height: '18px', marginRight: '6px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
-                  Önceki
-                </button>
-                <button
-                  className="btn btn-ghost sale-product-page-btn"
-                  disabled={safeProductPage >= totalProductPages - 1}
-                  onClick={() =>
-                    setProductPage((current) => Math.min(totalProductPages - 1, current + 1))
-                  }
-                  type="button"
-                >
-                  Sonraki
-                  <svg style={{ width: '18px', height: '18px', marginLeft: '6px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
-                </button>
-              </div>
+              <button
+                className="btn btn-ghost sale-product-page-btn"
+                disabled={safeProductPage >= totalProductPages - 1}
+                onClick={() =>
+                  setProductPage((current) => Math.min(totalProductPages - 1, current + 1))
+                }
+                type="button"
+                style={{ height: '34px', padding: '0 0.8rem', fontSize: '0.82rem' }}
+              >
+                Sonraki
+              </button>
             </div>
           </div>
 

@@ -500,11 +500,40 @@ textarea,
 
 .sale-layout {
   display: grid;
-  grid-template-columns: clamp(160px, 13vw, 176px) minmax(0, 1fr) clamp(360px, 32vw, 480px);
+  grid-template-columns: minmax(0, 1fr) clamp(360px, 32vw, 480px);
   gap: 0;
   height: calc(100vh - 56px - var(--status-height));
   overflow: hidden;
   background: var(--bg-secondary);
+}
+
+.category-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.45rem 1.1rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.category-pill:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.category-pill.active {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.45);
+  font-weight: 700;
 }
 
 .sale-categories {
@@ -1078,8 +1107,9 @@ textarea,
 .quick-grid {
   display: grid;
   align-content: start;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 0.38rem;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 0.65rem;
+  padding: 0.5rem 0.2rem;
 }
 
 .quick-btn {
