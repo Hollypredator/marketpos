@@ -42,6 +42,10 @@ function normalizeOptionalUsername(value?: string | null): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function isValidUuid(str: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+}
+
 function buildLoginAttemptKey(identifier: string, ipAddress: string): string {
   return `${identifier.toLowerCase()}|${ipAddress}`;
 }
@@ -116,15 +120,22 @@ export async function authRoutes(server: FastifyInstance): Promise<void> {
     } else if (normalizedUsername) {
       whereClause.username = normalizedUsername;
       if (companyId) {
+        const isUuid = isValidUuid(companyId);
         const targetCompany = await prisma.company.findFirst({
-          where: {
-            OR: [{ id: companyId }, { licenseKey: companyId }],
-          },
+          where: isUuid
+            ? { OR: [{ id: companyId }, { licenseKey: companyId }] }
+            : { licenseKey: companyId },
         });
         if (targetCompany) {
           whereClause.companyId = targetCompany.id;
-        } else {
+        } else if (isUuid) {
           whereClause.companyId = companyId;
+        } else {
+          registerFailedAttempt(attemptKey);
+          return reply.status(401).send({
+            error: 'Gecerli bir Lisans Kodu veya Kullanici Bulunamadi',
+            success: false,
+          });
         }
       }
     }
