@@ -62,6 +62,8 @@ export type {
   SyncPushSupplierOpEntry,
   SyncPullPayload,
   ResolvedPriceTier,
+  AnnualLicenseInfo,
+  LicenseStatus,
 } from './types';
 
 export type { ScaleBarcodeResult } from './utils';
@@ -121,3 +123,18 @@ export {
   calculateChange,
   parseScaleBarcode,
 } from './utils';
+
+// Storage Adapter
+export type {
+  IPOSStorageAdapter,
+  StorageAdapterCategory,
+  StorageAdapterCustomer,
+  StorageAdapterDailyReport,
+  StorageAdapterDailyReportSnapshot,
+  StorageAdapterOfflineAuthResult,
+  StorageAdapterProduct,
+  StorageAdapterSupplier,
+  StorageAdapterTopProductRow,
+  StorageAdapterUser,
+} from './storage-adapter';
+

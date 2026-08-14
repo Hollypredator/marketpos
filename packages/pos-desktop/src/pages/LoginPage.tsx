@@ -2,17 +2,13 @@ import React, { type FormEvent, useEffect, useRef, useState } from 'react';
 
 import {
   explainRuntimeError,
-  isCompanyAccessBlockError,
   loginOffline,
   loginOnline,
-  readCompanyAccessBlockDetails,
-  type CompanyAccessBlockDetails,
 } from '../services/pos-runtime';
 import type { AuthSession } from '../services/types';
 import { useToast } from '../store';
 
 interface LoginPageProps {
-  onAccessBlocked: (details: CompanyAccessBlockDetails) => void;
   onLoginSuccess: (session: AuthSession) => Promise<void>;
 }
 
@@ -49,15 +45,15 @@ function mapLoginError(error: unknown): string {
   return message;
 }
 
-export default function LoginPage({ onAccessBlocked, onLoginSuccess }: LoginPageProps) {
+export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const toast = useToast();
   const usernameInputRef = useRef<HTMLInputElement>(null);
   const [companyId, setCompanyId] = useState('');
   const [mode, setMode] = useState<LoginMode>('AUTO');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [password, setPassword] = useState('');
-  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('123456');
+  const [username, setUsername] = useState('admin');
 
   const isFormReady = username.trim().length >= 3 && password.length >= 4;
 
@@ -118,18 +114,12 @@ export default function LoginPage({ onAccessBlocked, onLoginSuccess }: LoginPage
       }
 
       await onLoginSuccess(session);
-      if (session.companyAccess?.status === 'GRACE') {
-        toast.info(session.companyAccess.summary);
-      }
       if (usedOfflineFallback || !session.isOnline) {
         toast.info(`Offline giris yapildi. Hos geldiniz ${session.user.fullName}.`);
       } else {
         toast.success(`Hos geldiniz ${session.user.fullName}.`);
       }
     } catch (caughtError: unknown) {
-      if (isCompanyAccessBlockError(caughtError)) {
-        onAccessBlocked(readCompanyAccessBlockDetails(caughtError));
-      }
       const message = mapLoginError(caughtError);
       setError(message);
       toast.error(message);

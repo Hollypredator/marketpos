@@ -12,7 +12,18 @@ export interface HardwareConfig {
   port: number;
   target: string;
   timeout: number;
+  printer?: {
+    enabled?: boolean;
+    target?: string;
+    type?: string;
+  };
+  cashDrawer?: {
+    enabled?: boolean;
+    pulseOff?: number;
+    pulseOn?: number;
+  };
 }
+
 
 const DEFAULT_COPY_COUNT = 1;
 const DEFAULT_LAN_PORT = 9100;

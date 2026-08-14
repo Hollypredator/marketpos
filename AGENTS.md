@@ -69,10 +69,7 @@ npm run dev --workspace @marketpos/web-dashboard  # Vite dev server
 | `JWT_REFRESH_SECRET` | api-server | JWT refresh token secret |
 | `PORT` | api-server | API port (default 3001) |
 | `MARKETPOS_API_BASE_URL` | pos-desktop | API URL (default localhost:3001) |
-| `MARKETPOS_UPDATE_FEED_URL` | pos-desktop | Auto-update feed URL |
-| `MARKETPOS_OFFLINE_ACCESS_GRACE_DAYS` | api-server | Offline grace period (default 365) |
-| `SYNC_V2_ENABLED` | api-server, pos-desktop | V2 sync motoru (default false) |
-| `SUBSCRIPTION_WEBHOOK_URL` | api-server | Discord/Slack webhook URL (opsiyonel, abonelik degisiklik bildirimleri) |
+| `MARKETPOS_UPDATE_FEED_URL` | pos-desktop | Auto-update feed URL (henuz yapilandirilmadi) |
 
 ## Dosya Konvensiyonlari
 
@@ -91,21 +88,20 @@ npm run dev --workspace @marketpos/web-dashboard  # Vite dev server
 
 ## Lisans Modeli
 
-- Ilk kurulumda online aktivasyon gerekir (lisans kodu -> API -> HMAC-signed snapshot)
-- 365+15 gun tam offline (grace period 365 gun)
-- 365. gunde AccessLockScreen -> online yenileme
-- HMAC imza + clock rollback korumasi
+- **Lisans kontrolu yok.** Urun omur boyu lisansla satiliyor; kurulan her makinede calisir.
+- Aktivasyon, kilit ekrani, sure takibi ve imza dogrulamasi kaldirildi (2026-08-04).
+- Kopyalamaya karsi teknik engel yok; dagitim kanaliyla kontrol ediliyor.
+- Gecis plani: `docs/lifetime-license-migration-plan.md`
 
-## Mevcut Durum (2026-07-02)
+## Mevcut Durum (2026-08-04)
 
+**Omur boyu lisans gecisi basladi** — dal: `feat/lifetime-license`, plan: `docs/lifetime-license-migration-plan.md`.
+SaaS surumunun son hali `saas-final` etiketinde.
+
+- Faz 1 tamam: lisans/abonelik kodu pos-desktop'tan sokuldu
 - Desktop app offline calisiyor (satis, stok, iade, raporlar)
-- api-server PostgreSQL (Neon) kullaniyor
-- 4/4 paket typecheck temiz
-- 103/103 test geciyor
+- api-server hala PostgreSQL (Neon) kullaniyor — Faz 4'te silinecek
+- pos-desktop typecheck temiz, 38/38 test geciyor
 - NSIS installer + code signing yapilandirilmis
-- Auto-update (electron-updater) hazir
-- Super admin abonelik yonetim paneli (Phase A+B tamamlandi)
-- Soft-delete DB indeksleri eklendi (Phase C1)
-- Katalog seeding hata denetimi (Phase C2)
-- Audit log detay drawer (Phase C3)
-- Webhook bildirimleri (Phase C4)
+- Auto-update **yapilandirilmadi** (`package.json` icinde `"publish": null`)
+- `api-server` ve `web-dashboard` bilerek degistirilmiyor; Faz 4'te butun olarak silinecekler

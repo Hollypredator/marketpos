@@ -123,10 +123,7 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     'access:sales',
     'export:reports',
   ],
-  CASHIER: [
-    'access:dashboard',
-    'access:catalog',
-  ],
+  CASHIER: [],
 };
 
 export const TAB_PERMISSIONS: Record<string, Permission> = {

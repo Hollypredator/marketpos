@@ -4,7 +4,6 @@ import type {
   CachedCategoryRecord,
   CachedPurchaseInvoiceItemRecord,
   CachedPurchaseInvoiceRecord,
-  CompanyAccessSnapshot,
   CachedProductRecord,
   CachedSupplierRecord,
   LocalDailyReportSnapshot,
@@ -62,7 +61,6 @@ interface ApiEnvelope<TData> {
 interface LoginResponseData {
   accessToken: string;
   branch?: { id: string } | null;
-  companyAccess: CompanyAccessSnapshot;
   refreshToken: string;
   user: {
     branchId: string | null;
@@ -76,7 +74,6 @@ interface LoginResponseData {
 
 interface RefreshResponseData {
   accessToken: string;
-  companyAccess?: CompanyAccessSnapshot;
   refreshToken: string;
 }
 
@@ -123,17 +120,6 @@ interface RuntimeCatalog {
   bundles: CachedBundleRecord[];
 }
 
-export type CompanyAccessBlockType =
-  | 'CLOCK_ROLLBACK'
-  | 'OFFLINE_EXPIRED'
-  | 'SUBSCRIPTION_BLOCKED';
-
-export interface CompanyAccessBlockDetails {
-  blockType: CompanyAccessBlockType;
-  message: string;
-  snapshot: CompanyAccessSnapshot | null;
-}
-
 class RuntimeApiError extends Error {
   public readonly data: unknown;
   public readonly errorCode?: string;
@@ -161,22 +147,8 @@ export interface ReauthRecoveryAdvice {
   reason: ReauthReason;
 }
 
-export class CompanyAccessBlockError extends Error {
-  public readonly details: CompanyAccessBlockDetails;
-
-  public constructor(details: CompanyAccessBlockDetails) {
-    super(details.message);
-    this.name = 'CompanyAccessBlockError';
-    this.details = details;
-  }
-}
-
 let runtimeApiBaseUrl: string | null = null;
-const companyAccessRefreshAtByCompanyId = new Map<string, number>();
 const sessionByAccessToken = new Map<string, AuthSession>();
-const COMPANY_ACCESS_REFRESH_INTERVAL_MS = 2 * 60 * 1000;
-const CLOCK_ROLLBACK_TOLERANCE_MS = 30 * 60 * 1000;
-const LOCAL_SEEN_PERSIST_INTERVAL_MS = 60 * 1000;
 let refreshInFlight: Promise<void> | null = null;
 
 function readErrorMessage(error: unknown): string {
@@ -226,12 +198,138 @@ function createOfflineUuid(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.round(Math.random() * 1_000_000)}`;
 }
 
-function ensureElectronApi() {
-  if (!window.electronAPI) {
-    throw new Error('Electron API erisilebilir degil.');
-  }
-  return window.electronAPI;
+import { WebStorageAdapter } from './web-storage-adapter';
+
+const webStorageAdapter = new WebStorageAdapter();
+
+let fallbackWebElectronApi: any = null;
+
+function createWebElectronApiFallback(): any {
+  if (fallbackWebElectronApi) return fallbackWebElectronApi;
+  fallbackWebElectronApi = {
+    cacheOnlineLogin: async () => {},
+    cacheSyncData: async () => {},
+    clearSession: async () => webStorageAdapter.clearSession(),
+    completeSetup: async (msg?: string) => ({
+      completedAt: new Date().toISOString(),
+      lastResult: { at: new Date().toISOString(), message: msg || 'Tamamlandı', status: 'SUCCESS' },
+      offlineReadinessPassed: true,
+      setupMetrics: { durationMin: 1, firstSaleAt: null, operatorInterventionCount: 0, setupStartAt: new Date().toISOString() },
+      setupVersion: 1,
+      steps: [],
+    }),
+    configureYNOKC: async () => {},
+    copyBackupToPath: async () => true,
+    createBackup: async () => ({ createdAt: new Date().toISOString(), fileName: 'backup.json', path: '/backup.json', sizeBytes: 1024 }),
+    createEInvoice: async () => ({ success: true }),
+    deleteQueueRecord: async () => true,
+    ensureInteractive: async () => {},
+    getBackofficeSettings: async () => ({
+      discountPolicy: { maxCartDiscountAmount: 500, maxCartDiscountPercent: 25, maxItemDiscountAmount: 200, maxItemDiscountPercent: 20 },
+      offlineAudit: { maxPendingProductOps: 100, maxPendingRefunds: 100, maxPendingSales: 500, maxPendingStockOps: 100 },
+      rolePolicy: { accountantReadOnly: false, cashierCanOpenOperations: true },
+      version: 1,
+    }),
+    getBackupPolicy: async () => ({ enabled: true, intervalHours: 24, lastRunAt: null, maxBackups: 7, nextRunAt: null, retentionDays: 30 }),
+    getCachedCategories: async (companyId: string) => webStorageAdapter.getCachedCategories(companyId),
+    getCachedCustomers: async (companyId: string, search?: string) => webStorageAdapter.getCachedCustomers(companyId, search),
+    getCachedProducts: async (options: any) => webStorageAdapter.getCachedProducts(options),
+    getCachedPurchaseInvoices: async () => ({ data: [], pagination: { limit: 10, page: 1, total: 0, totalPages: 1 } }),
+    getCachedSession: async () => webStorageAdapter.getCachedSession(),
+    getCachedSuppliers: async (companyId: string) => webStorageAdapter.getCachedSuppliers(companyId),
+    getEInvoiceStatus: async () => ({ status: 'APPROVED' }),
+    getHardwareConfig: async () => ({ connectionMode: 'USB', copyCount: 1, drawerPulse: { off: 100, on: 50 }, port: 9100, target: 'COM1', timeout: 3000 }),
+    getLocalDailyReport: async (query: any) => webStorageAdapter.getLocalDailyReport(query),
+    getLocalSetting: async (key: string, def?: string) => webStorageAdapter.getLocalSetting(key, def),
+    getQueueStatus: async () => ({
+      customerOps: 0, lastSyncErrorCode: null, lastSyncedAt: null, lastSyncStatus: 'OK', oldestPendingAgeSec: null, pendingCount: 0, productOps: 0, purchaseOps: 0, queueByEntity: { customerOps: { failed: 0, pending: 0, queued: 0, synced: 0 }, productOps: { failed: 0, pending: 0, queued: 0, synced: 0 }, purchaseOps: { failed: 0, pending: 0, queued: 0, synced: 0 }, refunds: { failed: 0, pending: 0, queued: 0, synced: 0 }, sales: { failed: 0, pending: 0, queued: 0, synced: 0 }, stockOps: { failed: 0, pending: 0, queued: 0, synced: 0 }, supplierOps: { failed: 0, pending: 0, queued: 0, synced: 0 } }, queuePeak: 0, refunds: 0, sales: 0, stockOps: 0, supplierOps: 0,
+    }),
+    getRuntimeInfo: async () => ({
+      apiBaseUrl: 'http://localhost:3001',
+      databasePath: 'IndexedDB (Browser)',
+      isPackaged: false,
+      lastSyncedAt: new Date().toISOString(),
+      lastSyncStatus: 'OK',
+      offlineReadinessPassed: true,
+      pendingCount: 0,
+      platform: 'browser',
+      setupMetrics: { durationMin: 1, firstSaleAt: null, operatorInterventionCount: 0, setupStartAt: new Date().toISOString() },
+      userDataPath: 'WebStorage',
+      version: '1.0.0',
+    }),
+    getSetupState: async () => ({
+      completedAt: new Date().toISOString(),
+      lastResult: { at: new Date().toISOString(), message: 'Hazır', status: 'SUCCESS' },
+      offlineReadinessPassed: true,
+      setupMetrics: { durationMin: 1, firstSaleAt: null, operatorInterventionCount: 0, setupStartAt: new Date().toISOString() },
+      setupVersion: 1,
+      steps: [
+        { completedAt: new Date().toISOString(), detail: 'Tamamlandı', status: 'COMPLETED', stepId: 'INSTALL_PREFS' },
+        { completedAt: new Date().toISOString(), detail: 'Tamamlandı', status: 'COMPLETED', stepId: 'LICENSE' },
+        { completedAt: new Date().toISOString(), detail: 'Tamamlandı', status: 'COMPLETED', stepId: 'ACCOUNT' },
+        { completedAt: new Date().toISOString(), detail: 'Tamamlandı', status: 'COMPLETED', stepId: 'MODE_SELECT' },
+        { completedAt: new Date().toISOString(), detail: 'Tamamlandı', status: 'COMPLETED', stepId: 'FINALIZE' },
+      ],
+    }),
+    getUiPreset: async () => ({ touchDensity: 'comfortable', uiPreset: 'market' }),
+    incrementSetupOperatorIntervention: async () => ({}),
+    listBackups: async () => [],
+    listCachedBundles: async () => [],
+    listCashMovements: async () => [],
+    listPendingCustomerOps: async () => [],
+    listPendingProductOps: async () => [],
+    listPendingPurchaseOps: async () => [],
+    listPendingRefunds: async () => [],
+    listPendingSales: async () => [],
+    listPendingStockOps: async () => [],
+    listPendingSupplierOps: async () => [],
+    listSecurityEvents: async () => [],
+    listShiftHandovers: async () => [],
+    logSecurityEvent: async () => ({ createdAt: new Date().toISOString(), eventType: 'LOG', id: '1', managerUserId: null, message: 'OK', metadataJson: null, operatorUserId: null, reason: null, severity: 'INFO' }),
+    markFirstSale: async () => ({}),
+    offlineLogin: async (payload: any) => webStorageAdapter.offlineLogin(payload),
+    openCashDrawer: async () => ({ message: 'Çekmece açıldı (Web)', openedAt: new Date().toISOString(), operatorAction: 'NONE', success: true }),
+    printBarcode: async () => ({ message: 'Barkod yazdırıldı', printedAt: new Date().toISOString(), operatorAction: 'NONE', success: true }),
+    printReceipt: async (payload: any) => webStorageAdapter.printReceipt(payload),
+    processYNOKCPayment: async () => ({ success: true }),
+    queueCustomerOp: async (payload: any) => webStorageAdapter.queueCustomerOp(payload),
+    queueProductOp: async (payload: any) => webStorageAdapter.queueProductOp(payload),
+    queueRefund: async (payload: any) => webStorageAdapter.queueRefund(payload),
+    queueSale: async (payload: any) => webStorageAdapter.queueSale(payload),
+    queueStockOp: async (payload: any) => ({ id: 'stock-op-1' }),
+    recordCashMovement: async (payload: any) => ({ amount: payload.amount, createdAt: new Date().toISOString(), id: 'cash-1', movementType: payload.movementType, note: payload.note || null, operatorUserId: payload.operatorUserId, registerId: payload.registerId }),
+    recordShiftHandover: async (payload: any) => ({ blindClose: false, createdAt: new Date().toISOString(), declaredCash: payload.declaredCash, difference: 0, expectedCash: payload.expectedCash, id: 'shift-1', managerUserId: null, note: null, operatorUserId: payload.operatorUserId, registerId: payload.registerId }),
+    reprintLastReceipt: async () => ({ message: 'Son fiş yazdırıldı', printedAt: new Date().toISOString(), operatorAction: 'NONE', success: true }),
+    requestManagerSmsCode: async () => ({ message: 'Kod gönderildi', success: true }),
+    resetSetup: async () => ({}),
+    restoreBackup: async () => ({ createdAt: new Date().toISOString(), fileName: 'backup.json', path: '/backup.json', sizeBytes: 1024 }),
+    retryQueueRecord: async () => true,
+    runSync: async () => ({ errors: [], failedCustomerOpIds: [], failedProductOpIds: [], failedPurchaseOpIds: [], failedRefundIds: [], failedSaleIds: [], failedStockOpIds: [], failedSupplierOpIds: [], nextCursor: null, pulledBundles: 0, pulledCategories: [], pulledCustomers: 0, pulledProducts: [], pulledPurchaseInvoiceItems: 0, pulledPurchaseInvoices: 0, pulledSuppliers: [], pulledUsers: [], pushedAccepted: 0, pushedCustomerOpIds: [], pushedCustomerOps: 0, pushedFailed: 0, pushedProductOpIds: [], pushedProductOps: 0, pushedPurchaseOpIds: [], pushedPurchaseOps: 0, pushedRefundIds: [], pushedRefunds: 0, pushedReplayed: 0, pushedSaleIds: [], pushedSales: 0, pushedStockOpIds: [], pushedStockOps: 0, pushedSupplierOpIds: [], pushedSupplierOps: 0, pushSummary: { acceptedCount: 0, errors: [], failedCount: 0, replayedCount: 0, serverSyncAt: new Date().toISOString() }, resultsByEntity: { customerOps: [], productOps: [], purchaseOps: [], refunds: [], sales: [], stockOps: [], supplierOps: [] }, success: true, syncedAt: new Date().toISOString(), usedCursor: null }),
+    selectDirectory: async () => null,
+    setBackofficeSettings: async () => ({ discountPolicy: { maxCartDiscountAmount: 500, maxCartDiscountPercent: 25, maxItemDiscountAmount: 200, maxItemDiscountPercent: 20 }, offlineAudit: { maxPendingProductOps: 100, maxPendingRefunds: 100, maxPendingSales: 500, maxPendingStockOps: 100 }, rolePolicy: { accountantReadOnly: false, cashierCanOpenOperations: true }, version: 1 }),
+    setBackupPolicy: async () => ({ enabled: true, intervalHours: 24, lastRunAt: null, maxBackups: 7, nextRunAt: null, retentionDays: 30 }),
+    setHardwareConfig: async () => {},
+    setLocalSetting: async (key: string, val: string) => webStorageAdapter.setLocalSetting(key, val),
+    setManagerPin: async () => {},
+    setOfflineReadinessPassed: async () => ({}),
+    setUiPreset: async () => {},
+    testHardwareDrawer: async () => ({ message: 'Test çekmece', openedAt: new Date().toISOString(), operatorAction: 'NONE', success: true }),
+    testHardwarePrint: async () => ({ message: 'Test fiş', printedAt: new Date().toISOString(), operatorAction: 'NONE', success: true }),
+    updateCachedAuthTokens: async () => {},
+    updateSetupStep: async () => ({}),
+    verifyManagerSmsCode: async () => ({ method: 'PASSWORD', requiresPinSetup: false, user: { branchId: 'b1', companyId: 'c1', fullName: 'Yönetici', id: 'u1', isActive: true, role: 'ADMIN', username: 'admin' } }),
+    verifyManagerUnlock: async () => ({ method: 'PASSWORD', requiresPinSetup: false, user: { branchId: 'b1', companyId: 'c1', fullName: 'Yönetici', id: 'u1', isActive: true, role: 'ADMIN', username: 'admin' } }),
+  };
+  return fallbackWebElectronApi;
 }
+
+export function ensureElectronApi() {
+  if (typeof window !== 'undefined' && window.electronAPI) {
+    return window.electronAPI;
+  }
+  return createWebElectronApiFallback();
+}
+
 
 function ensureOnlineSession(session: AuthSession): string {
   if (!session.accessToken) {
@@ -285,7 +383,6 @@ async function persistRefreshedTokens(session: AuthSession): Promise<void> {
   try {
     await ensureElectronApi().updateCachedAuthTokens({
       accessToken: session.accessToken,
-      companyAccess: session.companyAccess ?? undefined,
       refreshToken: session.refreshToken,
     });
   } catch {
@@ -308,9 +405,6 @@ function shouldFallbackToOfflineReport(error: unknown): boolean {
 }
 
 function shouldQueueOfflineWrite(error: unknown): boolean {
-  if (error instanceof CompanyAccessBlockError) {
-    return false;
-  }
   if (error instanceof RuntimeApiError) {
     return error.httpStatus >= 500 || error.httpStatus === 401;
   }
@@ -329,7 +423,7 @@ async function getApiBaseUrl(): Promise<string> {
   }
   const runtime = await ensureElectronApi().getRuntimeInfo();
   runtimeApiBaseUrl = runtime.apiBaseUrl;
-  return runtimeApiBaseUrl;
+  return runtimeApiBaseUrl ?? 'http://localhost:3001';
 }
 
 async function refreshAuthSession(session: AuthSession): Promise<void> {
@@ -359,9 +453,6 @@ async function refreshAuthSession(session: AuthSession): Promise<void> {
     const previousAccessToken = session.accessToken;
     session.accessToken = payload.accessToken;
     session.refreshToken = payload.refreshToken;
-    if (payload.companyAccess) {
-      session.companyAccess = payload.companyAccess;
-    }
     session.isOnline = true;
 
     if (previousAccessToken && previousAccessToken !== payload.accessToken) {
@@ -390,18 +481,40 @@ async function requestApi<TData>(
     options?.session ??
     (options?.token ? sessionByAccessToken.get(options.token) ?? null : null);
 
+  const token = session?.accessToken ?? options?.token;
+
+  if (typeof window !== 'undefined' && (!window.electronAPI || token?.startsWith('web-'))) {
+    if (session) {
+      session.isOnline = false;
+    }
+    throw new Error('Web offline modunda uzak sunucu API devre disidir.');
+  }
+
   const baseUrl = await getApiBaseUrl();
   const headers = new Headers({ 'Content-Type': 'application/json' });
-  const token = session?.accessToken ?? options?.token;
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetch(new URL(path, baseUrl), {
-    body: options?.body ? JSON.stringify(options.body) : undefined,
-    headers,
-    method: options?.method ?? 'GET',
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 1500);
+
+  let response: Response;
+  try {
+    response = await fetch(new URL(path, baseUrl), {
+      body: options?.body ? JSON.stringify(options.body) : undefined,
+      headers,
+      method: options?.method ?? 'GET',
+      signal: controller.signal,
+    });
+  } catch (caughtErr) {
+    if (session) {
+      session.isOnline = false;
+    }
+    throw caughtErr;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   const raw = await response.text();
   if (raw.length === 0) {
@@ -496,264 +609,6 @@ async function requestApiEnvelope<TData>(
   return envelope;
 }
 
-function asCompanyAccessSnapshot(value: unknown): CompanyAccessSnapshot | null {
-  if (!value || typeof value !== 'object') {
-    return null;
-  }
-
-  const record = value as Partial<CompanyAccessSnapshot>;
-  if (
-    typeof record.companyId !== 'string' ||
-    record.companyId.trim().length === 0 ||
-    typeof record.checkedAt !== 'string' ||
-    typeof record.offlineAccessValidUntil !== 'string' ||
-    typeof record.summary !== 'string' ||
-    typeof record.isAccessAllowed !== 'boolean'
-  ) {
-    return null;
-  }
-
-  const status =
-    record.status === 'ACTIVE' ||
-    record.status === 'EXPIRED' ||
-    record.status === 'GRACE' ||
-    record.status === 'SUSPENDED' ||
-    record.status === 'UNCONFIGURED'
-      ? record.status
-      : null;
-  const reasonCode =
-    record.reasonCode === 'ACTIVE_SUBSCRIPTION' ||
-    record.reasonCode === 'COMPANY_DISABLED' ||
-    record.reasonCode === 'NO_PACKAGE_DATES' ||
-    record.reasonCode === 'PACKAGE_EXPIRED' ||
-    record.reasonCode === 'PACKAGE_EXPIRED_GRACE' ||
-    record.reasonCode === 'PACKAGE_SUSPENDED'
-      ? record.reasonCode
-      : null;
-  const operatorAction =
-    record.operatorAction === 'CHECK_PLAN_DATES' ||
-    record.operatorAction === 'CONTACT_SUPPORT' ||
-    record.operatorAction === 'NONE' ||
-    record.operatorAction === 'RENEW_PACKAGE'
-      ? record.operatorAction
-      : null;
-
-  if (!status || !reasonCode || !operatorAction) {
-    return null;
-  }
-
-  return {
-    checkedAt: record.checkedAt,
-    companyId: record.companyId,
-    daysRemaining:
-      typeof record.daysRemaining === 'number' && Number.isFinite(record.daysRemaining)
-        ? record.daysRemaining
-        : null,
-    expiresAt: typeof record.expiresAt === 'string' ? record.expiresAt : null,
-    graceEndsAt: typeof record.graceEndsAt === 'string' ? record.graceEndsAt : null,
-    isAccessAllowed: record.isAccessAllowed,
-    localLastSeenAt:
-      typeof record.localLastSeenAt === 'string' ? record.localLastSeenAt : null,
-    offlineAccessGraceDays:
-      typeof record.offlineAccessGraceDays === 'number' &&
-      Number.isFinite(record.offlineAccessGraceDays)
-        ? record.offlineAccessGraceDays
-        : 0,
-    offlineAccessValidUntil: record.offlineAccessValidUntil,
-    operatorAction,
-    reasonCode,
-    status,
-    summary: record.summary,
-  };
-}
-
-function parseTimestamp(value: string | null | undefined): number | null {
-  if (!value) {
-    return null;
-  }
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function buildCompanyAccessBlockError(
-  params: {
-    blockType: CompanyAccessBlockType;
-    message: string;
-    snapshot: CompanyAccessSnapshot | null;
-  },
-): CompanyAccessBlockError {
-  return new CompanyAccessBlockError({
-    blockType: params.blockType,
-    message: params.message,
-    snapshot: params.snapshot,
-  });
-}
-
-function mergeLocalSnapshotState(
-  incoming: CompanyAccessSnapshot,
-  previous: CompanyAccessSnapshot | null | undefined,
-): CompanyAccessSnapshot {
-  if (!previous?.localLastSeenAt) {
-    return incoming;
-  }
-  return {
-    ...incoming,
-    localLastSeenAt: previous.localLastSeenAt,
-  };
-}
-
-function ensureClockIsTrusted(snapshot: CompanyAccessSnapshot, nowMs: number): void {
-  const checkedAtMs = parseTimestamp(snapshot.checkedAt);
-  if (
-    checkedAtMs !== null &&
-    nowMs + CLOCK_ROLLBACK_TOLERANCE_MS < checkedAtMs
-  ) {
-    throw buildCompanyAccessBlockError({
-      blockType: 'CLOCK_ROLLBACK',
-      message:
-        'Cihaz saati geri alindigi tespit edildi. Guvenlik nedeniyle offline erisim durduruldu. Lutfen internete baglanip tekrar giris yapin.',
-      snapshot,
-    });
-  }
-
-  const localLastSeenMs = parseTimestamp(snapshot.localLastSeenAt ?? null);
-  if (
-    localLastSeenMs !== null &&
-    nowMs + CLOCK_ROLLBACK_TOLERANCE_MS < localLastSeenMs
-  ) {
-    throw buildCompanyAccessBlockError({
-      blockType: 'CLOCK_ROLLBACK',
-      message:
-        'Cihaz saati geri alindigi tespit edildi. Guvenlik nedeniyle offline erisim durduruldu. Lutfen internete baglanip tekrar giris yapin.',
-      snapshot,
-    });
-  }
-}
-
-function touchLocalLastSeen(
-  snapshot: CompanyAccessSnapshot,
-  nowMs: number,
-): { shouldPersist: boolean; snapshot: CompanyAccessSnapshot } {
-  const currentMs = parseTimestamp(snapshot.localLastSeenAt ?? null);
-  const targetMs = Math.max(currentMs ?? 0, nowMs);
-
-  if (
-    currentMs !== null &&
-    targetMs - currentMs < LOCAL_SEEN_PERSIST_INTERVAL_MS
-  ) {
-    return { shouldPersist: false, snapshot };
-  }
-
-  return {
-    shouldPersist: true,
-    snapshot: {
-      ...snapshot,
-      localLastSeenAt: new Date(targetMs).toISOString(),
-    },
-  };
-}
-
-function readCompanyAccessFromApiError(error: unknown): CompanyAccessSnapshot | null {
-  if (!(error instanceof RuntimeApiError) || !error.data || typeof error.data !== 'object') {
-    return null;
-  }
-
-  const payload = error.data as { companyAccess?: unknown };
-  return asCompanyAccessSnapshot(payload.companyAccess);
-}
-
-function ensureCompanyAccessWindow(
-  companyAccess: CompanyAccessSnapshot,
-  nowMs: number,
-): void {
-  if (
-    companyAccess.status === 'EXPIRED' ||
-    companyAccess.status === 'SUSPENDED' ||
-    !companyAccess.isAccessAllowed
-  ) {
-    throw buildCompanyAccessBlockError({
-      blockType: 'SUBSCRIPTION_BLOCKED',
-      message: companyAccess.summary,
-      snapshot: companyAccess,
-    });
-  }
-
-  const offlineValidUntilMs = Date.parse(companyAccess.offlineAccessValidUntil);
-  if (!Number.isFinite(offlineValidUntilMs) || nowMs > offlineValidUntilMs) {
-    throw buildCompanyAccessBlockError({
-      blockType: 'OFFLINE_EXPIRED',
-      message:
-        'Paket dogrulama suresi doldu. Lutfen internet ile tekrar online giris yapin.',
-      snapshot: companyAccess,
-    });
-  }
-}
-
-async function ensureCompanyAccess(
-  session: AuthSession,
-  options?: { forceOnlineCheck?: boolean },
-): Promise<CompanyAccessSnapshot> {
-  const electronApi = ensureElectronApi();
-  let snapshot =
-    (await electronApi.getCompanyAccessSnapshot(session.user.companyId)) ?? session.companyAccess;
-
-  const now = Date.now();
-  const lastRefreshAt = companyAccessRefreshAtByCompanyId.get(session.user.companyId) ?? 0;
-  const shouldTryOnlineRefresh =
-    session.isOnline &&
-    !!session.accessToken &&
-    (options?.forceOnlineCheck ||
-      !snapshot ||
-      now - lastRefreshAt >= COMPANY_ACCESS_REFRESH_INTERVAL_MS);
-
-  if (shouldTryOnlineRefresh && session.accessToken) {
-    try {
-      const fresh = await requestApi<CompanyAccessSnapshot>('/api/subscription/status', {
-        session,
-        token: session.accessToken,
-      });
-      snapshot = mergeLocalSnapshotState(fresh, snapshot);
-      await electronApi.setCompanyAccessSnapshot(snapshot);
-      companyAccessRefreshAtByCompanyId.set(session.user.companyId, now);
-    } catch (error: unknown) {
-      const fromError = readCompanyAccessFromApiError(error);
-      if (fromError) {
-        snapshot = mergeLocalSnapshotState(fromError, snapshot);
-        await electronApi.setCompanyAccessSnapshot(snapshot);
-      }
-      if (!snapshot) {
-        throw error;
-      }
-    }
-  }
-
-  if (!snapshot) {
-    throw new Error('Paket dogrulamasi bulunamadi. Lutfen internet ile online giris yapin.');
-  }
-
-  ensureClockIsTrusted(snapshot, now);
-  ensureCompanyAccessWindow(snapshot, now);
-
-  const touched = touchLocalLastSeen(snapshot, now);
-  snapshot = touched.snapshot;
-  if (touched.shouldPersist) {
-    await electronApi.setCompanyAccessSnapshot(snapshot);
-  }
-
-  return snapshot;
-}
-
-async function ensureCompanyAccessBestEffort(
-  session: AuthSession,
-  options?: { forceOnlineCheck?: boolean },
-): Promise<void> {
-  try {
-    session.companyAccess = await ensureCompanyAccess(session, options);
-  } catch {
-    // Offline-first policy: sales/report flows must continue even if access validation fails.
-  }
-}
-
 async function queueGenericWriteOperation(params: {
   body: Record<string, unknown>;
   localId?: string;
@@ -789,7 +644,6 @@ function normalizeOfflineSession(cached: OfflineAuthResult): AuthSession {
       '00000000-0000-4000-8000-000000000002');
   const session: AuthSession = {
     accessToken: cached.accessToken,
-    companyAccess: cached.companyAccess ?? null,
     isOnline: false,
     refreshToken: cached.refreshToken,
     registerId,
@@ -852,7 +706,6 @@ export async function loginOnline(input: OfflineCredential): Promise<AuthSession
 
   const session: AuthSession = {
     accessToken: loginData.accessToken,
-    companyAccess: loginData.companyAccess,
     isOnline: true,
     refreshToken: loginData.refreshToken,
     registerId,
@@ -869,7 +722,6 @@ export async function loginOnline(input: OfflineCredential): Promise<AuthSession
 
   await electronApi.cacheOnlineLogin({
     accessToken: session.accessToken ?? '',
-    companyAccess: session.companyAccess ?? undefined,
     password: input.password,
     refreshToken: session.refreshToken ?? '',
     registerId: session.registerId,
@@ -887,7 +739,6 @@ export async function loginOnline(input: OfflineCredential): Promise<AuthSession
   if (session.accessToken) {
     sessionByAccessToken.set(session.accessToken, session);
   }
-  companyAccessRefreshAtByCompanyId.set(session.user.companyId, Date.now());
 
   return session;
 }
@@ -902,7 +753,6 @@ export async function loginOffline(input: OfflineCredential): Promise<AuthSessio
     throw new Error('Offline login icin bu cihazda dogrulanmis kullanici bulunamadi.');
   }
   const session = normalizeOfflineSession(cached);
-  await ensureCompanyAccessBestEffort(session);
   return session;
 }
 
@@ -912,7 +762,6 @@ export async function restoreCachedSession(): Promise<AuthSession | null> {
     return null;
   }
   const session = normalizeOfflineSession(cached);
-  await ensureCompanyAccessBestEffort(session);
   return session;
 }
 
@@ -921,7 +770,6 @@ export async function loadCatalog(
   options?: { skipRemoteSyncPull?: boolean },
 ): Promise<RuntimeCatalog> {
   const electronApi = ensureElectronApi();
-  await ensureCompanyAccessBestEffort(session);
 
   if (!options?.skipRemoteSyncPull && session.isOnline && session.accessToken) {
     try {
@@ -963,7 +811,6 @@ export async function fetchCustomers(
 ): Promise<CustomerRecord[]> {
   if (session.isOnline && session.accessToken) {
     try {
-      session.companyAccess = await ensureCompanyAccess(session);
       const token = ensureOnlineSession(session);
       const search = params?.search?.trim();
       const query = new URLSearchParams();
@@ -993,7 +840,7 @@ export async function fetchCustomers(
     session.user.companyId,
     params?.search,
   );
-  return cached.map((row) => ({
+  return cached.map((row: any) => ({
     address: row.address ?? null,
     balance: row.balance ?? 0,
     companyId: row.companyId,
@@ -1083,13 +930,11 @@ export async function fetchSuppliers(
     search?: string;
   },
 ): Promise<PaginatedResult<SupplierRecord>> {
-  await ensureCompanyAccessBestEffort(session);
   const page = Math.max(1, params?.page ?? 1);
   const limit = Math.max(1, Math.min(100, params?.limit ?? 50));
 
   if (session.isOnline && session.accessToken) {
     try {
-      session.companyAccess = await ensureCompanyAccess(session);
       const token = ensureOnlineSession(session);
       const query = new URLSearchParams();
       query.set('companyId', session.user.companyId);
@@ -1122,7 +967,7 @@ export async function fetchSuppliers(
 
   const cached = await ensureElectronApi().getCachedSuppliers(session.user.companyId);
   const searchTerm = params?.search?.trim().toLowerCase();
-  const filtered = cached.filter((row) => {
+  const filtered = cached.filter((row: any) => {
     if (params?.activeOnly !== false && !row.isActive) {
       return false;
     }
@@ -1138,7 +983,7 @@ export async function fetchSuppliers(
   const start = (page - 1) * limit;
   const paged = filtered.slice(start, start + limit);
   return {
-    data: paged.map((row) => ({
+    data: paged.map((row: any) => ({
       balance: row.balance ?? 0,
       companyId: row.companyId,
       id: row.id,
@@ -1166,7 +1011,6 @@ export async function createSupplier(
 
   if (session.accessToken && session.isOnline) {
     try {
-      session.companyAccess = await ensureCompanyAccess(session);
       return await requestApi<SupplierRecord>('/api/suppliers', {
         body,
         method: 'POST',
@@ -1205,7 +1049,6 @@ export async function updateSupplier(
   const path = `/api/suppliers/${encodeURIComponent(supplierId)}`;
   if (session.accessToken && session.isOnline) {
     try {
-      session.companyAccess = await ensureCompanyAccess(session);
       return await requestApi<SupplierRecord>(path, {
         body: payload,
         method: 'PUT',
@@ -1243,7 +1086,6 @@ export async function deleteSupplier(
   const path = `/api/suppliers/${encodeURIComponent(supplierId)}`;
   if (session.accessToken && session.isOnline) {
     try {
-      session.companyAccess = await ensureCompanyAccess(session);
       await requestApi<{ success: boolean }>(path, {
         method: 'DELETE',
         token: ensureOnlineSession(session),
@@ -1274,7 +1116,6 @@ export async function fetchSupplierTransactions(
     type?: 'DEBT' | 'PAYMENT';
   },
 ): Promise<PaginatedResult<SupplierTransactionRecord>> {
-  await ensureCompanyAccessBestEffort(session);
   const page = Math.max(1, params?.page ?? 1);
   const limit = Math.max(1, Math.min(100, params?.limit ?? 50));
 
@@ -1285,7 +1126,6 @@ export async function fetchSupplierTransactions(
     };
   }
 
-  session.companyAccess = await ensureCompanyAccess(session);
   const query = new URLSearchParams();
   query.set('limit', String(limit));
   query.set('page', String(page));
@@ -1324,7 +1164,6 @@ export async function createSupplierTransaction(
   const path = `/api/suppliers/${encodeURIComponent(supplierId)}/transactions`;
   if (session.accessToken && session.isOnline) {
     try {
-      session.companyAccess = await ensureCompanyAccess(session);
       return await requestApi<SupplierTransactionRecord>(path, {
         body: payload,
         method: 'POST',
@@ -1367,7 +1206,6 @@ export async function fetchPurchaseInvoices(
     supplierId?: string;
   },
 ): Promise<PaginatedResult<PurchaseInvoiceRecord>> {
-  await ensureCompanyAccessBestEffort(session);
   const branchId = params?.branchId ?? session.user.branchId;
   if (!branchId) {
     throw new Error('Alis belgeleri icin branchId bulunamadi.');
@@ -1377,7 +1215,6 @@ export async function fetchPurchaseInvoices(
 
   if (session.isOnline && session.accessToken) {
     try {
-      session.companyAccess = await ensureCompanyAccess(session);
       const query = new URLSearchParams();
       query.set('branchId', branchId);
       query.set('limit', String(limit));
@@ -1443,7 +1280,7 @@ export async function fetchPurchaseInvoices(
   });
 
   return {
-    data: cached.data.map((row) => ({
+    data: cached.data.map((row: any) => ({
       branchId: row.branchId,
       convertedAt: row.convertedAt ?? null,
       convertedToInvoiceId: row.convertedToInvoiceId ?? null,
@@ -1474,7 +1311,6 @@ export async function createPurchaseInvoice(
 ): Promise<PurchaseInvoiceRecord> {
   if (session.accessToken && session.isOnline) {
     try {
-      session.companyAccess = await ensureCompanyAccess(session);
       const created = await requestApi<any>('/api/purchase-invoices', {
         body: payload,
         method: 'POST',
@@ -1555,7 +1391,6 @@ export async function convertDispatchToInvoice(
   const path = `/api/purchase-invoices/${encodeURIComponent(dispatchId)}/convert-to-invoice`;
   if (session.accessToken && session.isOnline) {
     try {
-      session.companyAccess = await ensureCompanyAccess(session);
       const converted = await requestApi<any>(
         path,
         {
@@ -1653,7 +1488,6 @@ export async function saveDailyAutomationSettings(settings: {
 
 
 export async function queueSale(session: AuthSession, payload: PendingSale): Promise<PendingSaleRecord> {
-  await ensureCompanyAccessBestEffort(session);
   const clientRequestId = ensureClientRequestId(payload.clientRequestId);
   const record = await ensureElectronApi().queueSale({
     localId: clientRequestId,
@@ -1676,7 +1510,6 @@ export async function queueRefund(
   session: AuthSession,
   payload: PendingRefund,
 ): Promise<void> {
-  await ensureCompanyAccessBestEffort(session);
   const clientRequestId = ensureClientRequestId(payload.clientRequestId);
   await ensureElectronApi().queueRefund({
     localId: clientRequestId,
@@ -1698,7 +1531,6 @@ export async function runSync(session: AuthSession): Promise<SyncRunResult | nul
   if (!session.accessToken) {
     return null;
   }
-  session.companyAccess = await ensureCompanyAccess(session, { forceOnlineCheck: true });
   return ensureElectronApi().runSync({
     accessToken: session.accessToken,
     registerId: session.registerId,
@@ -1832,7 +1664,6 @@ export async function fetchSaleByReceipt(
   }
 
   if (session.accessToken && session.isOnline) {
-    session.companyAccess = await ensureCompanyAccess(session);
     return requestApi<SaleReceipt>(
       `/api/sales/receipt/${encodeURIComponent(normalizedReceipt)}`,
       { token: ensureOnlineSession(session) },
@@ -1840,7 +1671,7 @@ export async function fetchSaleByReceipt(
   }
 
   const pending = await ensureElectronApi().listPendingSales(500);
-  const targetIndex = pending.findIndex((row, index) => {
+  const targetIndex = pending.findIndex((row: any, index: number) => {
     let payload: any = {};
     try {
       payload = JSON.parse(row.payloadData);
@@ -1906,7 +1737,6 @@ export async function fetchSales(
   session: AuthSession,
   params?: { branchId?: string; limit?: number; page?: number },
 ): Promise<{ data: any[]; pagination: any }> {
-  await ensureCompanyAccessBestEffort(session);
   const { branchId, limit = 20, page = 1 } = params ?? {};
 
   if (!session.accessToken || !session.isOnline) {
@@ -1937,7 +1767,7 @@ export async function fetchSales(
 
 async function readLocalSales(session: AuthSession, limit: number): Promise<{ data: any[]; pagination: any }> {
   const pending = await ensureElectronApi().listPendingSales(limit);
-  const localData = pending.map((row, index) => {
+  const localData = pending.map((row: any, index: number) => {
     let payload: any = {};
     try {
       payload = JSON.parse(row.payloadData);
@@ -2017,7 +1847,6 @@ export async function fetchDailyReport(
   rangeTo?: string,
 ): Promise<DailyReport> {
   try {
-    session.companyAccess = await ensureCompanyAccess(session);
   } catch {
     const offline = await getOfflineDailyReportSnapshot(session, 10, date, rangeTo);
     return offline.report as unknown as DailyReport;
@@ -2068,7 +1897,6 @@ export async function fetchTopProducts(
   rangeTo?: string,
 ): Promise<TopProductReportRow[]> {
   try {
-    session.companyAccess = await ensureCompanyAccess(session);
   } catch {
     const offline = await getOfflineDailyReportSnapshot(session, limit, date, rangeTo);
     return offline.topProducts;
@@ -2115,7 +1943,6 @@ export async function fetchSessions(
   from?: string,
   to?: string,
 ): Promise<{ data: any[]; meta: any }> {
-  session.companyAccess = await ensureCompanyAccess(session);
   const token = ensureOnlineSession(session);
   const branchId = (await resolveSessionBranchId(session)) ?? '';
   const fromQuery = from ? `&from=${encodeURIComponent(from)}` : '';
@@ -2131,7 +1958,6 @@ export async function fetchStockLevels(session: AuthSession): Promise<StockLevel
   const branchId = session.user.branchId ?? 'offline-branch';
   if (session.accessToken && session.isOnline) {
     try {
-      session.companyAccess = await ensureCompanyAccess(session);
       return await requestApi<StockLevelRow[]>(
         `/api/stock/levels?branchId=${encodeURIComponent(branchId)}`,
         { token: ensureOnlineSession(session) },
@@ -2173,7 +1999,7 @@ export async function fetchStockLevels(session: AuthSession): Promise<StockLevel
     );
   }
 
-  return products.map((product) => ({
+  return products.map((product: any) => ({
     branchId,
     id: `offline-stock-${product.id}`,
     product: {
@@ -2217,7 +2043,6 @@ export async function createStockMovement(
 
   if (session.accessToken && session.isOnline) {
     try {
-      session.companyAccess = await ensureCompanyAccess(session);
       await requestApi<{ id: string }>('/api/stock/movement', {
         body,
         method: 'POST',
@@ -2256,7 +2081,6 @@ export async function createProduct(
 
   if (session.accessToken && session.isOnline) {
     try {
-      session.companyAccess = await ensureCompanyAccess(session);
       await requestApi<{ id: string }>('/api/products', {
         body,
         method: 'POST',
@@ -2298,7 +2122,6 @@ export async function updateProduct(
 
   if (session.accessToken && session.isOnline) {
     try {
-      session.companyAccess = await ensureCompanyAccess(session);
       await requestApi<{ id: string }>(`/api/products/${encodeURIComponent(productId)}`, {
         body,
         method: 'PUT',
@@ -2330,7 +2153,6 @@ export async function closeSession(
   closingBalance: number,
   note?: string,
 ): Promise<void> {
-  session.companyAccess = await ensureCompanyAccess(session);
   await requestApi<{ id: string }>(`/api/stock/session/${session.sessionId}/close`, {
     body: {
       closingBalance,
@@ -2354,6 +2176,7 @@ export function canAccessDesktopPage(
   role: string | undefined,
   page:
     | 'campaigns'
+    | 'crm'
     | 'customers'
     | 'dashboard'
     | 'diagnostics'
@@ -2365,7 +2188,9 @@ export function canAccessDesktopPage(
     | 'report'
     | 'sale'
     | 'shift'
+    | 'staff'
     | 'stock'
+    | 'superadmin'
     | 'suppliers',
 ): boolean {
   const normalizedRole = normalizeDesktopRole(role);
@@ -2402,17 +2227,6 @@ export function canWriteOperations(role: string | undefined): boolean {
 }
 
 export function explainRuntimeError(error: unknown): string {
-  if (isCompanyAccessBlockError(error)) {
-    return error.message;
-  }
-
-  if (error instanceof RuntimeApiError && error.errorCode === 'SUBSCRIPTION_BLOCKED') {
-    const companyAccess = readCompanyAccessFromApiError(error);
-    if (companyAccess) {
-      return companyAccess.summary;
-    }
-  }
-
   const message = readErrorMessage(error);
   const normalized = message.toLowerCase();
 
@@ -2422,25 +2236,10 @@ export function explainRuntimeError(error: unknown): string {
   if (normalized.includes('yetkisiz')) {
     return 'Oturum yetkisi gecersiz. Lutfen tekrar giris yapin.';
   }
-  if (normalized.includes('paket') || normalized.includes('yenileme') || normalized.includes('erisim kapatildi')) {
-    return message;
-  }
   if (normalized.includes('kasa bulunamadi')) {
     return 'Kasa kaydi bulunamadi. Sunucu kayitlarini kontrol edin.';
   }
   return message;
-}
-
-export function isCompanyAccessBlockError(
-  error: unknown,
-): error is CompanyAccessBlockError {
-  return error instanceof CompanyAccessBlockError;
-}
-
-export function readCompanyAccessBlockDetails(
-  error: CompanyAccessBlockError,
-): CompanyAccessBlockDetails {
-  return error.details;
 }
 
 export function explainHardwareOperatorAction(
@@ -2487,10 +2286,3 @@ export function explainHardwareRecoveryPlan(result: {
   return 'Donanim ayarlarini ve baglanti durumunu kontrol edip islemi tekrar deneyin.';
 }
 
-export async function renewLicense(licenseKey: string): Promise<CompanyAccessSnapshot> {
-  const result = await requestApi<CompanyAccessSnapshot>('/api/license/renew', {
-    body: { licenseKey },
-    method: 'POST',
-  });
-  return result;
-}

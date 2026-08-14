@@ -1,150 +1,98 @@
 import React, { useState } from 'react';
-
-import type { CompanyAccessBlockDetails } from '../services/pos-runtime';
-import { renewLicense } from '../services/pos-runtime';
+import type { AnnualLicenseInfo } from '@marketpos/shared';
+import { AnnualLicenseService } from '../services/annual-license';
 
 interface AccessLockScreenProps {
-  details: CompanyAccessBlockDetails;
-  onSwitchToOnlineLogin: () => void;
+  licenseInfo: AnnualLicenseInfo;
+  onLicenseRenewed: (newInfo: AnnualLicenseInfo) => void;
 }
 
-function toDateText(value: string | null | undefined): string {
-  if (!value) {
-    return '-';
-  }
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-  return parsed.toLocaleString('tr-TR');
-}
+export const AccessLockScreen: React.FC<AccessLockScreenProps> = ({
+  licenseInfo,
+  onLicenseRenewed,
+}) => {
+  const [checking, setChecking] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-function getTitle(details: CompanyAccessBlockDetails): string {
-  if (details.blockType === 'CLOCK_ROLLBACK') {
-    return 'Guvenlik Kilidi';
-  }
-  if (details.blockType === 'OFFLINE_EXPIRED') {
-    return 'Offline Dogrulama Suresi Doldu';
-  }
-  return 'Paket Erisimi Kapali';
-}
-
-export default function AccessLockScreen({
-  details,
-  onSwitchToOnlineLogin,
-}: AccessLockScreenProps) {
-  const [licenseKey, setLicenseKey] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [errorText, setErrorText] = useState<string | null>(null);
-
-  const handleRenew = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanKey = licenseKey.trim();
-    if (cleanKey.length < 5) {
-      setErrorText('Lutfen gecerli bir lisans anahtari girin.');
-      return;
-    }
-    setLoading(true);
-    setErrorText(null);
+  const handleCheckLicense = async () => {
+    setChecking(true);
+    setErrorMessage(null);
     try {
-      const snapshot = await renewLicense(cleanKey);
-      if (window.electronAPI) {
-        await window.electronAPI.setCompanyAccessSnapshot(snapshot);
-      }
-      alert('Lisans basariyla yenilendi! Uygulama yeniden baslatiliyor.');
-      window.location.reload();
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        setErrorText(err.message);
+      const updated = await AnnualLicenseService.checkLicense({
+        companyId: licenseInfo.companyId,
+      });
+      if (updated.isExpired) {
+        setErrorMessage('Lisansınız henüz yenilenmedi veya sunucuya ulaşılamadı.');
       } else {
-        setErrorText('Lisans yenileme basarisiz oldu. Lutfen internet baglantinizi ve anahtari kontrol edin.');
+        onLicenseRenewed(updated);
       }
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : 'Bağlantı hatası oluştu');
     } finally {
-      setLoading(false);
+      setChecking(false);
     }
   };
 
   return (
-    <div className="access-lock-page">
-      <div className="access-lock-card">
-        <h1>{getTitle(details)}</h1>
-        <p className="access-lock-message">{details.message}</p>
-
-        <div className="access-lock-grid">
-          <div>
-            <strong>Durum</strong>
-            <span>{details.snapshot?.status ?? '-'}</span>
-          </div>
-          <div>
-            <strong>Son Kontrol</strong>
-            <span>{toDateText(details.snapshot?.checkedAt ?? null)}</span>
-          </div>
-          <div>
-            <strong>Offline Son Tarih</strong>
-            <span>{toDateText(details.snapshot?.offlineAccessValidUntil ?? null)}</span>
-          </div>
-          <div>
-            <strong>Cihaz Son Gorulme</strong>
-            <span>{toDateText(details.snapshot?.localLastSeenAt ?? null)}</span>
-          </div>
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/95 backdrop-blur-md p-6 text-white">
+      <div className="max-w-lg w-full bg-slate-800 border border-slate-700 rounded-2xl p-8 shadow-2xl text-center space-y-6">
+        <div className="mx-auto w-16 h-16 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center text-3xl font-bold border border-rose-500/30">
+          🔒
         </div>
 
-        <ol className="access-lock-steps">
-          <li>Cihazi internete baglayin.</li>
-          <li>Online dogrulama ile tekrar giris yapin.</li>
-          <li>Gerekirse merkez ekipten yeni bir lisans anahtari talep edin.</li>
-        </ol>
-
-        <div className="access-lock-renew-section">
-          <h3>Yeni Lisans Kodu ile Yenile</h3>
-          <p className="muted">
-            Merkez ekipten aldiginiz yeni 365 gunluk lisans anahtarini girerek paketinizi aninda uzatabilirsiniz.
+        <div className="space-y-2">
+          <h2 className="text-2xl font-bold tracking-tight text-slate-100">
+            Yıllık Lisans Süreniz Dolmuştur
+          </h2>
+          <p className="text-sm text-slate-400">
+            {licenseInfo.companyName} firmasına ait MarketPOS kullanım süresi sonlanmıştır. Satış ve işlem yapabilmek için lisansınızı yenileyiniz.
           </p>
-          <form onSubmit={handleRenew} className="renew-form">
-            <input
-              type="text"
-              className="input"
-              placeholder="Orn: MP-XXXX-XXXX-XXXX-XXXX"
-              value={licenseKey}
-              onChange={(e) => setLicenseKey(e.target.value)}
-              disabled={loading}
-              style={{
-                textTransform: 'uppercase',
-                width: '100%',
-                padding: '12px',
-                fontSize: '1.1rem',
-                letterSpacing: '1px',
-                textAlign: 'center',
-                margin: '10px 0 5px 0',
-                borderRadius: '6px',
-                border: '1px solid var(--border)',
-                backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                color: 'var(--text)'
-              }}
-            />
-            {errorText && (
-              <div style={{ color: 'var(--danger)', fontSize: '0.9rem', margin: '5px 0' }}>
-                {errorText}
-              </div>
-            )}
-            <button
-              type="submit"
-              className="btn btn-primary btn-lg"
-              disabled={loading || licenseKey.trim().length === 0}
-              style={{ width: '100%', marginTop: '5px', padding: '12px' }}
-            >
-              {loading ? 'Lisans Dogrulaniyor...' : 'Lisansi Etkinlestir'}
-            </button>
-          </form>
         </div>
 
-        <div style={{ marginTop: '15px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '15px' }}>
-          <button className="btn btn-ghost" type="button" onClick={onSwitchToOnlineLogin} style={{ width: '100%' }}>
-            Giris Ekranina Don
+        <div className="bg-slate-900/80 rounded-xl p-4 text-left border border-slate-700/50 space-y-2 text-xs text-slate-300">
+          <div className="flex justify-between">
+            <span className="text-slate-400">Firma kenti:</span>
+            <span className="font-semibold text-slate-200">{licenseInfo.companyId}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-slate-400">Lisans Tipi:</span>
+            <span className="font-semibold text-emerald-400">Yıllık Abonelik</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-slate-400">Son Geçerlilik:</span>
+            <span className="font-semibold text-rose-400">
+              {new Date(licenseInfo.expiresAt).toLocaleDateString('tr-TR')}
+            </span>
+          </div>
+        </div>
+
+        {errorMessage && (
+          <div className="p-3 text-xs bg-rose-500/10 border border-rose-500/20 text-rose-300 rounded-lg">
+            {errorMessage}
+          </div>
+        )}
+
+        <div className="flex flex-col gap-3">
+          <button
+            onClick={handleCheckLicense}
+            disabled={checking}
+            className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-medium rounded-xl transition shadow-lg shadow-emerald-900/30 flex items-center justify-center gap-2"
+          >
+            {checking ? (
+              <span>Kontrol Ediliyor...</span>
+            ) : (
+              <>
+                <span>🔄</span>
+                <span>Lisans Durumunu Yeniden Kontrol Et</span>
+              </>
+            )}
           </button>
+        </div>
+
+        <div className="pt-2 text-xs text-slate-500 border-t border-slate-700/50">
+          Yenileme ve destek için: <span className="text-slate-400 font-medium">+90 (850) 000 00 00</span> veya <span className="text-slate-400 font-medium">destek@marketpos.com</span>
         </div>
       </div>
     </div>
   );
-}
-
+};

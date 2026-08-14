@@ -11,7 +11,6 @@ import type {
   CachedSupplierRecord,
   CachedUserRecord,
   CacheLoginPayload,
-  CompanyAccessSnapshot,
   CustomerOpQueueRecord,
   CustomerOpType,
   HardwareConfig,
@@ -104,8 +103,6 @@ export const IPC_CHANNELS = {
   HARDWARE_SET_CONFIG: 'hardware:set-config',
   HARDWARE_TEST_DRAWER: 'hardware:test-drawer',
   HARDWARE_TEST_PRINT: 'hardware:test-print',
-  LICENSE_GET_ACCESS_SNAPSHOT: 'license:get-access-snapshot',
-  LICENSE_SET_ACCESS_SNAPSHOT: 'license:set-access-snapshot',
   PRINTER_PRINT_RECEIPT: 'printer:print-receipt',
   SECURITY_LIST_EVENTS: 'security:list-events',
   SECURITY_LOG_EVENT: 'security:log-event',
@@ -256,7 +253,6 @@ export interface ElectronApi {
   getLocalSetting(key: string, defaultValue?: string): Promise<string | null>;
   setLocalSetting(key: string, value: string): Promise<void>;
 
-  getCompanyAccessSnapshot(companyId: string): Promise<CompanyAccessSnapshot | null>;
   getCachedSession(): Promise<OfflineAuthResult | null>;
   getHardwareConfig(): Promise<HardwareConfig>;
   getQueueStatus(): Promise<SyncStatusSummary>;
@@ -300,7 +296,6 @@ export interface ElectronApi {
   markFirstSale(atIso?: string): Promise<SetupState>;
   resetSetup(message?: string): Promise<SetupState>;
   setOfflineReadinessPassed(passed: boolean): Promise<SetupState>;
-  setCompanyAccessSnapshot(payload: CompanyAccessSnapshot): Promise<void>;
   setManagerPin(payload: { pin: string }): Promise<void>;
   updateSetupStep(payload: SetupStepUpdatePayload): Promise<SetupState>;
   testHardwareDrawer(): Promise<CashDrawerActionResult>;
@@ -337,7 +332,6 @@ export type {
   CachedSupplierRecord,
   CachedUserRecord,
   CacheLoginPayload,
-  CompanyAccessSnapshot,
   CustomerOpQueueRecord,
   CustomerOpType,
   HardwareConfig,

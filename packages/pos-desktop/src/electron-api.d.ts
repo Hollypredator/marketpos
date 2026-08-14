@@ -69,24 +69,6 @@ export type SetupStepId =
 export type SetupStepStatus = 'COMPLETED' | 'PENDING';
 export type SetupResultStatus = 'FAILED' | 'SUCCESS';
 export type HardwareConnectionMode = 'LAN' | 'USB';
-export type CompanyAccessStatus =
-  | 'ACTIVE'
-  | 'EXPIRED'
-  | 'GRACE'
-  | 'SUSPENDED'
-  | 'UNCONFIGURED';
-export type CompanyAccessReasonCode =
-  | 'ACTIVE_SUBSCRIPTION'
-  | 'COMPANY_DISABLED'
-  | 'NO_PACKAGE_DATES'
-  | 'PACKAGE_EXPIRED'
-  | 'PACKAGE_EXPIRED_GRACE'
-  | 'PACKAGE_SUSPENDED';
-export type CompanyAccessOperatorAction =
-  | 'CHECK_PLAN_DATES'
-  | 'CONTACT_SUPPORT'
-  | 'NONE'
-  | 'RENEW_PACKAGE';
 export type HardwareErrorCode =
   | 'NO_LAST_RECEIPT'
   | 'NO_RECEIPT_CONTENT'
@@ -218,7 +200,18 @@ export interface HardwareConfig {
   port: number;
   target: string;
   timeout: number;
+  printer?: {
+    enabled?: boolean;
+    target?: string;
+    type?: string;
+  };
+  cashDrawer?: {
+    enabled?: boolean;
+    pulseOff?: number;
+    pulseOn?: number;
+  };
 }
+
 
 export interface PendingSaleRecord {
   createdAt: string;
@@ -501,27 +494,10 @@ export interface CashDrawerActionResult {
 
 export interface OfflineAuthResult {
   accessToken: string | null;
-  companyAccess: CompanyAccessSnapshot | null;
   refreshToken: string | null;
   registerId: string | null;
   sessionId: string | null;
   user: CachedUserRecord;
-}
-
-export interface CompanyAccessSnapshot {
-  checkedAt: string;
-  companyId: string;
-  daysRemaining: number | null;
-  expiresAt: string | null;
-  graceEndsAt: string | null;
-  isAccessAllowed: boolean;
-  localLastSeenAt?: string | null;
-  offlineAccessGraceDays: number;
-  offlineAccessValidUntil: string;
-  operatorAction: CompanyAccessOperatorAction;
-  reasonCode: CompanyAccessReasonCode;
-  status: CompanyAccessStatus;
-  summary: string;
 }
 
 export interface ManagerUnlockResult {
@@ -607,7 +583,6 @@ export interface ElectronApi {
   setBackupPolicy(payload: BackupPolicy): Promise<BackupPolicyState>;
   cacheOnlineLogin(payload: {
     accessToken: string;
-    companyAccess?: CompanyAccessSnapshot;
     password: string;
     refreshToken: string;
     registerId: string;
@@ -616,7 +591,6 @@ export interface ElectronApi {
   }): Promise<void>;
   updateCachedAuthTokens(payload: {
     accessToken: string;
-    companyAccess?: CompanyAccessSnapshot;
     refreshToken: string;
   }): Promise<void>;
   cacheSyncData(payload: {
@@ -654,7 +628,6 @@ export interface ElectronApi {
   getLocalSetting(key: string, defaultValue?: string): Promise<string | null>;
   setLocalSetting(key: string, value: string): Promise<void>;
 
-  getCompanyAccessSnapshot(companyId: string): Promise<CompanyAccessSnapshot | null>;
   getCachedSession(): Promise<OfflineAuthResult | null>;
   getHardwareConfig(): Promise<HardwareConfig>;
   getQueueStatus(): Promise<SyncStatusSummary>;
@@ -713,7 +686,6 @@ export interface ElectronApi {
   resetSetup(message?: string): Promise<SetupState>;
   setOfflineReadinessPassed(passed: boolean): Promise<SetupState>;
   setHardwareConfig(payload: HardwareConfig): Promise<void>;
-  setCompanyAccessSnapshot(payload: CompanyAccessSnapshot): Promise<void>;
   setManagerPin(payload: { pin: string }): Promise<void>;
   testHardwareDrawer(): Promise<CashDrawerActionResult>;
   testHardwarePrint(): Promise<PrinterActionResult>;

@@ -18,7 +18,6 @@ import {
   type BackupPolicyState,
   type BackupRestorePayload,
   type CacheLoginPayload,
-  type CompanyAccessSnapshot,
   type HardwareConfig,
   type ListOpsQuery,
   type LogSecurityEventPayload,
@@ -683,7 +682,7 @@ function configureAutoUpdate(): void {
     return;
   }
 
-  const envFeedUrl = process.env.MARKETPOS_UPDATE_FEED_URL?.trim();
+  const envFeedUrl = process.env.MARKETPOS_UPDATE_FEED_URL?.trim() || `${DEFAULT_API_BASE_URL}/updates`;
   if (envFeedUrl) {
     try {
       autoUpdater.setFeedURL({
@@ -700,6 +699,7 @@ function configureAutoUpdate(): void {
       return;
     }
   }
+
 
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
@@ -1112,19 +1112,6 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.AUTH_GET_CACHED_SESSION, async () =>
     getDatabaseService().getCachedSession(),
-  );
-
-  ipcMain.handle(
-    IPC_CHANNELS.LICENSE_GET_ACCESS_SNAPSHOT,
-    async (_event, companyId: string) =>
-      getDatabaseService().getCompanyAccessSnapshot(companyId),
-  );
-
-  ipcMain.handle(
-    IPC_CHANNELS.LICENSE_SET_ACCESS_SNAPSHOT,
-    async (_event, snapshot: CompanyAccessSnapshot) => {
-      getDatabaseService().setCompanyAccessSnapshot(snapshot);
-    },
   );
 
   ipcMain.handle(IPC_CHANNELS.SETUP_GET_STATE, async () =>

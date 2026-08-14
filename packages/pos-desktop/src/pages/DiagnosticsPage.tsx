@@ -14,12 +14,17 @@ import type {
 import { useApp, useToast } from '../store';
 import ManagerApprovalModal from '../components/ManagerApprovalModal';
 import type { ManagerApprovalPayload } from '../components/ManagerApprovalModal';
+import { ensureElectronApi } from '../services/pos-runtime';
+import HardwareHealthPanel from '../components/HardwareHealthPanel';
+import type { HardwareConfig } from '../electron-api';
+
 
 export default function DiagnosticsPage() {
   const { state } = useApp();
   const toast = useToast();
   const [summary, setSummary] = useState<SyncStatusSummary | null>(null);
   const [runtime, setRuntime] = useState<RuntimeInfo | null>(null);
+  const [hardwareConfig, setHardwareConfig] = useState<HardwareConfig | null>(null);
 
   const [failedSales, setFailedSales] = useState<PendingSaleRecord[]>([]);
   const [failedRefunds, setFailedRefunds] = useState<PendingRefundRecord[]>([]);
@@ -33,9 +38,11 @@ export default function DiagnosticsPage() {
   const loadDiagnostics = async () => {
     setIsLoading(true);
     try {
+      const api = ensureElectronApi();
       const [
         sum,
         run,
+        hwConfig,
         sales,
         refunds,
         customerOps,
@@ -44,33 +51,35 @@ export default function DiagnosticsPage() {
         purchaseOps,
         stockOps,
       ] = await Promise.all([
-        window.electronAPI.getQueueStatus(),
-        window.electronAPI.getRuntimeInfo(),
-        window.electronAPI
+        api.getQueueStatus(),
+        api.getRuntimeInfo(),
+        api.getHardwareConfig().catch(() => null),
+        api
           .listPendingSales(100)
-          .then((list) => list.filter((i) => i.syncStatus === 'FAILED')),
-        window.electronAPI
+          .then((list: any[]) => (list || []).filter((i: any) => i.syncStatus === 'FAILED')),
+        api
           .listPendingRefunds(100)
-          .then((list) => list.filter((i) => i.syncStatus === 'FAILED')),
-        window.electronAPI
+          .then((list: any[]) => (list || []).filter((i: any) => i.syncStatus === 'FAILED')),
+        api
           .listPendingCustomerOps(100)
-          .then((list) => list.filter((i) => i.syncStatus === 'FAILED')),
-        window.electronAPI
+          .then((list: any[]) => (list || []).filter((i: any) => i.syncStatus === 'FAILED')),
+        api
           .listPendingProductOps(100)
-          .then((list) => list.filter((i) => i.syncStatus === 'FAILED')),
-        window.electronAPI
+          .then((list: any[]) => (list || []).filter((i: any) => i.syncStatus === 'FAILED')),
+        api
           .listPendingSupplierOps(100)
-          .then((list) => list.filter((i) => i.syncStatus === 'FAILED')),
-        window.electronAPI
+          .then((list: any[]) => (list || []).filter((i: any) => i.syncStatus === 'FAILED')),
+        api
           .listPendingPurchaseOps(100)
-          .then((list) => list.filter((i) => i.syncStatus === 'FAILED')),
-        window.electronAPI
+          .then((list: any[]) => (list || []).filter((i: any) => i.syncStatus === 'FAILED')),
+        api
           .listPendingStockOps(100)
-          .then((list) => list.filter((i) => i.syncStatus === 'FAILED')),
+          .then((list: any[]) => (list || []).filter((i: any) => i.syncStatus === 'FAILED')),
       ]);
 
       setSummary(sum);
       setRuntime(run);
+      if (hwConfig) setHardwareConfig(hwConfig);
       setFailedSales(sales);
       setFailedRefunds(refunds);
       setFailedCustomerOps(customerOps);
@@ -78,6 +87,7 @@ export default function DiagnosticsPage() {
       setFailedSupplierOps(supplierOps);
       setFailedPurchaseOps(purchaseOps);
       setFailedStockOps(stockOps);
+
     } catch {
       toast.error('Diagnostik veriler alinamadi.');
     } finally {
@@ -562,7 +572,11 @@ export default function DiagnosticsPage() {
           </div>
         </section>
       </div>
+
+      <HardwareHealthPanel hardwareConfig={hardwareConfig} onRefreshConfig={loadDiagnostics} />
+
       {pendingApprovalAction && (
+
         <ManagerApprovalModal
           actionLabel={pendingApprovalAction.type === 'retry' ? 'Kuyruk Yeniden Deneme Onayı' : 'Kuyruk Silme Onayı'}
           companyId={state.user?.companyId}

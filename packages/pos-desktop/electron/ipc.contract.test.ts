@@ -13,15 +13,6 @@ describe('ipc contracts', () => {
     );
   });
 
-  it('includes license channels for package access control', () => {
-    expect(IPC_CHANNELS.LICENSE_GET_ACCESS_SNAPSHOT).toBe(
-      'license:get-access-snapshot',
-    );
-    expect(IPC_CHANNELS.LICENSE_SET_ACCESS_SNAPSHOT).toBe(
-      'license:set-access-snapshot',
-    );
-  });
-
   it('includes setup channels for first boot wizard', () => {
     expect(IPC_CHANNELS.SETUP_GET_STATE).toBe('setup:get-state');
     expect(IPC_CHANNELS.SETUP_UPDATE_STEP).toBe('setup:update-step');

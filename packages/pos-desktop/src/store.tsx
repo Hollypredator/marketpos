@@ -18,7 +18,6 @@ import { calculateCampaignDiscount } from './services/campaign-logic';
 
 import type {
   CachedCategoryRecord,
-  CompanyAccessSnapshot,
   CachedProductRecord,
   CachedBundleRecord,
 } from './electron-api';
@@ -76,7 +75,6 @@ export interface AppState {
   cartDiscountAmount: number;
   categories: CachedCategoryRecord[];
   bundles: CachedBundleRecord[];
-  companyAccess: CompanyAccessSnapshot | null;
   isOnline: boolean;
   lastSyncAt: string | null;
   lastSyncStatus: 'DEGRADED' | 'IDLE' | 'OK';
@@ -159,7 +157,6 @@ const initialState: AppState = {
   cartDiscountAmount: 0,
   categories: [],
   bundles: [],
-  companyAccess: null,
   isOnline: true,
   lastSyncAt: null,
   lastSyncStatus: 'IDLE',
@@ -184,7 +181,6 @@ function appReducer(state: AppState, action: Action): AppState {
       return {
         ...state,
         accessToken: action.payload.accessToken,
-        companyAccess: action.payload.companyAccess,
         isOnline: action.payload.isOnline,
         refreshToken: action.payload.refreshToken,
         registerId: action.payload.registerId,
@@ -513,7 +509,6 @@ export function selectAuthSession(state: AppState): AuthSession | null {
   }
   return {
     accessToken: state.accessToken,
-    companyAccess: state.companyAccess,
     isOnline: state.isOnline,
     refreshToken: state.refreshToken,
     registerId: state.registerId,

@@ -125,10 +125,10 @@ export default function SalePage({ onOpenPayment }: SalePageProps) {
 
   useEffect(() => {
     const focusBarcodeInput = (): void => {
-      const activeElement = document.activeElement as HTMLElement | null;
       if (!barcodeInputRef.current || !document.hasFocus() || document.hidden) {
         return;
       }
+      const activeElement = document.activeElement as HTMLElement | null;
       if (activeElement && (
         activeElement.tagName === 'INPUT' ||
         activeElement.tagName === 'TEXTAREA' ||
@@ -142,19 +142,8 @@ export default function SalePage({ onOpenPayment }: SalePageProps) {
       barcodeInputRef.current.focus();
     };
 
-    focusBarcodeInput();
-    window.addEventListener('focus', focusBarcodeInput);
-    const handleVisibility = (): void => {
-      if (!document.hidden) {
-        focusBarcodeInput();
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibility);
-
-    return () => {
-      window.removeEventListener('focus', focusBarcodeInput);
-      document.removeEventListener('visibilitychange', handleVisibility);
-    };
+    const timer = setTimeout(focusBarcodeInput, 100);
+    return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -412,13 +401,7 @@ export default function SalePage({ onOpenPayment }: SalePageProps) {
               <button
                 key={category.id}
                 className={`category-tab ${activeCategory === category.id ? 'active' : ''}`}
-                onClick={(event) => {
-                  setActiveCategory(category.id);
-                  event.currentTarget.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'nearest',
-                  });
-                }}
+                onClick={() => setActiveCategory(category.id)}
                 type="button"
               >
                 {category.name}
@@ -683,9 +666,9 @@ export default function SalePage({ onOpenPayment }: SalePageProps) {
               <span>KDV</span>
               <span>{totals.totalVat.toFixed(2)} TL</span>
             </div>
-            <div className="summary-row total accent-gradient-banner">
-              <span>TOPLAM</span>
-              <span>{totals.formatGrandTotal}</span>
+            <div className="summary-row total accent-gradient-banner" style={{ backdropFilter: 'blur(16px)', background: 'linear-gradient(135deg, rgba(79, 70, 229, 0.12) 0%, rgba(99, 102, 241, 0.2) 100%)', border: '1.5px solid rgba(79, 70, 229, 0.35)', borderRadius: '14px', padding: '14px 18px', boxShadow: '0 8px 24px rgba(79, 70, 229, 0.12)' }}>
+              <span style={{ fontSize: '1.1rem', fontWeight: 800 }}>TOPLAM</span>
+              <span style={{ fontSize: '2.4rem', fontWeight: 900, color: 'var(--accent)' }}>{totals.formatGrandTotal}</span>
             </div>
           </div>
 

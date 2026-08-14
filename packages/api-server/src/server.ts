@@ -28,6 +28,8 @@ import { syncRoutes } from './routes/sync';
 import { userRoutes } from './routes/users';
 import { licenseRoutes } from './routes/license';
 import { paymentsRoutes } from './routes/payments';
+import { superadminRoutes } from './routes/superadmin';
+import { platformAdminRoutes } from './routes/platform-admin';
 
 function loadEnvironment(): void {
   const currentDir = dirname(fileURLToPath(import.meta.url));
@@ -140,6 +142,8 @@ async function start(): Promise<void> {
   await server.register(licenseRoutes, { prefix: '/api/license' });
   await server.register(financeRoutes, { prefix: '/api/finance' });
   await server.register(paymentsRoutes, { prefix: '/api/payments' });
+  await server.register(superadminRoutes, { prefix: '/api/superadmin' });
+  await server.register(platformAdminRoutes, { prefix: '/api/superadmin' });
 
   const stopSubscriptionAuditJob = startSubscriptionAuditJob(server);
   server.addHook('onClose', async () => {

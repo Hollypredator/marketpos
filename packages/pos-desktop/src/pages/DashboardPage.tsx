@@ -47,16 +47,20 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!activeSession) {
+      setIsLoading(false);
       return;
     }
     let cancelled = false;
     setIsLoading(true);
     setError('');
+    const getInfoPromise = typeof window !== 'undefined' && window.electronAPI?.getRuntimeInfo 
+      ? window.electronAPI.getRuntimeInfo() 
+      : Promise.resolve(null);
     void Promise.allSettled([
       fetchDailyReport(activeSession),
       fetchTopProducts(activeSession, 5),
       fetchSales(activeSession, { limit: 5 }),
-      window.electronAPI?.getRuntimeInfo(),
+      getInfoPromise,
     ])
       .then(([dailyResult, topResult, salesResult, runtimeResult]) => {
         if (cancelled) {

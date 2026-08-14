@@ -37,7 +37,6 @@ const mockedStore = vi.hoisted(() => ({
         sortOrder: 0,
       },
     ],
-    companyAccess: null,
     isOnline: true,
     lastSyncAt: null,
     payments: [],
@@ -94,7 +93,6 @@ vi.mock('../services/pos-runtime', () => mockedRuntime);
 vi.mock('../store', () => ({
   selectAuthSession: vi.fn(() => ({
     accessToken: 'token',
-    companyAccess: null,
     isOnline: true,
     refreshToken: null,
     registerId: 'reg-1',

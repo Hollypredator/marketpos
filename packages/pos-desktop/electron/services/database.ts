@@ -1,5 +1,4 @@
 import {
-  createHmac,
   randomBytes,
   randomUUID,
   scryptSync,
@@ -79,24 +78,6 @@ export type SetupStepId =
 export type SetupStepStatus = 'COMPLETED' | 'PENDING';
 export type SetupResultStatus = 'FAILED' | 'SUCCESS';
 export type CustomerOpType = 'CREATE' | 'DELETE' | 'UPDATE';
-export type CompanyAccessStatus =
-  | 'ACTIVE'
-  | 'EXPIRED'
-  | 'GRACE'
-  | 'SUSPENDED'
-  | 'UNCONFIGURED';
-export type CompanyAccessReasonCode =
-  | 'ACTIVE_SUBSCRIPTION'
-  | 'COMPANY_DISABLED'
-  | 'NO_PACKAGE_DATES'
-  | 'PACKAGE_EXPIRED'
-  | 'PACKAGE_EXPIRED_GRACE'
-  | 'PACKAGE_SUSPENDED';
-export type CompanyAccessOperatorAction =
-  | 'CHECK_PLAN_DATES'
-  | 'CONTACT_SUPPORT'
-  | 'NONE'
-  | 'RENEW_PACKAGE';
 export type SecurityEventSeverity = 'CRITICAL' | 'INFO' | 'WARN';
 export type CashMovementType = 'DROP' | 'PETTY_CASH' | 'SAFE_IN' | 'SAFE_OUT';
 export type ProductOpType = 'CREATE' | 'DELETE' | 'UPDATE';
@@ -110,23 +91,6 @@ export interface BackupPolicy {
   lastRunAt: string | null;
   maxBackups: number;
   retentionDays: number;
-}
-
-export interface CompanyAccessSnapshot {
-  checkedAt: string;
-  companyId: string;
-  daysRemaining: number | null;
-  expiresAt: string | null;
-  graceEndsAt: string | null;
-  isAccessAllowed: boolean;
-  localLastSeenAt?: string | null;
-  offlineAccessGraceDays: number;
-  offlineAccessValidUntil: string;
-  operatorAction: CompanyAccessOperatorAction;
-  reasonCode: CompanyAccessReasonCode;
-  status: CompanyAccessStatus;
-  summary: string;
-  signature: string;
 }
 
 export interface SetupStepState {
@@ -197,7 +161,6 @@ export interface SetupStepUpdatePayload {
 
 export interface OfflineAuthResult {
   accessToken: string | null;
-  companyAccess: CompanyAccessSnapshot | null;
   refreshToken: string | null;
   registerId: string | null;
   sessionId: string | null;
@@ -465,7 +428,6 @@ export interface RecordCashMovementPayload {
 
 export interface CacheLoginPayload {
   accessToken: string;
-  companyAccess?: CompanyAccessSnapshot;
   password: string;
   refreshToken: string;
   registerId: string;
@@ -475,7 +437,6 @@ export interface CacheLoginPayload {
 
 export interface UpdateAuthTokensPayload {
   accessToken: string;
-  companyAccess?: CompanyAccessSnapshot;
   refreshToken: string;
 }
 
@@ -510,7 +471,6 @@ const MANAGER_UNLOCK_PIN_UPDATED_AT_KEY = 'manager_unlock_pin_updated_at';
 const HARDWARE_CONFIG_KEY = 'hardware_config';
 const BACKUP_POLICY_KEY = 'backup_policy';
 const LAST_RECEIPT_PAYLOAD_KEY = 'last_receipt_payload';
-const COMPANY_ACCESS_KEY_PREFIX = 'company_access_';
 const SETUP_STATE_KEY = 'setup_state';
 const BACKOFFICE_SETTINGS_KEY = 'backoffice.settings.v1';
 const LAST_SYNC_AT_KEY = 'last_sync_at';
@@ -1305,96 +1265,6 @@ export function parseSetupState(raw: string | null): SetupState {
   }
 }
 
-function parseCompanyAccessSnapshot(raw: string | null): CompanyAccessSnapshot | null {
-  if (!raw) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as Partial<CompanyAccessSnapshot>;
-    if (
-      !parsed ||
-      typeof parsed.companyId !== 'string' ||
-      parsed.companyId.trim().length === 0 ||
-      typeof parsed.checkedAt !== 'string' ||
-      typeof parsed.offlineAccessValidUntil !== 'string' ||
-      typeof parsed.summary !== 'string' ||
-      typeof parsed.isAccessAllowed !== 'boolean'
-    ) {
-      return null;
-    }
-
-    const status =
-      parsed.status === 'ACTIVE' ||
-      parsed.status === 'EXPIRED' ||
-      parsed.status === 'GRACE' ||
-      parsed.status === 'SUSPENDED' ||
-      parsed.status === 'UNCONFIGURED'
-        ? parsed.status
-        : null;
-    const reasonCode =
-      parsed.reasonCode === 'ACTIVE_SUBSCRIPTION' ||
-      parsed.reasonCode === 'COMPANY_DISABLED' ||
-      parsed.reasonCode === 'NO_PACKAGE_DATES' ||
-      parsed.reasonCode === 'PACKAGE_EXPIRED' ||
-      parsed.reasonCode === 'PACKAGE_EXPIRED_GRACE' ||
-      parsed.reasonCode === 'PACKAGE_SUSPENDED'
-        ? parsed.reasonCode
-        : null;
-    const operatorAction =
-      parsed.operatorAction === 'CHECK_PLAN_DATES' ||
-      parsed.operatorAction === 'CONTACT_SUPPORT' ||
-      parsed.operatorAction === 'NONE' ||
-      parsed.operatorAction === 'RENEW_PACKAGE'
-        ? parsed.operatorAction
-        : null;
-
-    if (!status || !reasonCode || !operatorAction) {
-      return null;
-    }
-
-    if (typeof parsed.signature !== 'string') {
-      return null;
-    }
-
-    const dataToSign = `${parsed.companyId}|${parsed.offlineAccessValidUntil}|${status}`;
-    const computedSignature = createHmac('sha256', 'marketpos-offline-license-verification-secret-token-key')
-      .update(dataToSign)
-      .digest('hex');
-
-    if (computedSignature !== parsed.signature) {
-      return null;
-    }
-
-    return {
-      checkedAt: parsed.checkedAt,
-      companyId: parsed.companyId,
-      daysRemaining:
-        typeof parsed.daysRemaining === 'number' && Number.isFinite(parsed.daysRemaining)
-          ? parsed.daysRemaining
-          : null,
-      expiresAt: typeof parsed.expiresAt === 'string' ? parsed.expiresAt : null,
-      graceEndsAt: typeof parsed.graceEndsAt === 'string' ? parsed.graceEndsAt : null,
-      isAccessAllowed: parsed.isAccessAllowed,
-      localLastSeenAt:
-        typeof parsed.localLastSeenAt === 'string' ? parsed.localLastSeenAt : null,
-      offlineAccessGraceDays:
-        typeof parsed.offlineAccessGraceDays === 'number' &&
-        Number.isFinite(parsed.offlineAccessGraceDays)
-          ? parsed.offlineAccessGraceDays
-          : 0,
-      offlineAccessValidUntil: parsed.offlineAccessValidUntil,
-      operatorAction,
-      reasonCode,
-      status,
-      summary: parsed.summary,
-      signature: parsed.signature,
-    };
-  } catch {
-    return null;
-  }
-}
-
 export class LocalDatabaseService {
   private readonly db: Database.Database;
   private readonly databasePath: string;
@@ -1467,9 +1337,6 @@ export class LocalDatabaseService {
     this.setSetting(AUTH_REFRESH_TOKEN_KEY, payload.refreshToken);
     this.setSetting(AUTH_REGISTER_ID_KEY, payload.registerId);
     this.setSetting(AUTH_SESSION_ID_KEY, payload.sessionId);
-    if (payload.companyAccess) {
-      this.setCompanyAccessSnapshot(payload.companyAccess);
-    }
   }
 
   public offlineLogin(username: string, password: string, companyId?: string): OfflineAuthResult | null {
@@ -1497,7 +1364,6 @@ export class LocalDatabaseService {
 
     return {
       accessToken: this.getSetting(AUTH_ACCESS_TOKEN_KEY),
-      companyAccess: this.getCompanyAccessSnapshot(row.company_id),
       refreshToken: this.getSetting(AUTH_REFRESH_TOKEN_KEY),
       registerId: this.getSetting(AUTH_REGISTER_ID_KEY),
       sessionId: this.getSetting(AUTH_SESSION_ID_KEY),
@@ -1537,7 +1403,6 @@ export class LocalDatabaseService {
 
     return {
       accessToken: this.getSetting(AUTH_ACCESS_TOKEN_KEY),
-      companyAccess: this.getCompanyAccessSnapshot(row.company_id),
       refreshToken: this.getSetting(AUTH_REFRESH_TOKEN_KEY),
       registerId,
       sessionId,
@@ -1574,9 +1439,6 @@ export class LocalDatabaseService {
   public updateCachedAuthTokens(payload: UpdateAuthTokensPayload): void {
     this.setSetting(AUTH_ACCESS_TOKEN_KEY, payload.accessToken);
     this.setSetting(AUTH_REFRESH_TOKEN_KEY, payload.refreshToken);
-    if (payload.companyAccess) {
-      this.setCompanyAccessSnapshot(payload.companyAccess);
-    }
   }
 
   public getUiPreset(): UiPreset {
@@ -1758,25 +1620,6 @@ export class LocalDatabaseService {
     };
     this.setSetupState(next);
     return next;
-  }
-
-  public setCompanyAccessSnapshot(snapshot: CompanyAccessSnapshot): void {
-    if (!snapshot.companyId || snapshot.companyId.trim().length === 0) {
-      return;
-    }
-    this.setSetting(
-      this.getCompanyAccessSettingKey(snapshot.companyId),
-      JSON.stringify(snapshot),
-    );
-  }
-
-  public getCompanyAccessSnapshot(companyId: string): CompanyAccessSnapshot | null {
-    if (!companyId || companyId.trim().length === 0) {
-      return null;
-    }
-    return parseCompanyAccessSnapshot(
-      this.getSetting(this.getCompanyAccessSettingKey(companyId)),
-    );
   }
 
   public saveLastReceiptPayload(payload: StoredReceiptPayload): void {
@@ -4062,10 +3905,6 @@ export class LocalDatabaseService {
 
   private setSetupState(state: SetupState): void {
     this.setSetting(SETUP_STATE_KEY, JSON.stringify(state));
-  }
-
-  private getCompanyAccessSettingKey(companyId: string): string {
-    return `${COMPANY_ACCESS_KEY_PREFIX}${companyId}`;
   }
 
   private initializeSchema(): void {

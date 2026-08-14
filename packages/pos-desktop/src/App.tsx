@@ -1,10 +1,20 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
+import type { AnnualLicenseInfo } from '@marketpos/shared';
 import type { SetupState } from './electron-api';
-import AccessLockScreen from './components/AccessLockScreen';
 import PresetSettingsModal from './components/PresetSettingsModal';
 import SetupGate from './components/SetupGate';
 import ToastContainer from './components/ToastContainer';
+import { FastStockEntryModal } from './components/FastStockEntryModal';
+import { ReportsOverviewPage } from './pages/ReportsOverviewPage';
+import { SuperAdminPage } from './pages/SuperAdminPage';
+import { AnnualLicenseService } from './services/annual-license';
+import { AccessLockScreen } from './components/AccessLockScreen';
+import { LicenseBanner } from './components/LicenseBanner';
+
+import { CRMPage } from './pages/CRMPage';
+import { StaffPage } from './pages/StaffPage';
+import { WebStorageAdapter } from './services/web-storage-adapter';
 import DayReportPage from './pages/DayReportPage';
 import DiagnosticsPage from './pages/DiagnosticsPage';
 import DashboardPage from './pages/DashboardPage';
@@ -24,9 +34,7 @@ import {
   canAccessDesktopPage,
   explainRuntimeError,
   getQueueStatus,
-  isCompanyAccessBlockError,
   loadCatalog,
-  readCompanyAccessBlockDetails,
   restoreCachedSession,
   runSync,
   recordShiftHandover,
@@ -34,13 +42,14 @@ import {
   fetchDailyReport,
   listCashMovements,
   logSecurityEvent,
-  type CompanyAccessBlockDetails,
 } from './services/pos-runtime';
 import type { AuthSession } from './services/types';
 import { resolveTouchDensityByViewport } from './services/ui-preset';
 import { AppProvider, selectAuthSession, useApp, useToast } from './store';
 
-type Page = 'campaigns' | 'customers' | 'dashboard' | 'diagnostics' | 'expenses' | 'operations' | 'payment' | 'quick' | 'refund' | 'report' | 'sale' | 'shift' | 'stock' | 'suppliers';
+const webStorageAdapter = new WebStorageAdapter();
+
+type Page = 'campaigns' | 'crm' | 'customers' | 'dashboard' | 'diagnostics' | 'expenses' | 'operations' | 'payment' | 'quick' | 'refund' | 'report' | 'sale' | 'shift' | 'staff' | 'stock' | 'superadmin' | 'suppliers';
 type SyncIndicator = 'ERROR' | 'IDLE' | 'RUNNING';
 
 function resolveFallbackPage(role: string | undefined): Page {
@@ -57,13 +66,24 @@ function AppContent() {
   const toast = useToast();
   const { dispatch, state } = useApp();
   const [booting, setBooting] = useState(true);
-  const [accessLock, setAccessLock] = useState<CompanyAccessBlockDetails | null>(null);
   const [loginRenderKey, setLoginRenderKey] = useState(0);
   const [isPresetModalOpen, setPresetModalOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [page, setPage] = useState<Page>('dashboard');
+  const [page, setPage] = useState<Page>('sale');
+  const [isFastStockModalOpen, setFastStockModalOpen] = useState(false);
   const [setupState, setSetupState] = useState<SetupState | null>(null);
   const [syncIndicator, setSyncIndicator] = useState<SyncIndicator>('IDLE');
+  const [licenseInfo, setLicenseInfo] = useState<AnnualLicenseInfo | null>(null);
+
+  useEffect(() => {
+    if (!state.user?.companyId) {
+      setLicenseInfo(null);
+      return;
+    }
+    void AnnualLicenseService.checkLicense({ companyId: state.user.companyId }).then((info) => {
+      setLicenseInfo(info);
+    });
+  }, [state.user?.companyId]);
 
   const activeSession = useMemo(() => selectAuthSession(state), [state]);
   const canVisitPage = (nextPage: Page): boolean => canAccessDesktopPage(state.user?.role, nextPage);
@@ -123,9 +143,7 @@ function AppContent() {
     } catch (caughtError: unknown) {
       dispatch({ payload: false, type: 'SET_ONLINE' });
       setSyncIndicator('ERROR');
-      if (isCompanyAccessBlockError(caughtError)) {
-        setAccessLock(readCompanyAccessBlockDetails(caughtError));
-      } else if (!options?.silent) {
+      if (!options?.silent) {
         toast.error(explainRuntimeError(caughtError));
       }
     } finally {
@@ -152,13 +170,8 @@ function AppContent() {
           return;
         }
         await hydrateSession(cached);
-        setAccessLock(null);
       } catch (caughtError: unknown) {
-        if (isCompanyAccessBlockError(caughtError)) {
-          setAccessLock(readCompanyAccessBlockDetails(caughtError));
-        } else {
-          toast.error(explainRuntimeError(caughtError));
-        }
+        toast.error(explainRuntimeError(caughtError));
       } finally {
         if (!cancelled) {
           setBooting(false);
@@ -168,47 +181,8 @@ function AppContent() {
     const interval = setInterval(() => {
       if (activeSession) {
         void getQueueStatus().then((q) => dispatch({ payload: q, type: 'SET_QUEUE_STATUS' }));
-
-        if (window.electronAPI) {
-          window.electronAPI.getCompanyAccessSnapshot(activeSession.user.companyId).then((snapshot) => {
-            if (snapshot) {
-              const nowMs = Date.now();
-              const offlineValidUntilMs = Date.parse(snapshot.offlineAccessValidUntil);
-              const checkedAtMs = Date.parse(snapshot.checkedAt);
-              const localLastSeenMs = snapshot.localLastSeenAt ? Date.parse(snapshot.localLastSeenAt) : null;
-              const CLOCK_ROLLBACK_TOLERANCE_MS = 30 * 60 * 1000;
-
-              if (
-                (Number.isFinite(checkedAtMs) && nowMs + CLOCK_ROLLBACK_TOLERANCE_MS < checkedAtMs) ||
-                (localLastSeenMs !== null && Number.isFinite(localLastSeenMs) && nowMs + CLOCK_ROLLBACK_TOLERANCE_MS < localLastSeenMs)
-              ) {
-                setAccessLock({
-                  blockType: 'CLOCK_ROLLBACK',
-                  message: 'Cihaz saati geri alindigi tespit edildi. Guvenlik nedeniyle offline erisim durduruldu. Lutfen internete baglanip tekrar giris yapin.',
-                  snapshot,
-                });
-              } else if (
-                snapshot.status === 'EXPIRED' ||
-                snapshot.status === 'SUSPENDED' ||
-                !snapshot.isAccessAllowed
-              ) {
-                setAccessLock({
-                  blockType: 'SUBSCRIPTION_BLOCKED',
-                  message: snapshot.summary,
-                  snapshot,
-                });
-              } else if (!Number.isFinite(offlineValidUntilMs) || nowMs > offlineValidUntilMs) {
-                setAccessLock({
-                  blockType: 'OFFLINE_EXPIRED',
-                  message: 'Paket dogrulama suresi doldu. Lutfen internet ile tekrar online giris yapin.',
-                  snapshot,
-                });
-              }
-            }
-          }).catch(() => {});
-        }
       }
-      
+
       // Otomatik Gün Sonu Kontrolü
       const autoCloseEnabled = localStorage.getItem('marketpos_auto_close_enabled') === 'true';
       const autoCloseTime = localStorage.getItem('marketpos_auto_close_time') || '02:00';
@@ -276,7 +250,7 @@ function AppContent() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [activeSession?.sessionId]);
+  }, []);
 
   useEffect(() => {
     const handleResize = (): void => {
@@ -409,7 +383,6 @@ function AppContent() {
       toast.error(explainRuntimeError(caughtError));
     } finally {
       dispatch({ type: 'CLEAR_SESSION' });
-      setAccessLock(null);
       setPage('sale');
       setSyncIndicator('IDLE');
       setIsSyncing(false);
@@ -427,7 +400,6 @@ function AppContent() {
     setupState: SetupState;
   }): Promise<void> => {
     setSetupState(params.setupState);
-    setAccessLock(null);
     if (params.session) {
       await hydrateSession(params.session);
     } else {
@@ -436,7 +408,19 @@ function AppContent() {
   };
 
   if (booting) {
-    return <div className="login-page">Yukleniyor...</div>;
+    return (
+      <div className="login-page">
+        <div className="login-card" style={{ alignItems: 'center', textAlign: 'center', padding: '48px 32px' }}>
+          <div className="login-logo pulse-status">M</div>
+          <h2 style={{ fontSize: '1.4rem', fontWeight: 800, margin: '12px 0 4px', color: 'var(--text-primary)' }}>
+            MarketPOS Başlatılıyor
+          </h2>
+          <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)' }}>
+            Veritabanı ve kasa ayarları yükleniyor...
+          </p>
+        </div>
+      </div>
+    );
   }
 
   if (setupState && !setupState.completedAt) {
@@ -449,28 +433,11 @@ function AppContent() {
   }
 
   if (!state.user) {
-    if (accessLock) {
-      return (
-        <>
-          <AccessLockScreen
-            details={accessLock}
-            onSwitchToOnlineLogin={() => {
-              setAccessLock(null);
-              setLoginRenderKey((current) => current + 1);
-            }}
-          />
-          <ToastContainer />
-        </>
-      );
-    }
-
     return (
       <>
         <LoginPage
           key={loginRenderKey}
-          onAccessBlocked={(details) => setAccessLock(details)}
           onLoginSuccess={async (session) => {
-            setAccessLock(null);
             await hydrateSession(session);
             try {
               await synchronizeRuntime(session, { silent: true });
@@ -487,6 +454,9 @@ function AppContent() {
 
   return (
     <div className={`app-layout touch-${state.touchDensity}`} data-ui-preset={state.uiPreset}>
+      {licenseInfo?.isExpired && (
+        <AccessLockScreen licenseInfo={licenseInfo} onLicenseRenewed={setLicenseInfo} />
+      )}
       <nav className="sidebar sidebar-scrollable">
         <div className="sidebar-logo">M</div>
 
@@ -550,6 +520,10 @@ function AppContent() {
             <span className="label">Stok</span>
           </button>
         )}
+        <button className="sidebar-btn" onClick={() => setFastStockModalOpen(true)} title="Hızlı Stok Girişi (Barkod)">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+          <span className="label">Hızlı Stok</span>
+        </button>
         {canVisitPage('campaigns') && (
           <button className={`sidebar-btn ${page === 'campaigns' ? 'active' : ''}`} onClick={() => setPage('campaigns')} title="Kampanyalar">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>
@@ -588,6 +562,21 @@ function AppContent() {
           </button>
         )}
 
+        <button className={`sidebar-btn ${page === 'crm' ? 'active' : ''}`} onClick={() => setPage('crm')} title="CRM & Sadakat Müşteri Katmanı">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+          <span className="label">CRM</span>
+        </button>
+
+        <button className={`sidebar-btn ${page === 'staff' ? 'active' : ''}`} onClick={() => setPage('staff')} title="Personel & Prim Yönetimi">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+          <span className="label">Personel</span>
+        </button>
+
+        <button className={`sidebar-btn ${page === 'superadmin' ? 'active' : ''}`} onClick={() => setPage('superadmin')} title="Merkezi SüperAdmin Paneli" style={{ color: 'var(--accent)' }}>
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+          <span className="label">SüperAdmin</span>
+        </button>
+
         <div className="sidebar-divider" />
         
         <button className="sidebar-btn" onClick={() => setPresetModalOpen(true)} title="Ayar">
@@ -604,6 +593,7 @@ function AppContent() {
       </nav>
 
       <div className="main-content">
+        {licenseInfo && <LicenseBanner licenseInfo={licenseInfo} />}
         {page === 'dashboard' && <DashboardPage />}
         {page === 'sale' && <SalePage onOpenPayment={() => setPage('payment')} />}
         {page === 'quick' && <QuickProductsPage />}
@@ -613,11 +603,14 @@ function AppContent() {
         {page === 'payment' && <PaymentPage onClose={() => setPage('sale')} />}
         {page === 'refund' && <RefundPage />}
         {page === 'stock' && <StockPage />}
-        {page === 'report' && <DayReportPage />}
+        {page === 'report' && <ReportsOverviewPage companyId={state.user?.companyId || 'comp-1'} registerId={activeSession?.registerId || 'reg-1'} storageAdapter={webStorageAdapter} />}
         {page === 'shift' && <ShiftPage />}
         {page === 'operations' && <OperationsPage />}
         {page === 'diagnostics' && <DiagnosticsPage />}
         {page === 'campaigns' && <CampaignsPage />}
+        {page === 'superadmin' && <SuperAdminPage />}
+        {page === 'crm' && <CRMPage />}
+        {page === 'staff' && <StaffPage />}
 
         <footer className="status-bar">
           <span>
@@ -662,6 +655,13 @@ function AppContent() {
           onSaved={(payload) => dispatch({ payload, type: 'SET_UI_CONFIG' })}
         />
       )}
+
+      <FastStockEntryModal
+        companyId={state.user?.companyId || 'comp-1'}
+        isOpen={isFastStockModalOpen}
+        onClose={() => setFastStockModalOpen(false)}
+        storageAdapter={webStorageAdapter}
+      />
 
       <ToastContainer />
     </div>

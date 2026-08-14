@@ -277,19 +277,35 @@ export function AppShell({
         <header className="admin-header">
           <span className="admin-header-title">{TAB_LABELS[activeTab]}</span>
           <span className="admin-header-sub">{TAB_HINTS[activeTab]}</span>
-          <button
-            type="button"
-            className="btn"
-            style={{ marginLeft: 'auto' }}
-            onClick={onRefresh}
-            disabled={refreshDisabled}
-          >
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M2 8a6 6 0 1 1 1.5 4" strokeLinecap="round"/>
-              <path d="M2 12V8h4" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            {refreshLabel}
-          </button>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <a
+              href="/api/license/download-desktop"
+              target="_blank"
+              rel="noreferrer"
+              className="btn primary"
+              style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem' }}
+              title="Windows Masaüstü Kasa Uygulamasını İndir (.exe)"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              <span>Masaüstü Kasa İndir (.exe)</span>
+            </a>
+            <button
+              type="button"
+              className="btn"
+              onClick={onRefresh}
+              disabled={refreshDisabled}
+            >
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M2 8a6 6 0 1 1 1.5 4" strokeLinecap="round"/>
+                <path d="M2 12V8h4" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              {refreshLabel}
+            </button>
+          </div>
         </header>
 
         {/* Scrollable page area */}

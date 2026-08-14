@@ -51,13 +51,9 @@ describe('route access matrix', () => {
     expect(resolveFallbackTab('ACCOUNTANT')).toBe('dashboard');
   });
 
-  it('returns minimal tabs for CASHIER', () => {
+  it('returns empty tabs for CASHIER in web dashboard', () => {
     const tabs = resolveAllowedTabs('CASHIER');
-    expect(tabs).toContain('dashboard');
-    expect(tabs).toContain('catalog');
-    expect(tabs).not.toContain('stock');
-    expect(tabs).not.toContain('subscription');
-    expect(resolveFallbackTab('CASHIER')).toBe('dashboard');
+    expect(tabs).toEqual([]);
   });
 
   it('maps tab <-> path consistently', () => {

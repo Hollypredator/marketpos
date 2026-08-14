@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+/* MarketPOS Offline-First Fonts */
+
 
 /* ========================
    MarketPOS â€” Design System
@@ -13,35 +14,40 @@
 }
 
 :root {
-  /* Renkler */
-  --bg-main: #f4f6fa;
-  --bg-primary: #ffffff;
-  --bg-secondary: #f8fafc;
-  --bg-card: #ffffff;
-  --bg-input: #f1f5f9;
-  --bg-hover: #eceff8;
-  --bg-active: #e3e8f5;
-  --border: #e2e8f0;
-  --border-focus: #2563eb;
+  /* Liquid Glass Light Mode Tokens */
+  --bg-main: linear-gradient(135deg, #f0f4f8 0%, #e0e7ff 40%, #eef2ff 70%, #f8fafc 100%);
+  --bg-primary: rgba(255, 255, 255, 0.82);
+  --bg-secondary: rgba(241, 245, 249, 0.72);
+  --bg-card: rgba(255, 255, 255, 0.78);
+  --bg-glass: rgba(255, 255, 255, 0.75);
+  --glass-blur: blur(16px);
+  --glass-border: 1px solid rgba(255, 255, 255, 0.85);
+  --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+  --bg-input: rgba(255, 255, 255, 0.92);
+  --bg-hover: rgba(238, 242, 255, 0.85);
+  --bg-active: rgba(224, 231, 255, 0.92);
+  --border: rgba(203, 213, 225, 0.75);
+  --border-focus: #4f46e5;
   --text-primary: #0f172a;
   --text-secondary: #334155;
   --text-muted: #64748b;
-  --accent: #2563eb;
-  --accent-hover: #1d4ed8;
-  --accent-strong: #1e40af;
-  --success: #10b981;
+  --accent: #4f46e5;
+  --accent-hover: #4338ca;
+  --accent-strong: #3730a3;
+  --accent-glow: rgba(79, 70, 229, 0.22);
+  --success: #059669;
   --success-light: rgba(16, 185, 129, 0.18);
   --success-bg: rgba(16, 185, 129, 0.12);
-  --warning: #f59e0b;
+  --warning: #d97706;
   --warning-bg: rgba(245, 158, 11, 0.12);
-  --danger: #ef4444;
+  --danger: #dc2626;
   --danger-bg: rgba(239, 68, 68, 0.12);
-  --info: #3b82f6;
-  --overlay-strong: rgba(15, 23, 42, 0.72);
-  --overlay-soft: rgba(15, 23, 42, 0.56);
-  --shadow: 0 20px 38px rgba(15, 23, 42, 0.08);
-  --shadow-lg: 0 24px 40px rgba(15, 23, 42, 0.12);
-  --shadow-soft: 0 8px 20px rgba(15, 23, 42, 0.05);
+  --info: #2563eb;
+  --overlay-strong: rgba(15, 23, 42, 0.55);
+  --overlay-soft: rgba(15, 23, 42, 0.35);
+  --shadow: 0 10px 30px rgba(79, 70, 229, 0.07);
+  --shadow-lg: 0 20px 40px rgba(79, 70, 229, 0.12);
+  --shadow-soft: 0 8px 24px rgba(31, 38, 135, 0.05);
 
   /* Tipografi */
   --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -58,7 +64,7 @@
   --fs-kicker: 0.72rem;
   --ls-kicker: 0.12em;
 
-  /* BoÅŸluklar */
+  /* Boşluklar */
   --sp-1: 0.25rem;
   --sp-2: 0.5rem;
   --sp-3: 0.75rem;
@@ -68,8 +74,8 @@
   --sp-8: 2rem;
 
   /* Boyutlar */
-  --radius: 8px;
-  --radius-lg: 12px;
+  --radius: 12px;
+  --radius-lg: 16px;
   --touch-primary-min: 68px;
   --touch-secondary-min: 54px;
   --touch-icon-min: 48px;
@@ -77,8 +83,8 @@
   --btn-lg: var(--touch-primary-min);
   --status-height: 48px;
 
-  /* GeÃ§iÅŸ */
-  --transition: 150ms ease;
+  /* Geçiş */
+  --transition: 180ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 html, body, #root {
@@ -86,10 +92,8 @@ html, body, #root {
   overflow: hidden;
   font-family: var(--font);
   font-size: 16px;
-  background:
-    radial-gradient(circle at 10% 20%, rgba(37, 99, 235, 0.04), transparent 45%),
-    radial-gradient(circle at 90% 80%, rgba(59, 130, 246, 0.03), transparent 40%),
-    var(--bg-main);
+  background: var(--bg-main);
+  background-attachment: fixed;
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
   user-select: none;
@@ -156,10 +160,11 @@ textarea,
 
 .sidebar {
   width: 110px;
-  background: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border-right: 1px solid var(--border);
+  border-right: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 4px 0 24px rgba(31, 38, 135, 0.04);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -206,7 +211,7 @@ textarea,
   width: 52px;
   height: 52px;
   background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
-  box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 40%, transparent), 0 0 0 1px rgba(255, 255, 255, 0.12) inset;
+  box-shadow: 0 8px 20px rgba(79, 70, 229, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.3) inset;
   border-radius: 14px;
   display: flex;
   align-items: center;
@@ -221,7 +226,7 @@ textarea,
 .sidebar-btn {
   width: 98px;
   min-height: 72px;
-  border: none;
+  border: 1px solid transparent;
   border-radius: var(--radius);
   background: transparent;
   color: var(--text-secondary);
@@ -231,17 +236,24 @@ textarea,
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  transition: var(--transition);
+  transition: all 180ms cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   gap: 4px;
   padding: 8px 4px;
 }
 
-.sidebar-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
-.sidebar-btn.active { 
-  background: rgba(37, 99, 235, 0.08); 
+.sidebar-btn:hover {
+  background: rgba(238, 242, 255, 0.85);
   color: var(--accent);
-  box-shadow: inset 3px 0 0 var(--accent);
+  transform: translateY(-1px);
+}
+
+.sidebar-btn.active {
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.15) 0%, rgba(99, 102, 241, 0.08) 100%);
+  color: var(--accent);
+  border: 1px solid rgba(79, 70, 229, 0.3);
+  box-shadow: inset 3px 0 0 var(--accent), 0 4px 14px rgba(79, 70, 229, 0.12);
+  transform: scale(1.02);
 }
 
 .sidebar-btn svg {
@@ -252,11 +264,28 @@ textarea,
 
 .sidebar-btn .label {
   position: static;
-  font-size: 0.65rem;
-  font-weight: 600;
+  font-size: 0.68rem;
+  font-weight: 700;
   letter-spacing: 0.02em;
   text-align: center;
   line-height: 1.1;
+}
+
+/* Glass Card & Utility Classes */
+.glass-card {
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+  border-radius: 16px;
+}
+
+.price-hero-glow {
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.08) 0%, rgba(99, 102, 241, 0.16) 100%);
+  border: 1.5px solid rgba(79, 70, 229, 0.3);
+  box-shadow: 0 8px 24px rgba(79, 70, 229, 0.12);
+  border-radius: 14px;
 }
 
 .sidebar-spacer {
@@ -3772,5 +3801,106 @@ textarea,
 .input-barcode-scanner:focus {
   border-color: var(--success) !important;
   box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.25) !important;
+}
+
+/* Liquid Glass Login Page Styles */
+.login-page {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-main);
+  z-index: 9999;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 440px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 20px 50px rgba(79, 70, 229, 0.12);
+  border-radius: 20px;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.login-logo {
+  width: 60px;
+  height: 60px;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8rem;
+  font-weight: 900;
+  color: white;
+  margin: 0 auto 8px;
+  box-shadow: 0 10px 25px rgba(79, 70, 229, 0.35);
+}
+
+.login-head {
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.login-kicker {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.login-title {
+  font-size: 1.6rem;
+  font-weight: 900;
+  color: var(--text-primary);
+  margin: 4px 0;
+}
+
+.login-subtitle {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+}
+
+.login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.login-field label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.login-error {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: var(--danger);
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.login-help {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.4;
+  margin-top: 4px;
 }
 

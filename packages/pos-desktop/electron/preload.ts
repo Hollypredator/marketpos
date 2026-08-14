@@ -47,8 +47,6 @@ const electronApi: ElectronApi = {
   setLocalSetting: async (key, value) =>
     ipcRenderer.invoke(IPC_CHANNELS.APP_SET_LOCAL_SETTING, key, value),
 
-  getCompanyAccessSnapshot: async (companyId) =>
-    ipcRenderer.invoke(IPC_CHANNELS.LICENSE_GET_ACCESS_SNAPSHOT, companyId),
   getCachedSession: async () =>
     ipcRenderer.invoke(IPC_CHANNELS.AUTH_GET_CACHED_SESSION),
   getHardwareConfig: async () =>
@@ -118,8 +116,6 @@ const electronApi: ElectronApi = {
     ipcRenderer.invoke(IPC_CHANNELS.SETUP_RESET, message),
   setOfflineReadinessPassed: async (passed) =>
     ipcRenderer.invoke(IPC_CHANNELS.SETUP_SET_OFFLINE_READINESS, passed),
-  setCompanyAccessSnapshot: async (payload) =>
-    ipcRenderer.invoke(IPC_CHANNELS.LICENSE_SET_ACCESS_SNAPSHOT, payload),
   setManagerPin: async (payload) =>
     ipcRenderer.invoke(IPC_CHANNELS.AUTH_SET_MANAGER_PIN, payload),
   testHardwareDrawer: async () =>

@@ -6,7 +6,6 @@ import type {
   BackupPolicyState,
   CashMovementRecord,
   CashMovementType,
-  CompanyAccessSnapshot,
   CustomerOpQueueRecord,
   HardwareConfig,
   HardwareErrorCode,
@@ -34,7 +33,6 @@ export interface AuthUser {
 
 export interface AuthSession {
   accessToken: string | null;
-  companyAccess: CompanyAccessSnapshot | null;
   isOnline: boolean;
   refreshToken: string | null;
   registerId: string;

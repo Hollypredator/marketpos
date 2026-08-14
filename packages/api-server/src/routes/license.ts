@@ -1,3 +1,5 @@
+import { createReadStream, existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import type { Company } from '@prisma/client';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -383,4 +385,95 @@ export async function licenseRoutes(server: FastifyInstance): Promise<void> {
       success: true,
     };
   });
+
+  server.post('/verify', async (request: FastifyRequest, reply: FastifyReply) => {
+    const bodySchema = z.object({
+      companyId: z.string().min(1),
+    });
+    const parsed = bodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'Geçersiz firma kimliği',
+        success: false,
+      });
+    }
+
+    const company = await prisma.company.findUnique({
+      where: { id: parsed.data.companyId },
+    });
+
+    if (!company) {
+      return reply.status(404).send({
+        error: 'Firma bulunamadı',
+        errorCode: 'COMPANY_NOT_FOUND',
+        success: false,
+      });
+    }
+
+    const companyAccess = buildCompanyAccessSnapshot({
+      id: company.id,
+      isActive: company.isActive && company.deletedAt === null,
+      packageExpiresAt: company.packageExpiresAt,
+      packageGraceDays: company.packageGraceDays,
+      packageGraceEndsAt: company.packageGraceEndsAt,
+      packageStatus: company.packageStatus,
+    });
+
+    return {
+      data: companyAccess,
+      success: true,
+    };
+  });
+
+  server.get('/status', async (request: FastifyRequest, reply: FastifyReply) => {
+    const query = request.query as { companyId?: string };
+    if (!query.companyId) {
+      return reply.status(400).send({
+        error: 'companyId parametresi gereklidir',
+        success: false,
+      });
+    }
+
+    const company = await prisma.company.findUnique({
+      where: { id: query.companyId },
+    });
+
+    if (!company) {
+      return reply.status(404).send({
+        error: 'Firma bulunamadı',
+        success: false,
+      });
+    }
+
+    const companyAccess = buildCompanyAccessSnapshot({
+      id: company.id,
+      isActive: company.isActive && company.deletedAt === null,
+      packageExpiresAt: company.packageExpiresAt,
+      packageGraceDays: company.packageGraceDays,
+      packageGraceEndsAt: company.packageGraceEndsAt,
+      packageStatus: company.packageStatus,
+    });
+
+    return {
+      data: companyAccess,
+      success: true,
+    };
+  });
+
+  server.get('/download-desktop', async (_request: FastifyRequest, reply: FastifyReply) => {
+    const installerPath = resolve(process.cwd(), 'packages/pos-desktop/release/MarketPOS-1.0.0-setup.exe');
+    if (existsSync(installerPath)) {
+      const stream = createReadStream(installerPath);
+      reply.header('Content-Type', 'application/octet-stream');
+      reply.header('Content-Disposition', 'attachment; filename="MarketPOS-Setup.exe"');
+      return reply.send(stream);
+    }
+    return reply.status(200).send({
+      downloadUrl: '/api/license/download-desktop',
+      message: 'Masaüstü kurulum paketi hazırlanıyor. Henüz .exe üretilmediyse `npm run electron:build --workspace @marketpos/pos-desktop` komutu ile oluşturabilirsiniz.',
+      success: true,
+    });
+  });
 }
+
+

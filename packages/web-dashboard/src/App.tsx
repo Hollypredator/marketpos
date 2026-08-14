@@ -132,6 +132,28 @@ export default function App(): React.ReactElement {
     username: 'admin',
   });
 
+  const onLogin = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault();
+    if (loginForm.mode === 'EMAIL' && loginForm.email.trim().length === 0) {
+      setBanner({ type: 'error', text: 'Email ile giris modunda email zorunludur' });
+      return;
+    }
+    if (loginForm.mode === 'LEGACY' && loginForm.username.trim().length < 3) {
+      setBanner({ type: 'error', text: 'Legacy giris modunda kullanici adi zorunludur' });
+      return;
+    }
+    setIsAuthenticating(true);
+    try {
+      await auth.login(loginForm);
+      setBanner({ type: 'success', text: 'Giris basarili' });
+      auth.clearAccessBlockedMessage();
+    } catch (error: unknown) {
+      setBanner({ type: 'error', text: readError(error, 'Giris basarisiz') });
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
+
   // LoginView wrapper for routes (provides required props)
   const RouteLoginView = React.useCallback(() => (
     <LoginView
@@ -143,10 +165,10 @@ export default function App(): React.ReactElement {
       onChangeMode={(mode) => setLoginForm((current) => ({ ...current, mode }))}
       onChangePassword={(value) => setLoginForm((current) => ({ ...current, password: value }))}
       onChangeUsername={(value) => setLoginForm((current) => ({ ...current, username: value }))}
-      onSubmit={async () => {}}
-      saving={false}
+      onSubmit={onLogin}
+      saving={isAuthenticating}
     />
-  ), [loginForm]);
+  ), [loginForm, isAuthenticating, onLogin]);
 
   const [companyId, setCompanyId] = useState('');
   const [branchId, setBranchId] = useState('');
@@ -954,27 +976,7 @@ export default function App(): React.ReactElement {
     setReportRange({ from: toLocalDateIso(monthStart), to: toLocalDateIso(now) });
   };
 
-  const onLogin = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
-    event.preventDefault();
-    if (loginForm.mode === 'EMAIL' && loginForm.email.trim().length === 0) {
-      setBanner({ type: 'error', text: 'Email ile giris modunda email zorunludur' });
-      return;
-    }
-    if (loginForm.mode === 'LEGACY' && loginForm.username.trim().length < 3) {
-      setBanner({ type: 'error', text: 'Legacy giris modunda kullanici adi zorunludur' });
-      return;
-    }
-    setIsAuthenticating(true);
-    try {
-      await auth.login(loginForm);
-      setBanner({ type: 'success', text: 'Giris basarili' });
-      auth.clearAccessBlockedMessage();
-    } catch (error: unknown) {
-      setBanner({ type: 'error', text: readError(error, 'Giris basarisiz') });
-    } finally {
-      setIsAuthenticating(false);
-    }
-  };
+
 
   const createCompany = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
@@ -1706,7 +1708,23 @@ const appShellProps = {
   userRole: auth.role ?? '-',
 };
 
-function AuthenticatedAppShell() {
+  if (!auth.isAuthenticated) {
+    return (
+      <LoginView
+        accessBlockedMessage={auth.accessBlockedMessage}
+        banner={banner}
+        login={loginForm}
+        onChangeEmail={(value) => setLoginForm((current) => ({ ...current, email: value }))}
+        onChangeCompanyId={(value) => setLoginForm((current) => ({ ...current, companyId: value }))}
+        onChangeMode={(mode) => setLoginForm((current) => ({ ...current, mode }))}
+        onChangePassword={(value) => setLoginForm((current) => ({ ...current, password: value }))}
+        onChangeUsername={(value) => setLoginForm((current) => ({ ...current, username: value }))}
+        onSubmit={onLogin}
+        saving={isAuthenticating}
+      />
+    );
+  }
+
   return (
     <AppShell {...appShellProps}>
       {requiresCompanySelection && (
@@ -2068,38 +2086,5 @@ function AuthenticatedAppShell() {
         />
       )}
     </AppShell>
-  );
-}
-
-  return (
-    <Routes>
-      <Route
-        path="/"
-        element={!auth.isAuthenticated ? (
-          <LandingPage
-            onNavigateToLogin={() => navigate('/login')}
-            onNavigateToSuccess={(companyId) => navigate(`/payment-success?companyId=${companyId}`)}
-          />
-        ) : (
-          <Navigate to="/dashboard" replace />
-        )}
-      />
-      <Route
-        path="/login"
-        element={!auth.isAuthenticated ? <RouteLoginView /> : <Navigate to="/dashboard" replace />}
-      />
-      <Route
-        path="/yonetim"
-        element={!auth.isAuthenticated ? <RouteLoginView /> : <Navigate to="/dashboard" replace />}
-      />
-      <Route
-        path="/payment-success"
-        element={!auth.isAuthenticated ? <PaymentSuccessPage /> : <Navigate to="/dashboard" replace />}
-      />
-      <Route
-        path="*"
-        element={auth.isAuthenticated ? <AuthenticatedAppShell /> : <Navigate to="/login" replace />}
-      />
-    </Routes>
   );
 }

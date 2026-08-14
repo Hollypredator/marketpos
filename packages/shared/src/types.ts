@@ -41,6 +41,24 @@ export interface Company extends BaseEntity {
   packageGraceEndsAt?: string | null;
 }
 
+export type LicenseStatus = 'ACTIVE' | 'TRIAL' | 'EXPIRED' | 'GRACE_PERIOD' | 'SUSPENDED';
+
+export interface AnnualLicenseInfo {
+  companyId: string;
+  companyName: string;
+  status: LicenseStatus;
+  packageType: 'MONTHLY' | 'YEARLY';
+  expiresAt: string;
+  graceEndsAt: string;
+  gracePeriodDays: number;
+  lastVerifiedAt: string;
+  offlineToken?: string;
+  isExpired: boolean;
+  inGracePeriod: boolean;
+  daysRemaining: number;
+}
+
+
 export interface Branch extends BaseEntity {
   companyId: string;
   name: string;

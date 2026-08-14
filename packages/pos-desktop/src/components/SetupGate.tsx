@@ -520,22 +520,18 @@ export default function SetupGate({ onCompleted }: SetupGateProps) {
         throw new Error(envelope.error ?? 'Aktivasyon basarisiz.');
       }
 
-      const { accessToken, companyAccess, refreshToken, seedData, user, registerId, sessionId } = envelope.data;
+      const { accessToken, refreshToken, seedData, user, registerId, sessionId } = envelope.data;
 
       if (!window.electronAPI) {
         throw new Error('Electron API bulunamadi.');
       }
 
-      // 1. Kriptografik imzalı CompanyAccessSnapshot'ı lokal SQLite veritabanına kaydet
-      await window.electronAPI.setCompanyAccessSnapshot(companyAccess);
-
-      // 2. İlk kurulum çevrimdışı seed verilerini lokal SQLite veritabanına kaydet (kategoriler, ürünler, stoklar vb.)
+      // 1. İlk kurulum çevrimdışı seed verilerini lokal SQLite veritabanına kaydet (kategoriler, ürünler, stoklar vb.)
       await window.electronAPI.cacheSyncData(seedData);
 
-      // 3. Oturum ve login bilgilerini lokal cache'e yaz (Böylece anında internet olmadan da login olunabilir!)
+      // 2. Oturum ve login bilgilerini lokal cache'e yaz (Böylece anında internet olmadan da login olunabilir!)
       await window.electronAPI.cacheOnlineLogin({
         accessToken,
-        companyAccess,
         password: accountForm.adminPassword.trim(),
         refreshToken,
         registerId,
