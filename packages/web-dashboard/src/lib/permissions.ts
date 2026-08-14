@@ -1,4 +1,5 @@
 export type DashboardTab =
+  | 'pos'
   | 'dashboard'
   | 'setup'
   | 'organization'
@@ -15,6 +16,7 @@ export type DashboardTab =
   | 'yonetim';
 
 export type Permission =
+  | 'access:pos'
   | 'access:dashboard'
   | 'access:setup'
   | 'access:organization'
@@ -71,6 +73,7 @@ export const ALL_PERMISSIONS: Permission[] = [
 
 export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
   SUPER_ADMIN: [
+    'access:pos',
     'access:dashboard',
     'access:setup',
     'access:organization',
@@ -98,6 +101,7 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     'export:subscription',
   ],
   ADMIN: [
+    'access:pos',
     'access:dashboard',
     'access:catalog',
     'access:stock',
@@ -117,16 +121,20 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     'export:reports',
   ],
   ACCOUNTANT: [
+    'access:pos',
     'access:dashboard',
     'access:catalog',
     'access:reports',
     'access:sales',
     'export:reports',
   ],
-  CASHIER: [],
+  CASHIER: [
+    'access:pos',
+  ],
 };
 
 export const TAB_PERMISSIONS: Record<string, Permission> = {
+  pos: 'access:pos',
   dashboard: 'access:dashboard',
   setup: 'access:setup',
   organization: 'access:organization',

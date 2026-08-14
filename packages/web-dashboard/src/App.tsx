@@ -73,6 +73,7 @@ import { SetupWizardPage } from './pages/SetupWizardPage';
 import { StockPage } from './pages/StockPage';
 import { AuditLogPage } from './pages/AuditLogPage';
 import { SubscriptionPage } from './pages/SubscriptionPage';
+import { PosRegisterView } from './components/PosRegisterView';
 import { UsersPage } from './pages/UsersPage';
 import { SuppliersPage } from './pages/suppliers/SuppliersPage';
 import { LandingPage } from './pages/LandingPage';
@@ -1730,6 +1731,14 @@ const appShellProps = {
             organizasyon, katalog, stok, kullanici ve rapor modulleri acilmaz.
           </p>
         </section>
+      )}
+
+      {activeTab === 'pos' && (
+        <PosRegisterView
+          products={products}
+          categories={categories}
+          customers={customers}
+        />
       )}
 
       {activeTab === 'dashboard' && (

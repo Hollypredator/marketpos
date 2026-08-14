@@ -4,6 +4,7 @@ import type { DashboardTab } from './permissions';
 export type { DashboardTab };
 
 export const TAB_PATHS: Record<DashboardTab, string> = {
+  pos: '/pos',
   dashboard: '/dashboard',
   setup: '/setup',
   organization: '/organization',

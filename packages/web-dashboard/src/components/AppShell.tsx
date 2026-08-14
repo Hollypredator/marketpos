@@ -35,6 +35,7 @@ interface AppShellProps {
 }
 
 const TAB_LABELS: Record<DashboardTab, string> = {
+  pos:          '🛒 Kasa / Hızlı Satış',
   dashboard:    'Genel Bakış',
   setup:        'Firma Kurulum',
   organization: 'Firma / Şube',
@@ -52,6 +53,7 @@ const TAB_LABELS: Record<DashboardTab, string> = {
 };
 
 const TAB_HINTS: Record<DashboardTab, string> = {
+  pos:          'Barkodlu hızlı kasa satışı yapın ve fiş kesin',
   dashboard:    'Günlük KPI özeti ve hızlı erişim',
   setup:        'Yeni firma açılışı ve provisioning adımları',
   organization: 'Firma ve şube yapısını yönetin',
@@ -70,6 +72,13 @@ const TAB_HINTS: Record<DashboardTab, string> = {
 
 // SVG icons for each tab
 const TAB_ICONS: Record<DashboardTab, React.ReactElement> = {
+  pos: (
+    <svg className="nav-item-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <circle cx="5" cy="14" r="1"/>
+      <circle cx="12" cy="14" r="1"/>
+      <path d="M1 1h3l2.2 9h7.8l2-7H4" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  ),
   dashboard: (
     <svg className="nav-item-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
       <rect x="2" y="2" width="5" height="5" rx="1"/>
