@@ -423,7 +423,7 @@ async function getApiBaseUrl(): Promise<string> {
   }
   const runtime = await ensureElectronApi().getRuntimeInfo();
   runtimeApiBaseUrl = runtime.apiBaseUrl;
-  return runtimeApiBaseUrl ?? 'http://localhost:3001';
+  return runtimeApiBaseUrl ?? 'https://marketpos-api-fiq6.onrender.com';
 }
 
 async function refreshAuthSession(session: AuthSession): Promise<void> {

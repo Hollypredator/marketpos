@@ -146,9 +146,9 @@ export class AnnualLicenseService {
   private static async getApiBaseUrl(): Promise<string> {
     try {
       const runtime = await ensureElectronApi().getRuntimeInfo();
-      return runtime.apiBaseUrl || 'http://localhost:3001';
+      return runtime.apiBaseUrl || 'https://marketpos-api-fiq6.onrender.com';
     } catch {
-      return 'http://localhost:3001';
+      return 'https://marketpos-api-fiq6.onrender.com';
     }
   }
 }

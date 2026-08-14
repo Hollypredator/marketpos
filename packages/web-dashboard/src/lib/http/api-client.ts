@@ -5,7 +5,7 @@ import type {
   RefreshResponse,
 } from '../../domain/shared/types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'https://marketpos-api-fiq6.onrender.com';
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
 
