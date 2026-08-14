@@ -448,47 +448,50 @@ export function PosRegisterView({
           ))}
         </div>
 
-        {/* Product Cards Grid */}
-        <div style={{ flex: 1, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '12px', paddingRight: '4px' }}>
+        {/* Product Cards Grid - High Density Ergonomic POS Grid */}
+        <div style={{ flex: 1, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(105px, 1fr))', gap: '8px', paddingRight: '4px' }}>
           {filteredProducts.map((p) => (
             <div
               key={p.id}
               onClick={() => addToCart(p)}
               style={{
                 background: 'var(--bg-card, #1e1e2e)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: '14px',
-                padding: '14px',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: '10px',
+                padding: '8px 10px',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'space-between',
                 cursor: 'pointer',
                 transition: 'all 0.15s ease',
                 userSelect: 'none',
+                minHeight: '84px',
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.borderColor = 'var(--primary, #4f46e5)';
+                e.currentTarget.style.borderColor = 'var(--primary, #6366f1)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(99,102,241,0.25)';
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
+                e.currentTarget.style.boxShadow = 'none';
               }}
             >
               <div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginBottom: '2px', fontFamily: 'monospace' }}>
                   {p.barcode}
                 </div>
-                <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#fff', lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden' }}>
+                <div style={{ fontWeight: 700, fontSize: '0.84rem', color: '#fff', lineHeight: 1.2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden' }}>
                   {p.name}
                 </div>
               </div>
 
-              <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-                <span style={{ fontSize: '0.75rem', padding: '2px 6px', borderRadius: '4px', background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)' }}>
-                  Min Stok: {p.minStock ?? 0}
+              <div style={{ marginTop: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.68rem', padding: '1px 5px', borderRadius: '4px', background: 'rgba(255,255,255,0.08)', color: 'var(--text-muted)' }}>
+                  Min: {p.minStock ?? 0}
                 </span>
-                <span style={{ fontWeight: 900, fontSize: '1.1rem', color: '#818cf8' }}>
+                <span style={{ fontWeight: 900, fontSize: '0.98rem', color: '#818cf8' }}>
                   {money(Number(p.salePrice) || 0)}
                 </span>
               </div>
