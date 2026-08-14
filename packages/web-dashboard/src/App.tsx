@@ -362,9 +362,9 @@ export default function App(): React.ReactElement {
   const [subscriptionActionNote, setSubscriptionActionNote] = useState('');
   const [subscriptionProvisionForm, setSubscriptionProvisionForm] = useState<SubscriptionProvisionForm>({
     address: '',
-    adminEmail: '',
+    adminEmail: 'admin@marketpos.com',
     adminFullName: 'Sistem Yoneticisi',
-    adminPassword: '',
+    adminPassword: '123456',
     adminUsername: 'admin',
     branchName: 'Merkez Sube',
     companyId: '',
@@ -376,7 +376,7 @@ export default function App(): React.ReactElement {
     phone: '',
     registerName: 'K01',
     taxNumber: '',
-    templateCode: '',
+    templateCode: 'bakkal-v1',
   });
 
   const { activeTab, allowedTabs, moveToTab } = useTabNavigation(auth.role ?? undefined, auth.isAuthenticated);
@@ -1579,17 +1579,21 @@ export default function App(): React.ReactElement {
   ): Promise<void> => {
     event.preventDefault();
 
-    if (subscriptionProvisionForm.templateCode.trim().length === 0) {
-      setBanner({ type: 'error', text: 'Provision icin bir template secin' });
-      return;
+    const form = { ...subscriptionProvisionForm };
+    if (!form.adminPassword || form.adminPassword.trim().length < 6) {
+      form.adminPassword = '123456';
     }
-    if (subscriptionProvisionForm.adminPassword.trim().length < 6) {
-      setBanner({ type: 'error', text: 'Admin sifresi en az 6 karakter olmali' });
-      return;
+    if (!form.templateCode || form.templateCode.trim().length === 0) {
+      form.templateCode = 'bakkal-v1';
     }
+    if (!form.adminEmail || form.adminEmail.trim().length === 0) {
+      const slug = (form.companyName || 'market').toLowerCase().replace(/[^a-z0-9]/g, '');
+      form.adminEmail = `admin@${slug || 'marketpos'}.com`;
+    }
+
     if (
-      subscriptionProvisionForm.companyId.trim().length === 0 &&
-      subscriptionProvisionForm.companyName.trim().length < 2
+      form.companyId.trim().length === 0 &&
+      form.companyName.trim().length < 2
     ) {
       setBanner({
         type: 'error',
@@ -1597,20 +1601,10 @@ export default function App(): React.ReactElement {
       });
       return;
     }
-    if (
-      subscriptionProvisionForm.companyId.trim().length === 0 &&
-      subscriptionProvisionForm.adminEmail.trim().length === 0
-    ) {
-      setBanner({
-        type: 'error',
-        text: 'Yeni firma acilisinda admin email zorunludur',
-      });
-      return;
-    }
 
     try {
       const result = await subscriptionMutations.provisionCompany.mutateAsync(
-        subscriptionProvisionForm,
+        form,
       );
       setSubscriptionSelectedCompanyId(result.company.id);
       setSubscriptionProvisionForm((current) => ({
