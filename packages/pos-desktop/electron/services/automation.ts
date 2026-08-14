@@ -25,7 +25,13 @@ export class AutomationService {
     this.isProcessing = true;
 
     try {
-      const db = getDatabaseService();
+      let db;
+      try {
+        db = getDatabaseService();
+      } catch {
+        // Database not initialized yet (e.g. initial setup gate)
+        return;
+      }
       const now = new Date();
       const currentTime = now.toTimeString().slice(0, 5); // "HH:MM"
 
