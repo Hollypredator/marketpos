@@ -808,22 +808,14 @@ function createMainWindow(): BrowserWindow {
     window.webContents.openDevTools({ mode: 'detach' });
   } else {
     const liveWebUrl = process.env.MARKETPOS_WEB_URL ?? 'https://marketpos-web-dashboard.vercel.app/pos';
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2500);
-
-    net.fetch(liveWebUrl, { method: 'HEAD', signal: controller.signal })
-      .then((res) => {
-        clearTimeout(timeout);
-        if (res.ok) {
-          void window.loadURL(liveWebUrl);
-        } else {
-          void window.loadFile(join(__dirname, '../dist/index.html'));
-        }
-      })
-      .catch(() => {
-        clearTimeout(timeout);
+    window.webContents.on('did-fail-load', (_event, errorCode) => {
+      if (errorCode !== -3) { // ignore cancelled navigations
         void window.loadFile(join(__dirname, '../dist/index.html'));
-      });
+      }
+    });
+    void window.loadURL(liveWebUrl).catch(() => {
+      void window.loadFile(join(__dirname, '../dist/index.html'));
+    });
   }
   return window;
 }
