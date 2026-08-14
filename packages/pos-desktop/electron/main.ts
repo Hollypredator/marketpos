@@ -807,7 +807,7 @@ function createMainWindow(): BrowserWindow {
     void window.loadURL(DEFAULT_RENDERER_URL);
     window.webContents.openDevTools({ mode: 'detach' });
   } else {
-    const liveWebUrl = process.env.MARKETPOS_WEB_URL ?? 'https://marketpos-web-dashboard.vercel.app';
+    const liveWebUrl = process.env.MARKETPOS_WEB_URL ?? 'https://marketpos-web-dashboard.vercel.app/pos';
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 2500);
 

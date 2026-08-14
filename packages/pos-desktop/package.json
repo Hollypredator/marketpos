@@ -62,9 +62,10 @@
       "output": "release"
     },
     "nsis": {
-      "allowToChangeInstallationDirectory": true,
+      "allowToChangeInstallationDirectory": false,
       "oneClick": false,
-      "perMachine": false
+      "perMachine": false,
+      "killProcessOnUninstall": true
     },
     "win": {
       "icon": "icon.ico",
