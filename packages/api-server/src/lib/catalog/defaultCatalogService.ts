@@ -418,7 +418,13 @@ export class DefaultCatalogService {
    */
   private static loadBundledCatalog(): CatalogJsonFile | null {
     try {
-      const catalogPath = path.join(__dirname, 'catalog.json');
+      const candidates = [
+        path.resolve(process.cwd(), 'packages/api-server/src/lib/catalog/catalog.json'),
+        path.resolve(process.cwd(), 'src/lib/catalog/catalog.json'),
+        path.resolve(process.cwd(), '../api-server/src/lib/catalog/catalog.json'),
+      ];
+      const catalogPath = candidates.find((p) => fs.existsSync(p));
+      if (!catalogPath) return null;
       const raw = fs.readFileSync(catalogPath, 'utf-8');
       return JSON.parse(raw) as CatalogJsonFile;
     } catch (err) {

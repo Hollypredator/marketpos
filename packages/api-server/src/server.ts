@@ -146,11 +146,12 @@ async function start(): Promise<void> {
   await server.register(platformAdminRoutes, { prefix: '/api/superadmin' });
 
   // Serve static web-dashboard single-page application (SPA)
+  const currentModuleDir = dirname(fileURLToPath(import.meta.url));
   const possibleWebPaths = [
     resolve(process.cwd(), 'packages/web-dashboard/dist'),
     resolve(process.cwd(), '../web-dashboard/dist'),
-    resolve(__dirname, '../../web-dashboard/dist'),
-    resolve(__dirname, '../../../packages/web-dashboard/dist'),
+    resolve(currentModuleDir, '../../web-dashboard/dist'),
+    resolve(currentModuleDir, '../../../packages/web-dashboard/dist'),
   ];
   const webDist = possibleWebPaths.find((p) => existsSync(p));
 
