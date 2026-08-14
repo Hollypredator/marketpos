@@ -1664,7 +1664,16 @@ export default function App(): React.ReactElement {
     if (location.pathname === '/payment-success') {
       return <PaymentSuccessPage />;
     }
-    if (location.pathname === '/landing') {
+    
+    // Subdomain routing check:
+    // If hostname is root domain (e.g. marketpos.com / localhost) AND pathname is '/' or '/landing', show LandingPage.
+    // If hostname is subdomain (e.g. backoffice.marketpos.com, app.marketpos.com) OR path is /login, show LoginView.
+    const isSubdomain = window.location.hostname.startsWith('backoffice') ||
+                        window.location.hostname.startsWith('app') ||
+                        window.location.hostname.startsWith('panel') ||
+                        window.location.hostname.startsWith('admin');
+
+    if (!isSubdomain && (location.pathname === '/' || location.pathname === '/landing')) {
       return (
         <LandingPage
           onNavigateToLogin={() => navigate('/login')}
