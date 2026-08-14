@@ -92,9 +92,7 @@ function loadLocalEnv(): void {
 loadLocalEnv();
 
 const IS_DEV = !app.isPackaged;
-const DEFAULT_API_BASE_URL = process.env.MARKETPOS_API_BASE_URL ?? (
-  IS_DEV ? 'http://localhost:3001' : 'https://marketpos-api-fiq6.onrender.com'
-);
+const DEFAULT_API_BASE_URL = process.env.MARKETPOS_API_BASE_URL ?? 'https://marketpos-api-fiq6.onrender.com';
 const DEFAULT_RENDERER_URL = process.env.ELECTRON_RENDERER_URL ?? 'http://localhost:5175';
 const SYNC_V2_ENABLED = (process.env.SYNC_V2_ENABLED ?? 'false').toLowerCase() === 'true';
 
