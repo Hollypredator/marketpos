@@ -807,15 +807,7 @@ function createMainWindow(): BrowserWindow {
     void window.loadURL(DEFAULT_RENDERER_URL);
     window.webContents.openDevTools({ mode: 'detach' });
   } else {
-    const liveWebUrl = process.env.MARKETPOS_WEB_URL ?? 'https://marketpos-web-dashboard.vercel.app/pos';
-    window.webContents.on('did-fail-load', (_event, errorCode) => {
-      if (errorCode !== -3) { // ignore cancelled navigations
-        void window.loadFile(join(__dirname, '../dist/index.html'));
-      }
-    });
-    void window.loadURL(liveWebUrl).catch(() => {
-      void window.loadFile(join(__dirname, '../dist/index.html'));
-    });
+    void window.loadFile(join(__dirname, '../dist/index.html'));
   }
   return window;
 }
