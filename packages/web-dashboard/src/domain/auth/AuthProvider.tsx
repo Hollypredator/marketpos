@@ -41,14 +41,18 @@ export function AuthProvider({ children }: AuthProviderProps): React.ReactElemen
       onAccessBlocked: (message: string) => {
         setAccessBlockedMessage(message);
         applySession(null);
-        navigate('/login', { replace: true });
+        if (window.location.pathname !== '/' && window.location.pathname !== '/landing') {
+          navigate('/login', { replace: true });
+        }
       },
       onSessionUpdate: (nextSession: AuthSession | null) => {
         applySession(nextSession);
       },
       onUnauthorized: () => {
         applySession(null);
-        navigate('/login', { replace: true });
+        if (window.location.pathname !== '/' && window.location.pathname !== '/landing') {
+          navigate('/login', { replace: true });
+        }
       },
     });
 
