@@ -53,8 +53,8 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [mode, setMode] = useState<LoginMode>('AUTO');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [password, setPassword] = useState('123456');
-  const [username, setUsername] = useState('admin');
+  const [password, setPassword] = useState('');
+  const [username, setUsername] = useState('');
 
   const isFormReady = username.trim().length >= 3 && password.length >= 4;
 

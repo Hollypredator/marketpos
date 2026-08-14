@@ -84,7 +84,7 @@ export function LoginView({
               <label>
                 Kullanici adi
                 <input
-                  autoComplete="username"
+                  autoComplete="off"
                   value={login.username}
                   onChange={(event) => onChangeUsername(event.target.value)}
                   required
@@ -93,6 +93,7 @@ export function LoginView({
               <label>
                 Firma ID (opsiyonel, SUPER_ADMIN icin)
                 <input
+                  autoComplete="off"
                   value={login.companyId}
                   onChange={(event) => onChangeCompanyId(event.target.value)}
                   placeholder="uuid"
@@ -104,7 +105,7 @@ export function LoginView({
             Sifre
             <input
               type="password"
-              autoComplete="current-password"
+              autoComplete="new-password"
               value={login.password}
               onChange={(event) => onChangePassword(event.target.value)}
               required

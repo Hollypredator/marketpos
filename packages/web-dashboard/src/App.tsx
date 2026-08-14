@@ -128,8 +128,8 @@ export default function App(): React.ReactElement {
     companyId: '',
     email: '',
     mode: 'EMAIL',
-    password: 'admin123',
-    username: 'admin',
+    password: '',
+    username: '',
   });
 
   const onLogin = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
