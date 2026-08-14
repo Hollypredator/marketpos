@@ -1664,35 +1664,26 @@ export default function App(): React.ReactElement {
     if (location.pathname === '/payment-success') {
       return <PaymentSuccessPage />;
     }
-    
-    // Subdomain routing check:
-    // If hostname is root domain (e.g. marketpos.com / localhost) AND pathname is '/' or '/landing', show LandingPage.
-    // If hostname is subdomain (e.g. backoffice.marketpos.com, app.marketpos.com) OR path is /login, show LoginView.
-    const isSubdomain = window.location.hostname.startsWith('backoffice') ||
-                        window.location.hostname.startsWith('app') ||
-                        window.location.hostname.startsWith('panel') ||
-                        window.location.hostname.startsWith('admin');
-
-    if (!isSubdomain && (location.pathname === '/' || location.pathname === '/landing')) {
+    if (location.pathname === '/login' || location.pathname === '/yonetim' || location.pathname === '/backoffice') {
       return (
-        <LandingPage
-          onNavigateToLogin={() => navigate('/login')}
-          onNavigateToSuccess={(companyId) => navigate(`/payment-success?companyId=${companyId}`)}
+        <LoginView
+          accessBlockedMessage={auth.accessBlockedMessage}
+          banner={banner}
+          login={loginForm}
+          onChangeEmail={(value) => setLoginForm((current) => ({ ...current, email: value }))}
+          onChangeCompanyId={(value) => setLoginForm((current) => ({ ...current, companyId: value }))}
+          onChangeMode={(mode) => setLoginForm((current) => ({ ...current, mode }))}
+          onChangePassword={(value) => setLoginForm((current) => ({ ...current, password: value }))}
+          onChangeUsername={(value) => setLoginForm((current) => ({ ...current, username: value }))}
+          onSubmit={onLogin}
+          saving={isAuthenticating}
         />
       );
     }
     return (
-      <LoginView
-        accessBlockedMessage={auth.accessBlockedMessage}
-        banner={banner}
-        login={loginForm}
-        onChangeEmail={(value) => setLoginForm((current) => ({ ...current, email: value }))}
-        onChangeCompanyId={(value) => setLoginForm((current) => ({ ...current, companyId: value }))}
-        onChangeMode={(mode) => setLoginForm((current) => ({ ...current, mode }))}
-        onChangePassword={(value) => setLoginForm((current) => ({ ...current, password: value }))}
-        onChangeUsername={(value) => setLoginForm((current) => ({ ...current, username: value }))}
-        onSubmit={onLogin}
-        saving={isAuthenticating}
+      <LandingPage
+        onNavigateToLogin={() => navigate('/login')}
+        onNavigateToSuccess={(companyId) => navigate(`/payment-success?companyId=${companyId}`)}
       />
     );
   }

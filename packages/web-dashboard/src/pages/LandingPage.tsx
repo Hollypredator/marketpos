@@ -90,17 +90,34 @@ export function LandingPage({ onNavigateToLogin }: LandingPageProps): React.Reac
             <div className="landing-logo">M</div>
             <span className="landing-brand-name">MarketPOS</span>
           </div>
-          <div className="landing-nav-links">
+          <div className="landing-nav-links" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
             <a href="#ozellikler">Özellikler</a>
             <a href="#nasil-calisir">Nasıl Çalışır</a>
-            <button className="btn landing-login-btn" onClick={onNavigateToLogin}>Giriş Yap</button>
+            <a
+              href="/api/license/download-desktop"
+              download="MarketPOS-Setup.exe"
+              className="btn"
+              style={{
+                textDecoration: 'none',
+                background: 'rgba(79, 70, 229, 0.15)',
+                border: '1.5px solid rgba(79, 70, 229, 0.4)',
+                color: 'var(--text-primary)',
+                padding: '6px 14px',
+                fontSize: '0.85rem'
+              }}
+            >
+              📥 .exe İndir
+            </a>
+            <button className="btn landing-login-btn" onClick={onNavigateToLogin}>
+              🔑 Yönetim Paneli
+            </button>
           </div>
         </div>
       </nav>
 
       {/* ── Hero ─────────────────────────────────────────────────── */}
       <section className="landing-hero">
-        <div className="landing-hero-badge">Yeni Nesil POS Sistemi</div>
+        <div className="landing-hero-badge">Yeni Nesil POS & Yazarkasa Sistemi</div>
         <h1 className="landing-hero-title">
           Marketiniz için<br />
           <span className="landing-hero-accent">akıllı POS</span> çözümü
@@ -109,9 +126,18 @@ export function LandingPage({ onNavigateToLogin }: LandingPageProps): React.Reac
           Offline çalışabilen, 4000+ ürün kataloğu ile hazır, çoklu şube destekli
           yazarkasa POS sistemi. Kurulumu 5 dakika, kullanımı çok kolay.
         </p>
-        <div className="landing-hero-actions">
-          <button className="btn landing-cta" onClick={onNavigateToLogin}>Hemen Başlayın</button>
-          <a href="#ozellikler" className="btn landing-cta-secondary">Daha Fazla Bilgi</a>
+        <div className="landing-hero-actions" style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <button className="btn landing-cta" onClick={onNavigateToLogin}>
+            🔑 Yönetim Paneline Giriş Yap
+          </button>
+          <a
+            href="/api/license/download-desktop"
+            download="MarketPOS-Setup.exe"
+            className="btn landing-cta-secondary"
+            style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+          >
+            💻 Masaüstü Windows Kasa İndir (.exe)
+          </a>
         </div>
 
         {/* Stats */}
