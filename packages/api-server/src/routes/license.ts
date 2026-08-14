@@ -465,6 +465,8 @@ export async function licenseRoutes(server: FastifyInstance): Promise<void> {
     const possiblePaths = [
       resolve(process.cwd(), 'packages/pos-desktop/release/MarketPOS-1.0.0-setup.exe'),
       resolve(process.cwd(), '../pos-desktop/release/MarketPOS-1.0.0-setup.exe'),
+      resolve(process.cwd(), 'release/MarketPOS-1.0.0-setup.exe'),
+      resolve(process.cwd(), 'MarketPOS-1.0.0-setup.exe'),
       resolve(currentModuleDir, '../../../../packages/pos-desktop/release/MarketPOS-1.0.0-setup.exe'),
       resolve(currentModuleDir, '../../../pos-desktop/release/MarketPOS-1.0.0-setup.exe'),
     ];
