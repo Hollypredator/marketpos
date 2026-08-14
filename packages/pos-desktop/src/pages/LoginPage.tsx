@@ -141,14 +141,14 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
         {error.length > 0 && <div className="login-error">{error}</div>}
 
         <div className="login-field">
-          <label htmlFor="company-id">Firma ID (Opsiyonel)</label>
+          <label htmlFor="company-id">Lisans Kodu / Firma ID (Opsiyonel)</label>
           <input
             id="company-id"
             className="input"
             type="text"
             value={companyId}
             onChange={(event) => setCompanyId(event.target.value)}
-            placeholder="UUID firma id (opsiyonel)"
+            placeholder="Örn: MPOS-XXXX-XXXX veya Firma ID"
             autoComplete="off"
           />
         </div>
