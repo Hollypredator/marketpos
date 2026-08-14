@@ -25,7 +25,7 @@ export const loginSchema = z.object({
   email: z.string().trim().email().max(255).optional(),
   username: z.string().trim().min(3).max(50).optional(),
   password: z.string().min(4).max(100),
-  companyId: z.string().uuid().optional(),
+  companyId: z.string().trim().min(1).max(100).optional(),
 }).superRefine((payload, ctx) => {
   const hasEmail = typeof payload.email === 'string' && payload.email.trim().length > 0;
   const hasUsername = typeof payload.username === 'string' && payload.username.trim().length > 0;
