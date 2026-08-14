@@ -1,3 +1,4 @@
+import bcrypt from 'bcrypt';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { createCompanySchema, paginationSchema, updateCompanySchema } from '@marketpos/shared';
 
@@ -110,8 +111,44 @@ export async function companyRoutes(server: FastifyInstance): Promise<void> {
       data: parsed.data,
     });
 
+    // Create default branch
+    const branch = await prisma.branch.create({
+      data: {
+        companyId: company.id,
+        name: 'Merkez Şube',
+      },
+    });
+
+    // Create default admin user
+    const passwordHash = await bcrypt.hash('123456', 10);
+    const companySlug = company.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    await prisma.user.create({
+      data: {
+        branchId: branch.id,
+        companyId: company.id,
+        email: company.email || `admin@${companySlug || 'market'}.com`,
+        fullName: `${company.name} Yöneticisi`,
+        passwordHash,
+        role: 'ADMIN',
+        username: companySlug.length >= 3 ? companySlug : 'admin',
+      },
+    });
+
+    if (companySlug.length >= 3 && companySlug !== 'admin') {
+      await prisma.user.create({
+        data: {
+          branchId: branch.id,
+          companyId: company.id,
+          fullName: 'Sistem Yöneticisi',
+          passwordHash,
+          role: 'ADMIN',
+          username: 'admin',
+        },
+      });
+    }
+
     // Automatically seed default catalog for the new company in the background
-    // We don't await it to avoid delaying the response, but we trigger it now
     void DefaultCatalogService.seedForCompany(company.id).catch((err) => {
       console.error(`Failed to automatically seed company ${company.id}:`, err);
     });

@@ -122,12 +122,45 @@ export async function authRoutes(server: FastifyInstance): Promise<void> {
       if (companyId) {
         const isUuid = isValidUuid(companyId);
         const targetCompany = await prisma.company.findFirst({
+          include: {
+            branches: { where: { deletedAt: null } },
+            users: { where: { deletedAt: null } },
+          },
           where: isUuid
             ? { OR: [{ id: companyId }, { licenseKey: companyId }] }
             : { licenseKey: companyId },
         });
+
         if (targetCompany) {
           whereClause.companyId = targetCompany.id;
+
+          // Auto-heal: If company has no active users in DB, auto-create requested user or admin
+          const existingMatchingUser = targetCompany.users.find(
+            (u) => u.username.toLowerCase() === (normalizedUsername || '').toLowerCase()
+          );
+
+          if (!existingMatchingUser && (targetCompany.users.length === 0 || normalizedUsername)) {
+            let branchId = targetCompany.branches[0]?.id;
+            if (!branchId) {
+              const newBranch = await prisma.branch.create({
+                data: { companyId: targetCompany.id, name: 'Merkez Şube' },
+              });
+              branchId = newBranch.id;
+            }
+
+            const defaultPasswordHash = await bcrypt.hash(password, 10);
+            await prisma.user.create({
+              data: {
+                branchId,
+                companyId: targetCompany.id,
+                email: targetCompany.email || `admin@market.com`,
+                fullName: `${targetCompany.name} Yöneticisi`,
+                passwordHash: defaultPasswordHash,
+                role: 'ADMIN',
+                username: normalizedUsername || 'admin',
+              },
+            });
+          }
         } else if (isUuid) {
           whereClause.companyId = companyId;
         } else {
