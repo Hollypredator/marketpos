@@ -497,7 +497,7 @@ async function requestApi<TData>(
   }
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 1500);
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
 
   let response: Response;
   try {

@@ -30,6 +30,9 @@ function mapLoginError(error: unknown): string {
   const message = explainRuntimeError(error);
   const normalized = message.toLowerCase();
 
+  if (normalized.includes('aborted') || normalized.includes('signal') || normalized.includes('timeout')) {
+    return 'Sunucu baglantisi zamanasimi (Render API uyaniyor olabilir). Lutfen tekrar deneyin.';
+  }
   if (normalized.includes('kullanici adi veya sifre hatali')) {
     return 'Kullanici adi veya sifre hatali. Bilgileri kontrol edip tekrar deneyin.';
   }
