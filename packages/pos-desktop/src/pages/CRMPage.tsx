@@ -12,12 +12,14 @@ interface CustomerCRM {
   phone: string;
   tier: 'GOLD' | 'SILVER' | 'STANDARD' | 'VIP';
   totalOrdersCount: number;
+  creditBalance: number;
 }
 
 const INITIAL_CUSTOMERS: CustomerCRM[] = [
   {
     address: 'Atatürk Mah. Karanfil Sok. No:12',
     clvTotalAmount: 14850,
+    creditBalance: 1250,
     email: 'ahmet.y@gmail.com',
     id: 'cust-1',
     lastPurchaseDate: '2026-08-14T10:15:00Z',
@@ -31,6 +33,7 @@ const INITIAL_CUSTOMERS: CustomerCRM[] = [
   {
     address: 'Cumhuriyet Cadds. Lale Apt. 4/2',
     clvTotalAmount: 6420,
+    creditBalance: 450,
     email: 'elif.d@hotmail.com',
     id: 'cust-2',
     lastPurchaseDate: '2026-08-13T16:40:00Z',
@@ -44,6 +47,7 @@ const INITIAL_CUSTOMERS: CustomerCRM[] = [
   {
     address: 'Gül Sokak No:8',
     clvTotalAmount: 2150,
+    creditBalance: 0,
     email: 'mehmet.k@gmail.com',
     id: 'cust-3',
     lastPurchaseDate: '2026-08-11T12:00:00Z',
@@ -70,6 +74,11 @@ export const CRMPage: React.FC = () => {
   // Add Note Modal
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
   const [newNote, setNewNote] = useState('');
+
+  // Veresiye Collection Modal
+  const [isCollectModalOpen, setIsCollectModalOpen] = useState(false);
+  const [collectAmount, setCollectAmount] = useState('');
+  const [collectPaymentMode, setCollectPaymentMode] = useState<'CASH' | 'CARD'>('CASH');
 
   const filteredCustomers = customers.filter((c) => {
     const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.phone.includes(searchQuery);
@@ -116,6 +125,31 @@ export const CRMPage: React.FC = () => {
     setIsNoteModalOpen(false);
   };
 
+  const handleCollectDebt = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedCustomer) return;
+    const amount = parseFloat(collectAmount) || 0;
+    if (amount <= 0) return;
+
+    setCustomers((prev) =>
+      prev.map((c) => {
+        if (c.id === selectedCustomer.id) {
+          const newBalance = Math.max(0, c.creditBalance - amount);
+          const updated = {
+            ...c,
+            creditBalance: newBalance,
+            notes: [`${new Date().toLocaleDateString('tr-TR')} - ${amount.toFixed(2)} TL veresiye tahsilatı alındı (${collectPaymentMode === 'CASH' ? 'Nakit' : 'Kredi Kartı'})`, ...c.notes],
+          };
+          setSelectedCustomer(updated);
+          return updated;
+        }
+        return c;
+      }),
+    );
+    setIsCollectModalOpen(false);
+    setCollectAmount('');
+  };
+
   const getTierBadge = (tier: CustomerCRM['tier']) => {
     switch (tier) {
       case 'VIP':
@@ -138,7 +172,7 @@ export const CRMPage: React.FC = () => {
             👥 CRM & Sadakat Müşteri Yönetim Katmanı
           </h1>
           <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: '0.92rem' }}>
-            Müşteri seviyelerini (VIP/Gold), sadakat puanlarını ve alışveriş alışkanlıklarını yönetin.
+            Müşteri seviyelerini (VIP/Gold), sadakat puanlarını ve veresiye borç takibini yönetin.
           </p>
         </div>
       </div>
@@ -187,7 +221,7 @@ export const CRMPage: React.FC = () => {
                 </div>
                 <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>📞 {c.phone}</div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '0.82rem', fontWeight: 700 }}>
-                  <span style={{ color: 'var(--accent)' }}>🎁 {c.loyaltyPoints} Puan</span>
+                  <span style={{ color: 'var(--danger)' }}>Borç: {c.creditBalance.toLocaleString('tr-TR')} ₺</span>
                   <span>{c.clvTotalAmount.toLocaleString('tr-TR')} ₺ Harcama</span>
                 </div>
               </div>
@@ -212,6 +246,12 @@ export const CRMPage: React.FC = () => {
                 </div>
 
                 <div style={{ display: 'flex', gap: '8px' }}>
+                  <button className="btn btn-danger" onClick={() => {
+                    setCollectAmount(selectedCustomer.creditBalance.toString());
+                    setIsCollectModalOpen(true);
+                  }}>
+                    💳 Veresiye Tahsilat Al
+                  </button>
                   <button className="btn btn-ghost" onClick={() => setIsNoteModalOpen(true)}>
                     + Not Ekle
                   </button>
@@ -222,14 +262,24 @@ export const CRMPage: React.FC = () => {
               </div>
 
               {/* KPI Grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px', marginTop: '20px' }}>
-                <div style={{ background: 'var(--bg-secondary)', padding: '14px', borderRadius: '10px' }}>
-                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 700 }}>BİRİKEN SADAKAT PUANI</span>
-                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--accent)', marginTop: '4px' }}>
-                    🎁 {selectedCustomer.loyaltyPoints} Puan
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginTop: '20px' }}>
+                <div style={{ background: 'var(--danger-bg)', border: '1px solid var(--danger)', padding: '14px', borderRadius: '10px' }}>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--danger)', fontWeight: 800 }}>GÜNCEL VERESİYE BORCU</span>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--danger)', marginTop: '4px' }}>
+                    {selectedCustomer.creditBalance.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺
                   </div>
                   <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                    = {(selectedCustomer.loyaltyPoints * 0.1).toFixed(2)} ₺ İndirim Değeri
+                    Kasa Veresiye Defteri
+                  </span>
+                </div>
+
+                <div style={{ background: 'var(--bg-secondary)', padding: '14px', borderRadius: '10px' }}>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 700 }}>SADAKAT PUANI</span>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--accent)', marginTop: '4px' }}>
+                    🎁 {selectedCustomer.loyaltyPoints}
+                  </div>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                    = {(selectedCustomer.loyaltyPoints * 0.1).toFixed(2)} ₺ İndirim
                   </span>
                 </div>
 
@@ -239,12 +289,12 @@ export const CRMPage: React.FC = () => {
                     {selectedCustomer.clvTotalAmount.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺
                   </div>
                   <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                    Toplam {selectedCustomer.totalOrdersCount} Alışveriş İşlemi
+                    Toplam {selectedCustomer.totalOrdersCount} Sipariş
                   </span>
                 </div>
 
                 <div style={{ background: 'var(--bg-secondary)', padding: '14px', borderRadius: '10px' }}>
-                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 700 }}>SON ALIŞVERİŞ TARİHİ</span>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 700 }}>SON İŞLEM TARİHİ</span>
                   <div style={{ fontSize: '1.2rem', fontWeight: 800, marginTop: '8px', color: 'var(--text-primary)' }}>
                     {new Date(selectedCustomer.lastPurchaseDate).toLocaleDateString('tr-TR')}
                   </div>
@@ -312,6 +362,53 @@ export const CRMPage: React.FC = () => {
               <div className="modal-footer">
                 <button type="button" className="btn btn-ghost" onClick={() => setIsPointsModalOpen(false)}>İptal</button>
                 <button type="submit" className="btn btn-primary">Puanı Güncelle</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Collect Debt Modal */}
+      {isCollectModalOpen && selectedCustomer && (
+        <div className="modal-backdrop" onClick={() => setIsCollectModalOpen(false)}>
+          <div className="modal-content" style={{ maxWidth: '420px', width: '90%' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">💳 Veresiye Tahsilat Al</h2>
+              <button className="modal-close" onClick={() => setIsCollectModalOpen(false)}>✕</button>
+            </div>
+            <form onSubmit={handleCollectDebt} className="modal-body" style={{ display: 'grid', gap: '12px' }}>
+              <div style={{ background: 'var(--danger-bg)', padding: '12px', borderRadius: '8px', color: 'var(--danger)', fontWeight: 700, textAlign: 'center' }}>
+                Müşteri Borcu: {selectedCustomer.creditBalance.toFixed(2)} TL
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Ödeme Yöntemi</label>
+                <select
+                  className="input"
+                  value={collectPaymentMode}
+                  onChange={(e) => setCollectPaymentMode(e.target.value as any)}
+                >
+                  <option value="CASH">💵 Nakit Tahsilat</option>
+                  <option value="CARD">💳 Kredi Kartı Tahsilat</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Tahsilat Tutarı (TL)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  className="input"
+                  placeholder="0.00"
+                  value={collectAmount}
+                  onChange={(e) => setCollectAmount(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" className="btn btn-ghost" onClick={() => setIsCollectModalOpen(false)}>İptal</button>
+                <button type="submit" className="btn btn-success">Tahsilatı Al ve Fiş Yazdır</button>
               </div>
             </form>
           </div>

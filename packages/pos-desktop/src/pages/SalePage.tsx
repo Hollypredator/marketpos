@@ -263,6 +263,34 @@ export default function SalePage({ onOpenPayment }: SalePageProps) {
     }
   };
 
+  const playPosBeep = (type: 'success' | 'error' = 'success'): void => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      if (type === 'success') {
+        osc.frequency.setValueAtTime(1200, ctx.currentTime);
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.08);
+      } else {
+        osc.frequency.setValueAtTime(320, ctx.currentTime);
+        gain.gain.setValueAtTime(0.2, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.22);
+      }
+    } catch {
+      // Ignore audio synthesis errors on headless browsers
+    }
+  };
+
   const tryScanBarcode = (): void => {
     const barcode = barcodeInput.trim();
     if (barcode.length === 0) {
@@ -273,6 +301,7 @@ export default function SalePage({ onOpenPayment }: SalePageProps) {
     if (scaleData) {
       const matchedScale = state.products.find((p) => p.barcode.startsWith(scaleData.pluCode) || p.barcode.includes(scaleData.pluCode));
       if (!matchedScale) {
+        playPosBeep('error');
         toast.error(`Terazi (PLU: ${scaleData.pluCode}) ile eşleşen ürün bulunamadı.`);
         return;
       }
@@ -290,17 +319,20 @@ export default function SalePage({ onOpenPayment }: SalePageProps) {
         type: 'ADD_TO_CART',
       });
       setBarcodeInput('');
+      playPosBeep('success');
       toast.success(`${matchedScale.name} eklendi (${qty}kg/Adet)`);
       return;
     }
 
     const matched = state.products.find((product) => product.barcode === barcode);
     if (!matched) {
+      playPosBeep('error');
       toast.error('Barkod bulunamadı. Hızlı ürün ekranından ürün seçmeyi deneyin.');
       return;
     }
     addProductToCart(matched.id);
     setBarcodeInput('');
+    playPosBeep('success');
     toast.success(`${matched.name} sepete eklendi.`);
   };
 
