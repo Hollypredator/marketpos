@@ -480,11 +480,7 @@ export async function licenseRoutes(server: FastifyInstance): Promise<void> {
       return reply.send(stream);
     }
 
-    return reply.status(404).send({
-      downloadUrl: '/api/license/download-desktop',
-      error: 'Masaüstü kurulum paketi henüz üretilmedi. `npm run electron:build --workspace @marketpos/pos-desktop` komutunu çalıştırın.',
-      success: false,
-    });
+    return reply.redirect('https://raw.githubusercontent.com/Hollypredator/marketpos/main/packages/pos-desktop/release/MarketPOS-1.0.0-setup.exe');
   });
 }
 
