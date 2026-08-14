@@ -289,7 +289,7 @@ export function AppShell({
           <span className="admin-header-sub">{TAB_HINTS[activeTab]}</span>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', alignItems: 'center' }}>
             <a
-              href={buildUrl('/api/license/download-desktop')}
+              href="https://github.com/Hollypredator/marketpos/releases/latest/download/MarketPOS-1.0.0-setup.exe"
               target="_blank"
               rel="noreferrer"
               className="btn primary"

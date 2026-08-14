@@ -96,7 +96,7 @@ export function LandingPage({ onNavigateToLogin, onNavigateToBackoffice }: Landi
             <a href="#ozellikler">Özellikler</a>
             <a href="#nasil-calisir">Nasıl Çalışır</a>
             <a
-              href={buildUrl('/api/license/download-desktop')}
+              href="https://github.com/Hollypredator/marketpos/releases/latest/download/MarketPOS-1.0.0-setup.exe"
               download="MarketPOS-Setup.exe"
               className="btn"
               style={{
@@ -139,7 +139,7 @@ export function LandingPage({ onNavigateToLogin, onNavigateToBackoffice }: Landi
             🔑 Market Kasa Girişi (/login)
           </button>
           <a
-            href={buildUrl('/api/license/download-desktop')}
+            href="https://github.com/Hollypredator/marketpos/releases/latest/download/MarketPOS-1.0.0-setup.exe"
             download="MarketPOS-Setup.exe"
             className="btn landing-cta-secondary"
             style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
