@@ -1236,23 +1236,40 @@ textarea,
 .payment-gopos-modal {
   background: #181825;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 16px;
+  border-radius: 14px;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
   display: grid;
-  gap: 0.6rem;
-  grid-template-columns: 240px 1fr 260px;
-  height: min(94vh, 720px);
-  max-width: min(1280px, calc(100vw - 1.5rem));
-  padding: 0.6rem;
+  gap: 0.5rem;
+  grid-template-columns: 220px 1fr 240px;
+  height: calc(100vh - 1.5rem);
+  max-height: 760px;
+  max-width: min(1280px, calc(100vw - 1rem));
+  padding: 0.5rem;
   width: 100%;
   color: #ffffff;
   overflow: hidden;
 }
 
+/* ── Compact: laptops ≤1180px wide OR ≤820px tall ── */
+.payment-gopos-modal.is-compact {
+  grid-template-columns: 180px 1fr 210px;
+  gap: 0.35rem;
+  padding: 0.35rem;
+  max-height: calc(100vh - 0.75rem);
+}
+
+/* ── Phone: ≤1024px wide OR ≤768px tall ── */
+.payment-gopos-modal.is-phone {
+  grid-template-columns: 160px 1fr 180px;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  max-height: calc(100vh - 0.5rem);
+}
+
 .payment-gopos-column {
   background: #1e1e2e;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
+  border-radius: 10px;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -1264,13 +1281,14 @@ textarea,
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   justify-content: space-between;
-  padding: 0.65rem 0.85rem;
+  padding: 0.4rem 0.6rem;
   background: rgba(0, 0, 0, 0.2);
+  flex-shrink: 0;
 }
 
 .payment-gopos-header h3 {
   color: #ffffff;
-  font-size: 1.05rem;
+  font-size: 0.9rem;
   font-weight: 800;
   letter-spacing: 0.01em;
   margin: 0;
@@ -1279,41 +1297,45 @@ textarea,
 .payment-gopos-secondary-btn {
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
+  border-radius: 6px;
   color: #818cf8;
-  font-size: 0.8rem;
+  font-size: 0.7rem;
   font-weight: 700;
-  min-height: 32px;
-  padding: 0.25rem 0.65rem;
+  min-height: 26px;
+  padding: 0.15rem 0.5rem;
 }
 
 .payment-gopos-subtitle {
   color: #a6adc8;
-  font-size: 0.88rem;
+  font-size: 0.78rem;
   font-weight: 700;
   margin: 0;
-  padding: 0.6rem 0.85rem 0.3rem;
+  padding: 0.35rem 0.6rem 0.2rem;
+  flex-shrink: 0;
 }
 
 .payment-gopos-item-list {
-  display: grid;
-  gap: 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
   min-height: 0;
-  overflow: auto;
-  padding: 0 0.85rem 0.65rem;
+  overflow-y: auto;
+  padding: 0 0.6rem 0.4rem;
+  flex: 1;
 }
 
 .payment-gopos-item-row {
   align-items: center;
   background: rgba(0, 0, 0, 0.25);
   border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 8px;
+  border-radius: 6px;
   display: flex;
-  font-size: 0.88rem;
+  font-size: 0.75rem;
   font-weight: 600;
   justify-content: space-between;
-  padding: 0.5rem 0.6rem;
+  padding: 0.3rem 0.45rem;
   color: #cdd6f4;
+  flex-shrink: 0;
 }
 
 .payment-gopos-item-row strong {
@@ -1322,24 +1344,25 @@ textarea,
 
 .payment-gopos-empty {
   color: #6c7086;
-  font-size: 0.85rem;
-  padding: 0.65rem 0;
+  font-size: 0.78rem;
+  padding: 0.4rem 0;
   text-align: center;
 }
 
 .payment-gopos-summary {
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   margin-top: auto;
-  padding: 0.65rem 0.85rem;
+  padding: 0.4rem 0.6rem;
   background: rgba(0, 0, 0, 0.15);
+  flex-shrink: 0;
 }
 
 .payment-gopos-summary h4 {
   color: #f59e0b;
-  font-size: 0.88rem;
+  font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.05em;
-  margin: 0 0 0.5rem;
+  margin: 0 0 0.3rem;
   text-align: center;
   text-transform: uppercase;
 }
@@ -1349,9 +1372,9 @@ textarea,
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   color: #a6adc8;
   display: flex;
-  font-size: 0.88rem;
+  font-size: 0.78rem;
   justify-content: space-between;
-  padding: 0.4rem 0;
+  padding: 0.2rem 0;
 }
 
 .payment-gopos-summary-row strong {
@@ -1361,7 +1384,7 @@ textarea,
 .payment-gopos-summary-row.total {
   border-bottom: none;
   color: #f87171;
-  font-size: 1.05rem;
+  font-size: 0.88rem;
   font-weight: 800;
 }
 
@@ -1369,23 +1392,26 @@ textarea,
   color: #f87171;
 }
 
+/* ── Center column ── */
 .payment-gopos-center {
-  gap: 0.5rem;
-  padding: 0.55rem;
+  gap: 0.35rem;
+  padding: 0.4rem;
+  overflow-y: auto;
 }
 
 .payment-gopos-amount-card {
   background: #161622;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
+  border-radius: 10px;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .payment-gopos-amount-row {
   align-items: center;
   display: flex;
   justify-content: space-between;
-  padding: 0.65rem 0.85rem;
+  padding: 0.4rem 0.6rem;
 }
 
 .payment-gopos-amount-row + .payment-gopos-amount-row {
@@ -1394,13 +1420,13 @@ textarea,
 
 .payment-gopos-amount-row span {
   color: #a6adc8;
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   font-weight: 600;
 }
 
 .payment-gopos-amount-row strong {
   color: #10b981;
-  font-size: clamp(1.5rem, 2vw, 1.85rem);
+  font-size: clamp(1.1rem, 1.8vw, 1.5rem);
   font-weight: 900;
 }
 
@@ -1410,7 +1436,7 @@ textarea,
 
 .payment-gopos-keypad {
   display: grid;
-  gap: 0.4rem;
+  gap: 0.25rem;
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
@@ -1422,16 +1448,21 @@ textarea,
   align-items: center;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
+  border-radius: 6px;
   color: #ffffff;
   cursor: pointer;
   display: inline-flex;
-  font-size: 1.15rem;
+  font-size: 0.95rem;
   font-weight: 700;
   justify-content: center;
-  min-height: 48px;
+  min-height: 38px;
   transition: all 0.12s ease;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.is-phone .payment-gopos-key {
+  min-height: 32px;
+  font-size: 0.85rem;
 }
 
 .payment-gopos-key:hover {
@@ -1444,7 +1475,7 @@ textarea,
   background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
   border-color: transparent;
   color: #ffffff;
-  font-size: 1.1rem;
+  font-size: 0.95rem;
   font-weight: 800;
 }
 
@@ -1469,13 +1500,14 @@ textarea,
   align-items: center;
   background: #161622;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 9px;
+  border-radius: 8px;
   display: flex;
-  font-size: 0.92rem;
+  font-size: 0.82rem;
   font-weight: 700;
   justify-content: space-between;
-  min-height: 44px;
-  padding: 0 0.85rem;
+  min-height: 36px;
+  padding: 0 0.6rem;
+  flex-shrink: 0;
 }
 
 .payment-gopos-change.ok {
@@ -1486,27 +1518,33 @@ textarea,
   color: #f87171;
 }
 
+/* ── Right column ── */
 .payment-gopos-right {
-  gap: 0.5rem;
-  padding: 0.55rem;
-  overflow: auto;
+  gap: 0.3rem;
+  padding: 0.4rem;
+  overflow-y: auto;
 }
 
 .payment-gopos-method-list {
   display: grid;
-  gap: 0.35rem;
+  gap: 0.25rem;
 }
 
 .payment-gopos-method {
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: 8px;
   color: #ffffff;
   cursor: pointer;
-  font-size: 0.95rem;
+  font-size: 0.82rem;
   font-weight: 700;
-  min-height: 42px;
+  min-height: 34px;
   transition: all 0.12s ease;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.is-phone .payment-gopos-method {
+  min-height: 28px;
+  font-size: 0.75rem;
 }
 
 .payment-gopos-method.cash {
@@ -1540,14 +1578,14 @@ textarea,
 .payment-gopos-note label {
   color: #a6adc8;
   display: block;
-  font-size: 0.78rem;
+  font-size: 0.7rem;
   font-weight: 700;
-  margin-bottom: 0.2rem;
+  margin-bottom: 0.15rem;
 }
 
 .payment-gopos-note .input {
-  font-size: 0.88rem;
-  min-height: 36px;
+  font-size: 0.78rem;
+  min-height: 28px;
   background: rgba(0, 0, 0, 0.2);
   border-color: rgba(255, 255, 255, 0.1);
   color: #ffffff;
@@ -1555,21 +1593,21 @@ textarea,
 
 .payment-gopos-presets {
   display: grid;
-  gap: 0.4rem;
+  gap: 0.25rem;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin-bottom: 0.4rem;
+  margin-bottom: 0.25rem;
 }
 
 .payment-gopos-preset {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
+  border-radius: 6px;
   color: #ffffff;
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   font-weight: 700;
-  min-height: 36px;
-  padding: 0.3rem 0.5rem;
+  min-height: 30px;
+  padding: 0.2rem 0.4rem;
 }
 
 .payment-gopos-preset:hover {
@@ -1584,32 +1622,32 @@ textarea,
 
 .payment-gopos-split-editor {
   display: grid;
-  gap: 0.35rem;
+  gap: 0.25rem;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .payment-gopos-split-field {
   display: grid;
-  gap: 0.2rem;
+  gap: 0.15rem;
 }
 
 .payment-gopos-split-field span {
   color: #a6adc8;
-  font-size: 0.78rem;
+  font-size: 0.7rem;
   font-weight: 700;
 }
 
 .payment-gopos-split-field .input {
-  min-height: 36px;
+  min-height: 28px;
 }
 
 .payment-status-card {
   background: #161622;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
+  border-radius: 6px;
   display: grid;
-  gap: 0.2rem;
-  padding: 0.5rem 0.6rem;
+  gap: 0.15rem;
+  padding: 0.3rem 0.5rem;
 }
 
 .payment-status-card.success {
@@ -1625,75 +1663,105 @@ textarea,
 }
 
 .payment-status-card strong {
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   color: #ffffff;
 }
 
 .payment-status-card span,
 .payment-status-card small {
   color: #a6adc8;
-  font-size: 0.75rem;
+  font-size: 0.68rem;
 }
 
 .payment-shift-summary {
   background: rgba(0, 0, 0, 0.2);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
+  border-radius: 6px;
   display: grid;
-  gap: 0.2rem;
-  padding: 0.4rem 0.6rem;
+  gap: 0.1rem;
+  padding: 0.3rem 0.5rem;
 }
 
 .payment-shift-summary h4 {
-  font-size: 0.82rem;
-  margin: 0 0 0.1rem;
+  font-size: 0.72rem;
+  margin: 0 0 0.05rem;
   color: #a6adc8;
 }
 
 .payment-shift-row {
   align-items: center;
   display: flex;
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   justify-content: space-between;
   color: #cdd6f4;
 }
 
 .payment-gopos-right-actions {
   display: grid;
-  gap: 0.4rem;
+  gap: 0.25rem;
   margin-top: auto;
 }
 
 .payment-gopos-right-actions button {
-  min-height: 42px;
-  font-size: 0.95rem;
+  min-height: 34px;
+  font-size: 0.82rem;
+}
+
+.is-phone .payment-gopos-right-actions button {
+  min-height: 28px;
+  font-size: 0.75rem;
 }
 
 .payment-gopos-fast-actions {
   display: grid;
-  gap: 0.4rem;
+  gap: 0.25rem;
 }
 
 .payment-gopos-fast-complete {
-  font-size: 1rem;
-  min-height: 44px;
+  font-size: 0.88rem;
+  min-height: 36px;
 }
 
 .payment-gopos-close-btn {
   background: rgba(239, 68, 68, 0.18);
   border: 1px solid rgba(239, 68, 68, 0.35);
-  border-radius: 8px;
+  border-radius: 6px;
   color: #f87171;
   cursor: pointer;
-  font-size: 0.95rem;
+  font-size: 0.82rem;
   font-weight: 700;
-  min-height: 42px;
+  min-height: 34px;
   transition: all 0.15s ease;
+}
+
+.is-phone .payment-gopos-close-btn {
+  min-height: 28px;
+  font-size: 0.75rem;
 }
 
 .payment-gopos-close-btn:hover {
   background: #ef4444;
   color: #ffffff;
+}
+
+.payment-card-hint {
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  padding: 0.3rem 0.5rem;
+}
+
+.payment-card-hint-title {
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #a6adc8;
+  margin-bottom: 0.1rem;
+}
+
+.payment-card-hint-text {
+  font-size: 0.62rem;
+  color: #6c7086;
+  line-height: 1.3;
 }
 
 /* Rapor Sekmeleri */
