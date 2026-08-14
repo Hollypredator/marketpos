@@ -1677,6 +1677,7 @@ export default function App(): React.ReactElement {
     return (
       <LandingPage
         onNavigateToLogin={() => navigate('/login')}
+        onNavigateToBackoffice={() => navigate('/backoffice')}
         onNavigateToSuccess={(companyId) => navigate(`/payment-success?companyId=${companyId}`)}
       />
     );

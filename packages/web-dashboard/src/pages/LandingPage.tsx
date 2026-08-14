@@ -4,6 +4,7 @@ import { buildUrl } from '../lib/http/api-client';
 
 interface LandingPageProps {
   onNavigateToLogin: () => void;
+  onNavigateToBackoffice: () => void;
   onNavigateToSuccess?: (companyId: string) => void;
 }
 
@@ -81,7 +82,7 @@ const STEPS = [
   { num: '3', title: 'Satışa Başlayın', desc: 'Barkod okutun, satış yapın, raporları takip edin.' },
 ];
 
-export function LandingPage({ onNavigateToLogin }: LandingPageProps): React.ReactElement {
+export function LandingPage({ onNavigateToLogin, onNavigateToBackoffice }: LandingPageProps): React.ReactElement {
   return (
     <div className="landing">
       {/* ── Nav ──────────────────────────────────────────────────── */}
@@ -109,8 +110,11 @@ export function LandingPage({ onNavigateToLogin }: LandingPageProps): React.Reac
             >
               📥 .exe İndir
             </a>
-            <button className="btn landing-login-btn" onClick={onNavigateToLogin}>
-              🔑 Yönetim Paneli
+            <button className="btn" style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)' }} onClick={onNavigateToLogin}>
+              🔑 Market Girişi
+            </button>
+            <button className="btn landing-login-btn" onClick={onNavigateToBackoffice}>
+              👑 Backoffice Paneli (/backoffice)
             </button>
           </div>
         </div>
@@ -128,8 +132,11 @@ export function LandingPage({ onNavigateToLogin }: LandingPageProps): React.Reac
           yazarkasa POS sistemi. Kurulumu 5 dakika, kullanımı çok kolay.
         </p>
         <div className="landing-hero-actions" style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
-          <button className="btn landing-cta" onClick={onNavigateToLogin} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-            🌐 Web Kasayı & Paneli Aç (Tarayıcıdan Kullan)
+          <button className="btn landing-cta" onClick={onNavigateToBackoffice} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+            👑 Backoffice / Yazılım Yönetim Paneli (/backoffice)
+          </button>
+          <button className="btn landing-cta-secondary" onClick={onNavigateToLogin} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+            🔑 Market Kasa Girişi (/login)
           </button>
           <a
             href={buildUrl('/api/license/download-desktop')}
