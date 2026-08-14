@@ -216,13 +216,15 @@ export class WebStorageAdapter implements IPOSStorageAdapter {
   }
 
   public async getCachedSession(): Promise<StorageAdapterOfflineAuthResult | null> {
-    return this.getItem<StorageAdapterOfflineAuthResult | null>('active_session', {
-      accessToken: 'web-session-token',
-      refreshToken: 'web-refresh-token',
-      registerId: 'reg-1',
-      sessionId: 'sess-1',
-      user: DEFAULT_USERS[0],
-    });
+    const raw = localStorage.getItem(`${STORAGE_PREFIX}active_session`);
+    if (!raw) {
+      return null;
+    }
+    try {
+      return JSON.parse(raw) as StorageAdapterOfflineAuthResult;
+    } catch {
+      return null;
+    }
   }
 
   public async offlineLogin(payload: {
@@ -253,6 +255,9 @@ export class WebStorageAdapter implements IPOSStorageAdapter {
 
   public async clearSession(): Promise<void> {
     localStorage.removeItem(`${STORAGE_PREFIX}active_session`);
+    localStorage.removeItem('marketpos_session_v1');
+    localStorage.removeItem('marketpos_auth_session');
+    localStorage.removeItem('marketpos.web.session.v1');
   }
 
   public async queueSale(payload: { localId?: string; sale: any }): Promise<any> {
