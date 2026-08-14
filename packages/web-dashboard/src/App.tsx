@@ -1664,26 +1664,26 @@ export default function App(): React.ReactElement {
     if (location.pathname === '/payment-success') {
       return <PaymentSuccessPage />;
     }
-    if (location.pathname === '/login' || location.pathname === '/yonetim') {
+    if (location.pathname === '/landing') {
       return (
-        <LoginView
-          accessBlockedMessage={auth.accessBlockedMessage}
-          banner={banner}
-          login={loginForm}
-          onChangeEmail={(value) => setLoginForm((current) => ({ ...current, email: value }))}
-          onChangeCompanyId={(value) => setLoginForm((current) => ({ ...current, companyId: value }))}
-          onChangeMode={(mode) => setLoginForm((current) => ({ ...current, mode }))}
-          onChangePassword={(value) => setLoginForm((current) => ({ ...current, password: value }))}
-          onChangeUsername={(value) => setLoginForm((current) => ({ ...current, username: value }))}
-          onSubmit={onLogin}
-          saving={isAuthenticating}
+        <LandingPage
+          onNavigateToLogin={() => navigate('/login')}
+          onNavigateToSuccess={(companyId) => navigate(`/payment-success?companyId=${companyId}`)}
         />
       );
     }
     return (
-      <LandingPage
-        onNavigateToLogin={() => navigate('/login')}
-        onNavigateToSuccess={(companyId) => navigate(`/payment-success?companyId=${companyId}`)}
+      <LoginView
+        accessBlockedMessage={auth.accessBlockedMessage}
+        banner={banner}
+        login={loginForm}
+        onChangeEmail={(value) => setLoginForm((current) => ({ ...current, email: value }))}
+        onChangeCompanyId={(value) => setLoginForm((current) => ({ ...current, companyId: value }))}
+        onChangeMode={(mode) => setLoginForm((current) => ({ ...current, mode }))}
+        onChangePassword={(value) => setLoginForm((current) => ({ ...current, password: value }))}
+        onChangeUsername={(value) => setLoginForm((current) => ({ ...current, username: value }))}
+        onSubmit={onLogin}
+        saving={isAuthenticating}
       />
     );
   }
