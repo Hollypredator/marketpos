@@ -1735,9 +1735,8 @@ const appShellProps = {
 
       {activeTab === 'pos' && (
         <PosRegisterView
-          products={products}
-          categories={categories}
-          customers={customers}
+          products={productsQuery.data ?? []}
+          categories={categoriesQuery.data ?? []}
         />
       )}
 

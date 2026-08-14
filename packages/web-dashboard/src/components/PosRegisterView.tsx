@@ -1,7 +1,12 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import type { ProductRecord } from '../domain/catalog/types';
-import type { CustomerRecord } from '../domain/shared/types';
+import type { Product } from '../domain/catalog/types';
 import { money } from '../lib/format';
+
+export interface PosCustomerRecord {
+  id: string;
+  name: string;
+  phone?: string | null;
+}
 
 interface CartItem {
   id: string;
@@ -13,9 +18,9 @@ interface CartItem {
 }
 
 interface PosRegisterViewProps {
-  products: ProductRecord[];
+  products: Product[];
   categories: Array<{ id: string; name: string }>;
-  customers?: CustomerRecord[];
+  customers?: PosCustomerRecord[];
   onCompleteSale?: (saleData: {
     items: CartItem[];
     paymentType: 'CASH' | 'CARD' | 'VERESIYE';
@@ -72,7 +77,7 @@ export function PosRegisterView({
   }, [products, selectedCategoryId, barcodeQuery]);
 
   // Handle add product to cart
-  const addToCart = (product: ProductRecord) => {
+  const addToCart = (product: Product) => {
     setCart((prev) => {
       const existingIndex = prev.findIndex((item) => item.id === product.id);
       if (existingIndex > -1) {
@@ -474,14 +479,14 @@ export function PosRegisterView({
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
                   {p.barcode}
                 </div>
-                <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#fff', lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'orient', overflow: 'hidden' }}>
+                <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#fff', lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden' }}>
                   {p.name}
                 </div>
               </div>
 
               <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                 <span style={{ fontSize: '0.75rem', padding: '2px 6px', borderRadius: '4px', background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)' }}>
-                  Stok: {p.stockQuantity ?? 0}
+                  Min Stok: {p.minStock ?? 0}
                 </span>
                 <span style={{ fontWeight: 900, fontSize: '1.1rem', color: '#818cf8' }}>
                   {money(Number(p.salePrice) || 0)}
