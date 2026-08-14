@@ -48,12 +48,13 @@ function mapLoginError(error: unknown): string {
 export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const toast = useToast();
   const usernameInputRef = useRef<HTMLInputElement>(null);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [companyId, setCompanyId] = useState('');
   const [mode, setMode] = useState<LoginMode>('AUTO');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [password, setPassword] = useState('');
-  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('123456');
+  const [username, setUsername] = useState('admin');
 
   const isFormReady = username.trim().length >= 3 && password.length >= 4;
 
@@ -130,73 +131,175 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
   return (
     <div className="login-page">
-      <form className="login-card" onSubmit={submitLogin}>
+      <form className="login-card" style={{ maxWidth: '520px' }} onSubmit={submitLogin}>
         <div className="login-logo">M</div>
+        
+        {/* Wizard Step Progress Header */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '20px' }}>
+          <div style={{
+            padding: '6px 14px',
+            borderRadius: '20px',
+            fontSize: '0.8rem',
+            fontWeight: 700,
+            background: step === 1 ? 'var(--primary, #4f46e5)' : 'rgba(255,255,255,0.08)',
+            color: step === 1 ? '#fff' : 'var(--text-muted)'
+          }}>
+            1. Lisans Kodu
+          </div>
+          <div style={{ padding: '6px 4px', color: 'var(--text-muted)' }}>➔</div>
+          <div style={{
+            padding: '6px 14px',
+            borderRadius: '20px',
+            fontSize: '0.8rem',
+            fontWeight: 700,
+            background: step === 2 ? 'var(--primary, #4f46e5)' : 'rgba(255,255,255,0.08)',
+            color: step === 2 ? '#fff' : 'var(--text-muted)'
+          }}>
+            2. Kullanıcı Girişi
+          </div>
+          <div style={{ padding: '6px 4px', color: 'var(--text-muted)' }}>➔</div>
+          <div style={{
+            padding: '6px 14px',
+            borderRadius: '20px',
+            fontSize: '0.8rem',
+            fontWeight: 700,
+            background: step === 3 ? 'var(--primary, #4f46e5)' : 'rgba(255,255,255,0.08)',
+            color: step === 3 ? '#fff' : 'var(--text-muted)'
+          }}>
+            3. Kurulum Tamamlandı
+          </div>
+        </div>
+
         <div className="login-head">
-          <p className="login-kicker">Magaza Oturumu</p>
-          <h1 className="login-title">MarketPOS Giris</h1>
-          <p className="login-subtitle">Kasa operasyonlarina devam etmek icin oturum acin.</p>
+          <p className="login-kicker">Masaüstü Kasa Kurulum Sihirbazı</p>
+          <h1 className="login-title">
+            {step === 1 ? 'Lisans Kodu Girişi' : step === 2 ? 'Yetkili Girişi' : 'Kurulum Hazır!'}
+          </h1>
+          <p className="login-subtitle">
+            {step === 1
+              ? 'Web panelinizden aldığınız Lisans Kodunu (Örn: MPOS-XXXX-XXXX) girin.'
+              : step === 2
+              ? 'Kasayı açmak ve senkronize etmek için kullanıcı bilgilerinizi girin.'
+              : 'Donanım ve yazıcı bağlantılarınız hazır. Kasayı başlatabilirsiniz.'}
+          </p>
         </div>
 
         {error.length > 0 && <div className="login-error">{error}</div>}
 
-        <div className="login-field">
-          <label htmlFor="company-id">Lisans Kodu / Firma ID (Opsiyonel)</label>
-          <input
-            id="company-id"
-            className="input"
-            type="text"
-            value={companyId}
-            onChange={(event) => setCompanyId(event.target.value)}
-            placeholder="Örn: MPOS-XXXX-XXXX veya Firma ID"
-            autoComplete="off"
-          />
+        {/* STEP 1: LİSANS KODU */}
+        {step === 1 && (
+          <div className="login-field">
+            <label htmlFor="company-id">Lisans Kodu / Firma ID (Zorunlu)</label>
+            <input
+              id="company-id"
+              className="input"
+              type="text"
+              value={companyId}
+              onChange={(event) => setCompanyId(event.target.value)}
+              placeholder="Örn: MPOS-XXXX-XXXX veya Firma ID"
+              autoComplete="off"
+              autoFocus
+            />
+            <div style={{ marginTop: '14px' }}>
+              <button
+                type="button"
+                className="btn btn-primary btn-lg btn-block"
+                onClick={() => {
+                  if (companyId.trim().length === 0) {
+                    setError('Lütfen Web Panelinizden aldığınız Lisans Kodunu girin.');
+                    return;
+                  }
+                  setError('');
+                  setStep(2);
+                }}
+              >
+                Lisansı Doğrula & İlerle ➔
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 2: KULLANICI GİRİŞİ */}
+        {step === 2 && (
+          <>
+            <div className="login-field">
+              <label htmlFor="username">Kullanıcı Adı</label>
+              <input
+                ref={usernameInputRef}
+                id="username"
+                className="input"
+                type="text"
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                placeholder="Kullanıcı adınızı girin"
+                autoComplete="off"
+                autoFocus
+              />
+            </div>
+
+            <div className="login-field">
+              <label htmlFor="password">Şifre</label>
+              <input
+                id="password"
+                className="input"
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="Şifrenizi girin"
+                autoComplete="off"
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setStep(1)}
+              >
+                ⬅ Geri
+              </button>
+              <button
+                className="btn btn-primary btn-lg btn-block login-submit"
+                type="submit"
+                disabled={isLoading || !isFormReady}
+              >
+                {isLoading
+                  ? 'Doğrulanıyor...'
+                  : mode === 'OFFLINE_ONLY'
+                    ? 'Offline Kasayı Aç'
+                    : 'Giriş Yap ve Kasayı Başlat 🚀'}
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* STEP 3: TAMAMLAMA & BİLGİ */}
+        {step === 3 && (
+          <div style={{ textAlign: 'center', display: 'grid', gap: '16px' }}>
+            <div style={{ fontSize: '3rem' }}>🎉</div>
+            <h3>Kurulum Başarıyla Tamamlandı!</h3>
+            <p className="muted">Kasaya giriş yapıp ürün satışına başlayabilirsiniz.</p>
+            <button
+              type="submit"
+              className="btn btn-primary btn-lg btn-block"
+              disabled={isLoading}
+            >
+              Kasayı Başlat 🚀
+            </button>
+          </div>
+        )}
+
+        <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <button
+            className="btn btn-ghost"
+            type="button"
+            style={{ fontSize: '0.8rem' }}
+            disabled={isLoading}
+            onClick={() => setMode((current) => (current === 'AUTO' ? 'OFFLINE_ONLY' : 'AUTO'))}
+          >
+            {mode === 'AUTO' ? 'Sadece Offline Moduna Geç' : 'Online Moduna Dön'}
+          </button>
         </div>
-
-        <div className="login-field">
-          <label htmlFor="username">Kullanici Adi</label>
-          <input
-            ref={usernameInputRef}
-            id="username"
-            className="input"
-            type="text"
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
-            placeholder="Kullanici adinizi girin"
-            autoComplete="off"
-            autoFocus
-          />
-        </div>
-
-        <div className="login-field">
-          <label htmlFor="password">Sifre</label>
-          <input
-            id="password"
-            className="input"
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="Sifrenizi girin"
-            autoComplete="off"
-          />
-        </div>
-
-        <button className="btn btn-primary btn-lg btn-block login-submit" type="submit" disabled={isLoading || !isFormReady}>
-          {isLoading
-            ? 'Giris yapiliyor...'
-            : mode === 'OFFLINE_ONLY'
-              ? 'Offline Giris'
-              : 'Giris Yap (Online oncelikli)'}
-        </button>
-
-        <button
-          className="btn btn-ghost btn-block login-mode-switch"
-          type="button"
-          disabled={isLoading}
-          onClick={() => setMode((current) => (current === 'AUTO' ? 'OFFLINE_ONLY' : 'AUTO'))}
-        >
-          {mode === 'AUTO' ? 'Sadece Offline Moduna Gec' : 'Online + Offline Moduna Don'}
-        </button>
 
         {!window.electronAPI && (
           <div style={{
