@@ -198,6 +198,35 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
           {mode === 'AUTO' ? 'Sadece Offline Moduna Gec' : 'Online + Offline Moduna Don'}
         </button>
 
+        {!window.electronAPI && (
+          <div style={{
+            marginTop: '20px',
+            padding: '16px',
+            borderRadius: '12px',
+            background: 'linear-gradient(135deg, rgba(79, 70, 229, 0.12) 0%, rgba(99, 102, 241, 0.22) 100%)',
+            border: '1.5px solid rgba(79, 70, 229, 0.35)',
+            textAlign: 'center',
+            display: 'grid',
+            gap: '10px'
+          }}>
+            <div style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--text-primary)' }}>
+              💻 MarketPOS Masaüstü Kasa Uygulaması (.exe)
+            </div>
+            <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+              Yazarkasa, termal yazıcı ve barkod okuyucu destekli çevrimdışı masaüstü uygulamasını kurmak için indirin.
+            </p>
+            <a
+              href="/api/license/download-desktop"
+              download="MarketPOS-Setup.exe"
+              className="btn btn-primary btn-block"
+              style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+            >
+              <svg style={{ width: '20px', height: '20px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+              Masaüstü .exe Dosyasını İndir
+            </a>
+          </div>
+        )}
+
         <p className="login-help">
           Offline giris yalnizca bu cihazda daha once online dogrulanan kullanicilar icin aciktir.
         </p>
