@@ -13,7 +13,6 @@ Thumbs.db
 coverage/
 out/
 release/
-!packages/pos-desktop/release/MarketPOS-1.0.0-setup.exe
 .tools/node20/
 
 # Scratch / debug output
