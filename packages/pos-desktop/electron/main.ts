@@ -764,6 +764,7 @@ function configureAutoUpdate(): void {
 
 function createMainWindow(): BrowserWindow {
   const window = new BrowserWindow({
+    autoHideMenuBar: true,
     backgroundColor: '#0F172A',
     height: 900,
     minHeight: 700,
@@ -778,6 +779,8 @@ function createMainWindow(): BrowserWindow {
     },
     width: 1400,
   });
+
+  window.setMenuBarVisibility(false);
 
   window.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url);
@@ -1552,6 +1555,11 @@ function registerIpcHandlers(): void {
 }
 
 function bootstrap(): void {
+  // POS cihazlarinda Windows DPI olceklemesinin (125%, 150%) 
+  // uygulamayi bozmasini engellemek icin force-device-scale-factor 1'e sabitlenir.
+  app.commandLine.appendSwitch('high-dpi-support', '1');
+  app.commandLine.appendSwitch('force-device-scale-factor', '1');
+
   app.whenReady().then(() => {
     registerIpcHandlers();
 

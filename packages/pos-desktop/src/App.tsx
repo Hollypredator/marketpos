@@ -254,7 +254,11 @@ function AppContent() {
 
   useEffect(() => {
     const handleResize = (): void => {
-      const autoDensity = resolveTouchDensityByViewport(window.innerWidth, window.innerHeight);
+      // Removed broken zoom logic that causes massive scaling issues on desktop.
+      // Scaling should be handled by CSS Media Queries.
+      document.body.style.zoom = '1';
+
+      const autoDensity = resolveTouchDensityByViewport(window.outerWidth, window.innerHeight);
       if (autoDensity !== state.touchDensity) {
         dispatch({
           payload: { touchDensity: autoDensity, uiPreset: state.uiPreset },
