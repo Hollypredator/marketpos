@@ -4,6 +4,7 @@ import {
   explainRuntimeError,
   loginOffline,
   loginOnline,
+  getLocalSetting,
 } from '../services/pos-runtime';
 import type { AuthSession } from '../services/types';
 import { useToast } from '../store';
@@ -77,6 +78,15 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
     return () => {
       window.clearTimeout(timer);
     };
+  }, []);
+
+  useEffect(() => {
+    void getLocalSetting('auth_company_id', '').then((cachedCompanyId) => {
+      if (cachedCompanyId && cachedCompanyId.trim().length > 0) {
+        setCompanyId(cachedCompanyId);
+        setStep(2);
+      }
+    });
   }, []);
 
   const submitLogin = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
