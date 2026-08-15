@@ -480,7 +480,7 @@ export async function licenseRoutes(server: FastifyInstance): Promise<void> {
       return reply.send(stream);
     }
 
-    return reply.redirect('https://raw.githubusercontent.com/Hollypredator/marketpos/main/packages/pos-desktop/release/MarketPOS-1.0.0-setup.exe');
+    return reply.redirect('https://github.com/Hollypredator/marketpos/releases/download/v1.0.0/MarketPOS-1.0.0-setup.exe');
   });
 }
 
