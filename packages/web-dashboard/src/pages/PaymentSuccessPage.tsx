@@ -76,7 +76,7 @@ export function PaymentSuccessPage(): React.ReactElement {
     }
   };
 
-  const downloadUrl = 'https://marketpos-releases.s3.eu-central-1.amazonaws.com/MarketPOS-Setup-1.0.0.exe';
+  const downloadUrl = 'https://github.com/Hollypredator/marketpos/releases/download/v1.0.0/MarketPOS-1.0.0-setup.exe';
 
   return (
     <div className="success-container">
